@@ -102,7 +102,7 @@ function normalizeStatusCode(status: string): string {
   const code = status.trim().toUpperCase();
   switch (code) {
     case "?":
-      return "?";
+      return "U";
     case "A":
       return "A";
     case "M":
@@ -120,7 +120,7 @@ function normalizeStatusCode(status: string): string {
 }
 
 function statusCodeForMode(mode: DiffMode, file: GitChangedFile): string {
-  if (mode === "-" && file.untracked) return "?";
+  if (mode === "-" && file.untracked) return "U";
   const primary = mode === "+" ? file.indexStatus : file.worktreeStatus;
   const fallback = mode === "+" ? file.worktreeStatus : file.indexStatus;
   return normalizeStatusCode(primary !== " " ? primary : fallback);

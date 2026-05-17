@@ -369,7 +369,7 @@ pub fn push(registry: &WorkspaceRegistry, repo_root: &str) -> Result<GitPushResu
     })
 }
 
-const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%s";
+const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 const MAX_LOG_LIMIT: u32 = 200;
 
 pub fn log(
@@ -395,7 +395,7 @@ pub fn log(
     let mut args: Vec<&OsStr> = vec![
         OsStr::new("log"),
         OsStr::new("--no-color"),
-        OsStr::new("-z"),
+        OsStr::new("--shortstat"),
         OsStr::new(&count_arg),
         OsStr::new(&format_arg),
     ];
@@ -418,29 +418,57 @@ pub fn log(
         return ensure_success(&output, "git log failed").map(|_| Vec::new());
     }
     let stdout = std::str::from_utf8(&output.stdout).unwrap_or("");
-    let mut entries = Vec::with_capacity(bounded as usize);
-    for record in stdout.split('\0') {
-        if record.is_empty() {
+    let mut entries: Vec<GitLogEntry> = Vec::with_capacity(bounded as usize);
+    // Lines we get back interleave:
+    //   <sha>\x1f<author>\x1f<email>\x1f<ts>\x1f<parents>\x1f<subject>
+    //   <blank>
+    //    5 files changed, 12 insertions(+), 3 deletions(-)
+    // Commits without diffstats (root commits, merges with no changes) just
+    // skip the shortstat line. Detect commit headers by the presence of
+    // the unit-separator we put in the format.
+    for raw_line in stdout.lines() {
+        let line = raw_line.trim_end_matches('\r');
+        if line.is_empty() {
             continue;
         }
-        let mut fields = record.splitn(5, '\x1f');
-        let sha = fields.next().unwrap_or("").to_string();
-        if sha.is_empty() {
+        if line.contains('\x1f') {
+            let mut fields = line.splitn(6, '\x1f');
+            let sha = fields.next().unwrap_or("").to_string();
+            if !sha_is_safe(&sha) {
+                continue;
+            }
+            let author = fields.next().unwrap_or("").to_string();
+            let author_email = fields.next().unwrap_or("").to_string();
+            let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
+            let parents_raw = fields.next().unwrap_or("");
+            let parents: Vec<String> = parents_raw
+                .split_ascii_whitespace()
+                .map(|s| s.to_string())
+                .collect();
+            let subject = fields.next().unwrap_or("").to_string();
+            let short_sha = sha.chars().take(7).collect::<String>();
+            entries.push(GitLogEntry {
+                sha,
+                short_sha,
+                author,
+                author_email,
+                timestamp_secs: timestamp,
+                parents,
+                subject,
+                files_changed: 0,
+                insertions: 0,
+                deletions: 0,
+            });
             continue;
         }
-        let author = fields.next().unwrap_or("").to_string();
-        let author_email = fields.next().unwrap_or("").to_string();
-        let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
-        let subject = fields.next().unwrap_or("").to_string();
-        let short_sha = sha.chars().take(7).collect::<String>();
-        entries.push(GitLogEntry {
-            sha,
-            short_sha,
-            author,
-            author_email,
-            timestamp_secs: timestamp,
-            subject,
-        });
+        if let Some(current) = entries.last_mut() {
+            if line.contains("file changed") || line.contains("files changed") {
+                let (files, ins, del) = parse_shortstat(line);
+                current.files_changed = files;
+                current.insertions = ins;
+                current.deletions = del;
+            }
+        }
     }
     Ok(entries)
 }
@@ -476,6 +504,33 @@ pub fn show_commit_diff(
         diff_text,
         truncated: output.truncated,
     })
+}
+
+fn parse_shortstat(tail: &str) -> (u32, u32, u32) {
+    // Looks for a line like " 5 files changed, 12 insertions(+), 3 deletions(-)"
+    for line in tail.lines() {
+        let trimmed = line.trim();
+        if !(trimmed.contains("file changed") || trimmed.contains("files changed")) {
+            continue;
+        }
+        let mut files = 0u32;
+        let mut ins = 0u32;
+        let mut del = 0u32;
+        for part in trimmed.split(',') {
+            let part = part.trim();
+            let num_str = part.split_ascii_whitespace().next().unwrap_or("0");
+            let n: u32 = num_str.parse().unwrap_or(0);
+            if part.contains("file") {
+                files = n;
+            } else if part.contains("insertion") {
+                ins = n;
+            } else if part.contains("deletion") {
+                del = n;
+            }
+        }
+        return (files, ins, del);
+    }
+    (0, 0, 0)
 }
 
 fn sha_is_safe(sha: &str) -> bool {

@@ -134,10 +134,13 @@ mod unix {
             Shell::Zsh => {
                 match prepare_zdotdir() {
                     Ok(zdotdir) => {
+                        // Guard against Terax-in-Terax :)
                         if let Ok(user_zd) = std::env::var("ZDOTDIR") {
-                            cmd.env("TERAX_USER_ZDOTDIR", user_zd);
+                            if PathBuf::from(&user_zd) != zdotdir {
+                                cmd.env("TERAX_USER_ZDOTDIR", user_zd);
+                            }
                         }
-                        cmd.env("ZDOTDIR", zdotdir);
+                        cmd.env("ZDOTDIR", &zdotdir);
                     }
                     Err(e) => {
                         log::warn!("zsh shell integration disabled: {e}");

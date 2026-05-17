@@ -100,7 +100,11 @@ pub struct GitLogEntry {
     pub author: String,
     pub author_email: String,
     pub timestamp_secs: i64,
+    pub parents: Vec<String>,
     pub subject: String,
+    pub files_changed: u32,
+    pub insertions: u32,
+    pub deletions: u32,
 }
 
 #[derive(Serialize)]

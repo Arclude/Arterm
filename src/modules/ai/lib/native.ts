@@ -96,7 +96,11 @@ export type GitLogEntry = {
   author: string;
   authorEmail: string;
   timestampSecs: number;
+  parents: string[];
   subject: string;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
 };
 
 export type GitCommitFileChange = {

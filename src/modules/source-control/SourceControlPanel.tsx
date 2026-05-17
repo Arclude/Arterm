@@ -24,17 +24,18 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Alert02Icon,
   ArrowDown01Icon,
-  ArrowReloadHorizontalIcon,
+  ArrowDownDoubleIcon,
   ArrowRight01Icon,
   ArrowUp01Icon,
   CheckmarkCircle01Icon,
   Clock01Icon,
-  CloudIcon,
+  CloudDownloadIcon,
+  Eraser01Icon,
   GitBranchIcon,
+  MagicWand02Icon,
   MinusSignIcon,
   PlusSignIcon,
   Refresh01Icon,
-  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -110,18 +111,55 @@ function upstreamBadgeLabel(upstream: string | null | undefined): string {
 }
 
 function statusTone(code: string): string {
+  // Slightly desaturated tones — calmer than full-strength 600/400.
   switch (code) {
     case "A":
-    case "?":
-      return "text-emerald-600 dark:text-emerald-400";
+      return "text-emerald-700/90 dark:text-emerald-300/90";
+    case "U":
+      return "text-teal-700/90 dark:text-teal-300/90";
     case "M":
-      return "text-amber-600 dark:text-amber-300";
+      return "text-amber-700/90 dark:text-amber-300/90";
     case "D":
-      return "text-rose-600 dark:text-rose-400";
+      return "text-rose-700/90 dark:text-rose-300/90";
     case "R":
-      return "text-sky-600 dark:text-sky-300";
+      return "text-sky-700/90 dark:text-sky-300/90";
     default:
       return "text-muted-foreground";
+  }
+}
+
+function statusChip(code: string): string {
+  // Subtle soft pill, no ring — paired with statusTone for text color.
+  switch (code) {
+    case "A":
+      return "bg-emerald-500/10";
+    case "U":
+      return "bg-teal-500/10";
+    case "M":
+      return "bg-amber-500/12";
+    case "D":
+      return "bg-rose-500/10";
+    case "R":
+      return "bg-sky-500/10";
+    default:
+      return "bg-muted/45";
+  }
+}
+
+function statusAccent(code: string): string {
+  switch (code) {
+    case "A":
+      return "bg-emerald-500/85";
+    case "U":
+      return "bg-teal-500/85";
+    case "M":
+      return "bg-amber-500/85";
+    case "D":
+      return "bg-rose-500/85";
+    case "R":
+      return "bg-sky-500/85";
+    default:
+      return "bg-muted-foreground/40";
   }
 }
 
@@ -471,25 +509,21 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   return (
     <TooltipProvider delayDuration={800} skipDelayDuration={300}>
       <aside className="flex h-full min-w-0 flex-col bg-card/80 backdrop-blur [contain:layout_style]">
-        <header className="flex shrink-0 items-center justify-between gap-1.5 border-b border-border/55 px-2.5 py-2">
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 pb-2.5 pt-3">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/85">
-              Source Control
-            </span>
-            <span className="text-muted-foreground/30">·</span>
-            <div className="inline-flex min-w-0 items-center gap-1 rounded-md border border-border/55 bg-background/70 px-1.5 py-0.5 text-[11px] font-medium leading-none text-foreground">
+            <div className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-foreground/5 px-2 py-1 text-[11.5px] font-medium leading-none text-foreground transition-colors hover:bg-foreground/10">
               <HugeiconsIcon
                 icon={GitBranchIcon}
-                size={10}
-                strokeWidth={2}
+                size={12}
+                strokeWidth={1.9}
                 className="shrink-0 text-muted-foreground"
               />
-              <span className="max-w-[110px] truncate">{repoLabel}</span>
+              <span className="max-w-[140px] truncate">{repoLabel}</span>
             </div>
             {scm.status && (scm.status.ahead > 0 || scm.status.behind > 0) ? (
-              <div className="flex shrink-0 items-center gap-1 text-[10px] font-medium tabular-nums leading-none text-muted-foreground">
+              <div className="flex shrink-0 items-center gap-0.5 text-[10px] font-semibold tabular-nums leading-none">
                 {scm.status.ahead > 0 ? (
-                  <span className="inline-flex items-center gap-0.5 rounded bg-muted/55 px-1 py-0.5">
+                  <span className="inline-flex items-center gap-0.5 rounded-md border border-emerald-500/35 px-1 py-0.5 text-emerald-700 dark:text-emerald-300">
                     <HugeiconsIcon
                       icon={ArrowUp01Icon}
                       size={9}
@@ -499,7 +533,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   </span>
                 ) : null}
                 {scm.status.behind > 0 ? (
-                  <span className="inline-flex items-center gap-0.5 rounded bg-muted/55 px-1 py-0.5">
+                  <span className="inline-flex items-center gap-0.5 rounded-md border border-amber-500/35 px-1 py-0.5 text-amber-700 dark:text-amber-300">
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
                       size={9}
@@ -511,7 +545,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               </div>
             ) : null}
             {scm.status?.isDetached ? (
-              <span className="rounded bg-muted/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="rounded bg-muted/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 detached
               </span>
             ) : null}
@@ -526,7 +560,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               {fetchBusy ? (
                 <Spinner className="size-3" />
               ) : (
-                <HugeiconsIcon icon={CloudIcon} size={13} strokeWidth={1.9} />
+                <HugeiconsIcon
+                  icon={CloudDownloadIcon}
+                  size={14}
+                  strokeWidth={1.85}
+                />
               )}
             </IconActionButton>
             <IconActionButton
@@ -549,9 +587,9 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                 <Spinner className="size-3" />
               ) : (
                 <HugeiconsIcon
-                  icon={ArrowDown01Icon}
-                  size={13}
-                  strokeWidth={2.1}
+                  icon={ArrowDownDoubleIcon}
+                  size={14}
+                  strokeWidth={1.9}
                 />
               )}
             </IconActionButton>
@@ -566,8 +604,8 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               ) : (
                 <HugeiconsIcon
                   icon={Refresh01Icon}
-                  size={13}
-                  strokeWidth={2}
+                  size={14}
+                  strokeWidth={1.9}
                   className={cn(refreshAnimating && "animate-spin")}
                 />
               )}
@@ -600,18 +638,34 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
         {scm.panelState === "ready" && scm.status ? (
           <>
-            <div className="relative shrink-0 space-y-2 border-b border-border/40 bg-card/55 px-2.5 pb-2 pt-2.5">
-              <div className="relative">
+            <div className="relative shrink-0 space-y-2 border-b border-border/40 bg-gradient-to-b from-card/65 to-card/30 px-2.5 pb-2.5 pt-2.5">
+              <div
+                className={cn(
+                  "relative rounded-lg border bg-background/95 shadow-sm transition-colors",
+                  scm.commitMessage.length > 0
+                    ? "border-border/70"
+                    : "border-border/45",
+                  "focus-within:border-primary/45 focus-within:shadow-md focus-within:shadow-primary/5",
+                )}
+              >
                 <Textarea
                   value={scm.commitMessage}
                   onChange={(event) => scm.setCommitMessage(event.target.value)}
                   onKeyDown={handleCommitShortcut}
-                  placeholder={`Message  (${commitShortcut} to commit)`}
+                  placeholder="Commit message"
                   rows={3}
                   className={cn(
-                    "min-h-[64px] resize-none rounded-md border border-border/55 bg-background/95 py-2 pl-2.5 pr-9 text-[12.5px] leading-snug shadow-none placeholder:text-muted-foreground/75 focus-visible:border-border/80 focus-visible:ring-0",
+                    "min-h-[72px] resize-none rounded-lg border-0 bg-transparent px-3 pb-7 pt-2.5 text-[12.5px] leading-snug shadow-none placeholder:text-muted-foreground/65 focus-visible:ring-0",
                   )}
                 />
+                <div className="pointer-events-none absolute inset-x-2 bottom-1.5 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/65">
+                  <span className="truncate">
+                    {commitShortcut} to commit
+                  </span>
+                  <span className="tabular-nums">
+                    {scm.commitMessage.length > 0 ? scm.commitMessage.length : ""}
+                  </span>
+                </div>
                 <div className="absolute right-1.5 top-1.5">
                   <IconActionButton
                     label={`${scm.generateCommitMessageHint} (${generateShortcut})`}
@@ -623,30 +677,32 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                       <Spinner className="size-3" />
                     ) : (
                       <HugeiconsIcon
-                        icon={SparklesIcon}
-                        size={12}
-                        strokeWidth={2}
+                        icon={MagicWand02Icon}
+                        size={13}
+                        strokeWidth={1.85}
                       />
                     )}
                   </IconActionButton>
                 </div>
               </div>
 
-              <div className="flex min-w-0 items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span
-                    className={cn(
-                      "size-1.5 shrink-0 rounded-full",
-                      canCommit ? "bg-emerald-500" : "bg-muted-foreground/40",
-                    )}
-                  />
-                  <span className="truncate">
-                    {stagedCount === 0
-                      ? "No staged changes"
-                      : `${stagedCount} ${stagedCount === 1 ? "file" : "files"} staged`}
-                  </span>
-                </div>
-                <span className="shrink-0 truncate text-muted-foreground/75">
+              <div className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full transition-colors",
+                    canCommit
+                      ? "bg-emerald-500 shadow-[0_0_6px_var(--color-emerald-500)]"
+                      : stagedCount > 0
+                        ? "bg-amber-500"
+                        : "bg-muted-foreground/35",
+                  )}
+                />
+                <span className="truncate font-medium text-foreground/85">
+                  {stagedCount === 0
+                    ? "Nothing staged"
+                    : `${stagedCount} ${stagedCount === 1 ? "file" : "files"} staged`}
+                </span>
+                <span className="ml-auto shrink-0 truncate text-muted-foreground/65">
                   {pushStatusLabel}
                 </span>
               </div>
@@ -656,7 +712,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   <TooltipTrigger asChild>
                     <Button
                       size="xs"
-                      className="h-7 flex-1 cursor-pointer text-[11.5px] font-medium disabled:cursor-not-allowed"
+                      className="h-7 flex-[2] cursor-pointer text-[11.5px] font-semibold tracking-tight shadow-sm disabled:cursor-not-allowed disabled:shadow-none"
                       disabled={!canCommit}
                       onClick={() => void scm.commit()}
                     >
@@ -866,34 +922,35 @@ function HistoryFooter({
   }, [ahead, behind, upstream]);
 
   return (
-    <div className="shrink-0 border-t border-border/45 bg-card/65 px-2.5 py-2">
+    <div className="shrink-0 border-t border-border/45 bg-card/60 px-2 py-1.5">
       <button
         type="button"
         onClick={onOpenHistory}
         disabled={!onOpenHistory}
         className={cn(
-          "group flex w-full min-w-0 items-center gap-2 rounded-md border border-border/45 bg-background/55 px-2 py-1.5 text-left transition-colors",
+          "group flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left transition-colors",
           onOpenHistory
-            ? "cursor-pointer hover:border-border/75 hover:bg-background/80"
-            : "cursor-not-allowed opacity-75",
+            ? "cursor-pointer hover:bg-accent/40"
+            : "cursor-not-allowed opacity-70",
         )}
       >
-        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground group-hover:bg-foreground/8 group-hover:text-foreground">
-          <HugeiconsIcon icon={Clock01Icon} size={13} strokeWidth={1.9} />
+        <HugeiconsIcon
+          icon={Clock01Icon}
+          size={14}
+          strokeWidth={1.85}
+          className="shrink-0 text-muted-foreground group-hover:text-foreground"
+        />
+        <span className="truncate text-[11.5px] font-medium text-foreground/90 group-hover:text-foreground">
+          History
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[11.5px] font-medium leading-tight text-foreground">
-            Open Git History
-          </div>
-          <div className="truncate text-[10px] leading-tight text-muted-foreground">
-            {onOpenHistory ? summary : "Coming next — design in progress"}
-          </div>
-        </div>
+        <span className="ml-auto truncate text-[10.5px] tabular-nums text-muted-foreground/70">
+          {onOpenHistory ? summary : "—"}
+        </span>
         <HugeiconsIcon
           icon={ArrowRight01Icon}
           size={11}
           strokeWidth={2}
-          className="shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5"
+          className="shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground"
         />
       </button>
     </div>
@@ -981,22 +1038,22 @@ function GroupHeader({
       <button
         type="button"
         onClick={toggle}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left text-muted-foreground transition-colors hover:bg-accent/35 hover:text-foreground"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-left text-muted-foreground/85 transition-colors hover:bg-accent/30 hover:text-foreground"
         aria-expanded={isOpen}
       >
         <HugeiconsIcon
           icon={ArrowRight01Icon}
-          size={11}
-          strokeWidth={2.15}
+          size={10}
+          strokeWidth={2.2}
           className={cn(
-            "shrink-0 transition-transform",
+            "shrink-0 transition-transform duration-150",
             isOpen && "rotate-90",
           )}
         />
-        <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em]">
+        <span className="truncate text-[10.5px] font-semibold uppercase tracking-[0.16em]">
           {title}
         </span>
-        <span className="rounded-sm bg-muted/55 px-1 py-px text-[9.5px] font-medium tabular-nums text-muted-foreground/85">
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/60 px-1 text-[9.5px] font-semibold tabular-nums text-muted-foreground">
           {row.count}
         </span>
       </button>
@@ -1013,9 +1070,9 @@ function GroupHeader({
                 <Spinner className="size-3" />
               ) : (
                 <HugeiconsIcon
-                  icon={ArrowReloadHorizontalIcon}
-                  size={11}
-                  strokeWidth={2}
+                  icon={Eraser01Icon}
+                  size={12}
+                  strokeWidth={1.85}
                 />
               )}
             </IconActionButton>
@@ -1027,7 +1084,7 @@ function GroupHeader({
               {actionBusy === "stage:all" ? (
                 <Spinner className="size-3" />
               ) : (
-                <HugeiconsIcon icon={PlusSignIcon} size={11} strokeWidth={2} />
+                <HugeiconsIcon icon={PlusSignIcon} size={12} strokeWidth={2} />
               )}
             </IconActionButton>
           </>
@@ -1040,7 +1097,7 @@ function GroupHeader({
             {actionBusy === "unstage:all" ? (
               <Spinner className="size-3" />
             ) : (
-              <HugeiconsIcon icon={MinusSignIcon} size={11} strokeWidth={2} />
+              <HugeiconsIcon icon={MinusSignIcon} size={12} strokeWidth={2} />
             )}
           </IconActionButton>
         )}
@@ -1089,14 +1146,24 @@ const EntryRow = memo(function EntryRow({
       aria-selected={isSelected}
       onMouseDown={() => onFocusRow(row.key)}
       className={cn(
-        "group flex h-[30px] items-center gap-2 rounded-md border border-transparent px-2 transition-colors",
+        "group relative flex h-[30px] items-center gap-2 rounded-md pl-2 pr-1.5 transition-all duration-100",
         focused
-          ? "border-primary/35 bg-accent/55"
+          ? "bg-accent/60"
           : isSelected
-            ? "bg-accent/65 text-foreground"
-            : "hover:bg-accent/35",
+            ? "bg-accent/55 text-foreground"
+            : "hover:bg-accent/30",
       )}
     >
+      <span
+        className={cn(
+          "pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-full transition-opacity",
+          statusAccent(entry.statusCode),
+          isSelected || focused
+            ? "opacity-100"
+            : "opacity-55 group-hover:opacity-95",
+        )}
+        aria-hidden
+      />
       <button
         type="button"
         onClick={() => {
@@ -1113,14 +1180,17 @@ const EntryRow = memo(function EntryRow({
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5 leading-none">
           <span
             className={cn(
-              "truncate text-[12px] font-medium leading-tight",
+              "truncate text-[12px] leading-tight",
+              isSelected || focused
+                ? "font-semibold text-foreground"
+                : "font-medium text-foreground/95",
               pathLabel ? "max-w-[58%] shrink-0" : "min-w-0 flex-1",
             )}
           >
             {fileName}
           </span>
           {pathLabel ? (
-            <span className="min-w-0 flex-1 truncate text-[10.5px] leading-tight text-muted-foreground/85">
+            <span className="min-w-0 flex-1 truncate text-[10.5px] leading-tight text-muted-foreground/75">
               {pathLabel}
             </span>
           ) : null}
@@ -1139,9 +1209,9 @@ const EntryRow = memo(function EntryRow({
               <Spinner className="size-3" />
             ) : (
               <HugeiconsIcon
-                icon={ArrowReloadHorizontalIcon}
+                icon={Eraser01Icon}
                 size={11}
-                strokeWidth={2}
+                strokeWidth={1.9}
               />
             )}
           </IconActionButton>
@@ -1155,14 +1225,15 @@ const EntryRow = memo(function EntryRow({
           {isBusy ? (
             <Spinner className="size-3" />
           ) : (
-            <HugeiconsIcon icon={actionIcon} size={11} strokeWidth={2} />
+            <HugeiconsIcon icon={actionIcon} size={12} strokeWidth={2} />
           )}
         </IconActionButton>
       </div>
 
       <span
         className={cn(
-          "inline-flex size-4 shrink-0 items-center justify-center rounded text-[9.5px] font-bold leading-none tabular-nums",
+          "inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-md px-1 font-mono text-[10px] font-bold leading-none tabular-nums",
+          statusChip(entry.statusCode),
           statusTone(entry.statusCode),
         )}
         title={entry.statusLabel}
@@ -1192,7 +1263,7 @@ function IconActionButton({
         <Button
           size="icon-xs"
           variant="ghost"
-          className="cursor-pointer rounded-md text-muted-foreground disabled:cursor-not-allowed"
+          className="size-7 cursor-pointer rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
           aria-label={label}
           disabled={disabled}
           onClick={onClick}
