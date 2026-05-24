@@ -2,6 +2,7 @@ export { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 export { TerminalStack } from "./TerminalStack";
 export {
   disposeSession,
+  leafIdForPty,
   respawnSession,
 } from "./lib/useTerminalSession";
 export {

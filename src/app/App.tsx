@@ -15,6 +15,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { AgentNotificationsBridge } from "@/modules/agents";
+import { Toaster } from "@/components/ui/sonner";
 import {
   AgentRunBridge,
   AiInputBar,
@@ -22,6 +24,7 @@ import {
   AiMiniWindow,
   getAllKeys,
   hasAnyKey,
+  LocalAgentNotificationsBridge,
   SelectionAskAi,
   useChatStore,
 } from "@/modules/ai";
@@ -1085,6 +1088,19 @@ export default function App() {
     [focusPane],
   );
 
+  const onActivateAgent = useCallback(
+    (tabId: number, leafId: number) => {
+      setActiveId(tabId);
+      focusPane(tabId, leafId);
+    },
+    [setActiveId, focusPane],
+  );
+
+  const onActivateLocalAgent = useCallback(() => {
+    openPanel();
+    focusInput(null);
+  }, [openPanel, focusInput]);
+
   const handleLeafExit = useCallback(
     (leafId: number, _code: number) => {
       const all = tabsRef.current;
@@ -1308,7 +1324,8 @@ export default function App() {
               activeTerminalTab !== null &&
               leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
             }
-            onOpenShortcuts={() => setShortcutsOpen(true)}
+            onActivateAgent={onActivateAgent}
+            onActivateLocalAgent={onActivateLocalAgent}
             onOpenSettings={() => void openSettingsWindow()}
             searchTarget={searchTarget}
             searchRef={searchInlineRef}
@@ -1406,11 +1423,21 @@ export default function App() {
             }
           />
 
+          <AgentNotificationsBridge
+            tabs={tabs}
+            activeId={activeId}
+            onActivate={onActivateAgent}
+          />
+          <Toaster position="bottom-right" />
+
           {hasComposer ? (
-            <AgentRunBridge
-              openAiDiffTab={openAiDiffTab}
-              closeAiDiffTab={closeAiDiffTab}
-            />
+            <>
+              <AgentRunBridge
+                openAiDiffTab={openAiDiffTab}
+                closeAiDiffTab={closeAiDiffTab}
+              />
+              <LocalAgentNotificationsBridge />
+            </>
           ) : null}
 
           <AnimatePresence>

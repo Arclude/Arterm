@@ -58,6 +58,13 @@ type Session = {
 
 const sessions = new Map<number, Session>();
 
+export function leafIdForPty(ptyId: number): number | null {
+  for (const [leafId, s] of sessions) {
+    if (s.pty?.id === ptyId) return leafId;
+  }
+  return null;
+}
+
 configureRendererPool({
   resolveLeaf(leafId) {
     const s = sessions.get(leafId);

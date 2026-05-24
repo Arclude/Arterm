@@ -19,6 +19,7 @@ import type { ThemePref } from "@/modules/settings/store";
 import {
   TERMINAL_FONT_SIZES,
   TERMINAL_SCROLLBACK_PRESETS,
+  setAgentNotifications,
   setAutostart,
   setRestoreWindowState,
   setShowHidden,
@@ -74,6 +75,7 @@ export function GeneralSection() {
   const terminalFontSize = usePreferencesStore((s) => s.terminalFontSize);
   const terminalScrollback = usePreferencesStore((s) => s.terminalScrollback);
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
+  const agentNotifications = usePreferencesStore((s) => s.agentNotifications);
 
   useEffect(() => {
     let alive = true;
@@ -289,6 +291,19 @@ export function GeneralSection() {
               ))}
             </SelectContent>
           </Select>
+        </SettingRow>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Agents</Label>
+        <SettingRow
+          title="Coding agent notifications"
+          description="Alert when Claude Code or Codex running in a terminal needs your input or finishes. Desktop notification when Terax is unfocused, in-app otherwise."
+        >
+          <Switch
+            checked={agentNotifications}
+            onCheckedChange={(v) => void setAgentNotifications(v)}
+          />
         </SettingRow>
       </div>
 
