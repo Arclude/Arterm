@@ -319,7 +319,12 @@ function bindSlot(slot: Slot, p: AcquireParams): void {
   slot.lastUsedAt = performance.now();
 
   cancelPendingUnhide(slot);
-  slot.host.style.visibility = "hidden";
+  // NOTE: previously the host was set visibility:hidden here and only restored
+  // inside scheduleUnhide's double-rAF. Under WebView2 that rAF was unreliable,
+  // leaving terminals permanently hidden AND unfocused (the focus() call lives
+  // in the same rAF) — visible-but-blank tabs you couldn't type into. Keep the
+  // host visible throughout; the clear()/reset()/snapshot below still run before
+  // the next paint, so there is no stale-content flash.
 
   if (slot.host.parentNode !== p.container) {
     p.container.appendChild(slot.host);
@@ -535,7 +540,15 @@ const WEBGL_RECOVERY_DELAY_MS = 250;
 // unhide to defeat silent GPU/context staleness.
 const SLOT_STALE_MS = 10_000;
 
+// WebGL is force-disabled: under the Tauri WebView2 runtime on Windows the
+// xterm WebGL renderer paints blank glyphs (the cursor shows but text never
+// rasterizes — the GPU glyph atlas stays empty after the slot is reparented
+// out of the off-screen recycler). The DOM renderer is reliable here. Flip
+// this to re-enable WebGL only behind a runtime capability check.
+const WEBGL_FORCE_DISABLED: boolean = true;
+
 function attachWebgl(slot: Slot): void {
+  if (WEBGL_FORCE_DISABLED) return;
   if (slot.webglAddon || !slot.term.element) return;
   if (!usePreferencesStore.getState().terminalWebglEnabled) return;
   const elem = slot.term.element;

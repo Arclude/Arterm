@@ -47,6 +47,11 @@ type Session = {
   cols: number;
   rows: number;
   container: HTMLDivElement | null;
+  // Input produced before the pty_open invoke resolves (s.pty still null) — most
+  // importantly the terminal's reply to the shell's startup ESC[6n cursor-position
+  // query. Without this buffer that reply is dropped and the shell (PSReadLine)
+  // never draws its prompt, leaving the first terminal blank. Flushed on assign.
+  pendingInput: string[];
   snapshot: string | null;
   searchQuery: string | null;
   dormantRing: DormantRing;
@@ -128,7 +133,10 @@ configureRendererPool({
     if (!s) return null;
     return {
       writeToPty: (data) => {
-        s.pty?.write(data);
+        if (s.pty) void s.pty.write(data);
+        // pty_open not resolved yet — buffer (e.g. the ESC[6n cursor reply) so
+        // it is flushed the instant s.pty is assigned. See pendingInput.
+        else s.pendingInput.push(data);
       },
       resizePty: (cols, rows) => {
         s.cols = cols;
@@ -178,6 +186,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     cols: 0,
     rows: 0,
     container: null,
+    pendingInput: [],
     snapshot: null,
     searchQuery: null,
     dormantRing: new DormantRing(),
@@ -192,6 +201,13 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
   })();
 
   return session;
+}
+
+function flushPendingInput(s: Session): void {
+  if (!s.pty || s.pendingInput.length === 0) return;
+  const pending = s.pendingInput;
+  s.pendingInput = [];
+  for (const d of pending) void s.pty.write(d);
 }
 
 function deliverPtyBytes(leafId: number, bytes: Uint8Array): void {
@@ -306,6 +322,7 @@ function attachSession(
           return;
         }
         s.pty = pty;
+        flushPendingInput(s);
         if (s.cols > 0 && s.rows > 0) pty.resize(s.cols, s.rows);
       })
       .catch((e) => {
@@ -359,6 +376,7 @@ export async function respawnSession(
     return;
   }
   s.pty = pty;
+  flushPendingInput(s);
   if (s.cols > 0 && s.rows > 0) pty.resize(s.cols, s.rows);
 }
 
