@@ -1,0 +1,24 @@
+{
+  "id": "example.solar-dusk",
+  "name": "Solar Dusk",
+  "version": "1.0.0",
+  "author": "you",
+  "description": "Smallest possible package: a single dark theme, no snippets.",
+  "contributes": {
+    "themes": [
+      {
+        "id": "solar-dusk",
+        "name": "Solar Dusk",
+        "variants": {
+          "dark": {
+            "terminal": {
+              "background": "#1a1410",
+              "foreground": "#e8d9c0",
+              "cursor": "#ff9e3b"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -10,7 +10,7 @@ import { useWhisperRecording } from "../hooks/useWhisperRecording";
 import { expandSnippetTokens, type Snippet } from "../lib/snippets";
 import { tryRunSlashCommand, type SlashCommandMeta } from "./slashCommands";
 import { getOrCreateChat, useChatStore } from "../store/chatStore";
-import { useSnippetsStore } from "../store/snippetsStore";
+import { allSnippets, useSnippetsStore } from "../store/snippetsStore";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 
 export type FileAttachment = {
@@ -264,7 +264,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
       );
     const { body: bodyAfterTokens, blocks: snippetBlocks } = expandSnippetTokens(
       effectiveText,
-      useSnippetsStore.getState().snippets,
+      allSnippets(useSnippetsStore.getState()),
     );
     const seenHandles = new Set<string>();
     const allSnippetBlocks: string[] = [];

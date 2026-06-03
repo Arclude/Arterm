@@ -92,6 +92,15 @@ pub struct GitCommitFileChange {
     pub is_binary: bool,
 }
 
+/// Aggregate working-tree diff stats vs HEAD (tracked changes), for the status bar.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDiffStat {
+    pub files: u32,
+    pub insertions: u32,
+    pub deletions: u32,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitLogEntry {

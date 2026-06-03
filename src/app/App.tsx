@@ -46,6 +46,7 @@ import { native } from "@/modules/ai/lib/native";
 import { redactSensitive } from "@/modules/ai/lib/redact";
 import { useAgentsStore } from "@/modules/ai/store/agentsStore";
 import { useSnippetsStore } from "@/modules/ai/store/snippetsStore";
+import { loadExtensions, onExtensionsChange } from "@/modules/extensions";
 import {
   CommandPalette,
   createCommandPaletteActions,
@@ -508,6 +509,13 @@ export default function App() {
     void hydrateSessions();
     void useAgentsStore.getState().hydrate();
     void useSnippetsStore.getState().hydrate();
+    void loadExtensions();
+    // Reload when the settings window installs/toggles/uninstalls an extension
+    // so contributed themes + snippets apply in the main window without restart.
+    const unlisten = onExtensionsChange(() => void loadExtensions());
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
   }, [hydrateSessions]);
 
   const activeTab = tabs.find((t) => t.id === activeId);
@@ -1692,6 +1700,9 @@ export default function App() {
               onCd={sendCd}
               onWorkspaceChange={switchWorkspace}
               onOpenMini={openMini}
+              onNewTab={openNewTab}
+              onToggleSidebar={toggleSidebar}
+              activeLeafId={activeLeafId}
               hasComposer={hasComposer}
               privateActive={
                 activeTab?.kind === "terminal" && activeTab.private === true

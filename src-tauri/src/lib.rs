@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, fs, git, lsp, net, pty, secrets, shell, workspace};
+use modules::{agent, extensions, fs, git, lsp, net, pty, secrets, shell, workspace};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
@@ -200,6 +200,7 @@ pub fn run() {
             git::commands::git_panel_snapshot,
             git::commands::git_status,
             git::commands::git_diff,
+            git::commands::git_diff_stat,
             git::commands::git_diff_content,
             git::commands::git_stage,
             git::commands::git_unstage,
@@ -230,6 +231,11 @@ pub fn run() {
             open_settings_window,
             agent::agent_enable_claude_hooks,
             agent::agent_claude_hooks_status,
+            extensions::extensions_list,
+            extensions::extensions_dir_path,
+            extensions::extensions_write,
+            extensions::extensions_uninstall,
+            extensions::extensions_fetch_text,
             secrets::secrets_get,
             secrets::secrets_set,
             secrets::secrets_delete,

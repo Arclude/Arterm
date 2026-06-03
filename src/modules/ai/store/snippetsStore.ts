@@ -12,16 +12,29 @@ const CHANGED_EVENT = "artex://ai-snippets-changed";
 type State = {
   hydrated: boolean;
   snippets: Snippet[];
+  /** Snippets contributed by enabled extensions. Not persisted to the user's
+   *  snippet store — replaced wholesale whenever extensions (re)load. */
+  extensionSnippets: Snippet[];
   hydrate: () => Promise<void>;
   upsert: (snippet: Snippet) => void;
   remove: (id: string) => void;
+  setExtensionSnippets: (snippets: Snippet[]) => void;
 };
+
+/** All snippets visible to the composer: user snippets + extension snippets. */
+export function allSnippets(state: Pick<State, "snippets" | "extensionSnippets">): Snippet[] {
+  return state.extensionSnippets.length === 0
+    ? state.snippets
+    : [...state.snippets, ...state.extensionSnippets];
+}
 
 let initialized = false;
 
 export const useSnippetsStore = create<State>((set, get) => ({
   hydrated: false,
   snippets: [],
+  extensionSnippets: [],
+  setExtensionSnippets: (extensionSnippets) => set({ extensionSnippets }),
   hydrate: async () => {
     if (initialized) return;
     initialized = true;

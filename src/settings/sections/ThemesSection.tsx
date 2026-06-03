@@ -25,11 +25,12 @@ import { useMemo, useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
-  const { themeId, setThemeId, resolvedMode, customThemes } = useTheme();
+  const { themeId, setThemeId, resolvedMode, customThemes, extensionThemes } =
+    useTheme();
   const builtinThemes = listBuiltinThemes();
   const themes = useMemo(
-    () => [...builtinThemes, ...customThemes],
-    [builtinThemes, customThemes],
+    () => [...builtinThemes, ...customThemes, ...extensionThemes],
+    [builtinThemes, customThemes, extensionThemes],
   );
   const customIds = useMemo(
     () => new Set(customThemes.map((t) => t.id)),

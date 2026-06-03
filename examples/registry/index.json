@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "updatedAt": "2026-06-03T00:00:00Z",
+  "extensions": [
+    {
+      "id": "artex.sample-pack",
+      "name": "Sample Pack",
+      "description": "Adds a Midnight Ocean theme and an /explain snippet.",
+      "author": "Artex",
+      "version": "1.0.0",
+      "manifestUrl": "https://raw.githubusercontent.com/Arclude/artex-extensions/main/extensions/sample-pack/artex-extension.json",
+      "homepage": "https://github.com/Arclude/artex-extensions",
+      "tags": ["theme", "snippet"]
+    },
+    {
+      "id": "example.solar-dusk",
+      "name": "Solar Dusk",
+      "description": "A minimal dark terminal theme.",
+      "author": "you",
+      "version": "1.0.0",
+      "manifestUrl": "https://raw.githubusercontent.com/Arclude/artex-extensions/main/extensions/minimal-theme/artex-extension.json",
+      "tags": ["theme"]
+    }
+  ]
+}

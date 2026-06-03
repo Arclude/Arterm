@@ -9,7 +9,8 @@ use crate::modules::git::process::{
 };
 use crate::modules::git::types::{
     DiscardEntry, GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult,
-    GitLogEntry, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStatusSnapshot,
+    GitDiffStat, GitLogEntry, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo,
+    GitStatusSnapshot,
     TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
 };
 use crate::modules::git::utils::{
@@ -201,6 +202,64 @@ fn diff_inner(
         diff_text,
         truncated: output.truncated,
     })
+}
+
+pub fn diff_stat(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<GitDiffStat> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+    diff_stat_inner(&repo_root)
+}
+
+/// Sum insertions/deletions across tracked working-tree + index changes vs HEAD.
+/// Untracked files contribute no line counts (git diff ignores them). Falls back
+/// to staged-only on a repo with no commits yet.
+fn diff_stat_inner(repo_root: &ResolvedGitDirectory) -> Result<GitDiffStat> {
+    let run = |args: Vec<OsString>| {
+        run_git(
+            &repo_root.workspace,
+            Some(&repo_root.git_path),
+            args,
+            DEFAULT_TIMEOUT_SECS,
+        )
+    };
+    let mut output = run(vec![
+        "diff".into(),
+        "--no-ext-diff".into(),
+        "--numstat".into(),
+        "HEAD".into(),
+    ])?;
+    if output.exit_code != Some(0) {
+        // No HEAD yet (fresh repo) — count staged changes against the empty tree.
+        output = run(vec![
+            "diff".into(),
+            "--no-ext-diff".into(),
+            "--numstat".into(),
+            "--cached".into(),
+        ])?;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut stat = GitDiffStat {
+        files: 0,
+        insertions: 0,
+        deletions: 0,
+    };
+    for line in text.lines() {
+        let mut parts = line.split('\t');
+        let added = parts.next().unwrap_or("");
+        let removed = parts.next().unwrap_or("");
+        if parts.next().is_none() {
+            continue; // not an "<added>\t<removed>\t<path>" row
+        }
+        stat.files += 1;
+        // Binary files are reported as "-\t-"; parse failures count as 0.
+        stat.insertions += added.parse::<u32>().unwrap_or(0);
+        stat.deletions += removed.parse::<u32>().unwrap_or(0);
+    }
+    Ok(stat)
 }
 
 pub fn diff_content(

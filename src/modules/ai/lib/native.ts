@@ -71,6 +71,12 @@ export type GitDiffResult = {
   truncated: boolean;
 };
 
+export type GitDiffStat = {
+  files: number;
+  insertions: number;
+  deletions: number;
+};
+
 export type GitDiffContentResult = {
   originalContent: string;
   modifiedContent: string;
@@ -257,6 +263,11 @@ export const native = {
     }),
   gitStatus: (repoRoot: string) =>
     invoke<GitStatusSnapshot>("git_status", {
+      repoRoot,
+      workspace: currentWorkspaceEnv(),
+    }),
+  gitDiffStat: (repoRoot: string) =>
+    invoke<GitDiffStat>("git_diff_stat", {
       repoRoot,
       workspace: currentWorkspaceEnv(),
     }),

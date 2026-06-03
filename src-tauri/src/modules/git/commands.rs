@@ -3,6 +3,7 @@ use tauri::{AppHandle, Manager};
 use crate::modules::git::operations;
 use crate::modules::git::types::{
     DiscardEntry, GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult,
+    GitDiffStat,
     GitLogEntry, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStatusSnapshot,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
@@ -70,6 +71,19 @@ pub async fn git_diff(
     let workspace = WorkspaceEnv::from_option(workspace);
     blocking(app, move |r| {
         operations::diff(r, &repo_root, path.as_deref(), staged, &workspace).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_diff_stat(
+    repo_root: String,
+    workspace: Option<WorkspaceEnv>,
+    app: AppHandle,
+) -> Result<GitDiffStat, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    blocking(app, move |r| {
+        operations::diff_stat(r, &repo_root, &workspace).map_err(Into::into)
     })
     .await
 }

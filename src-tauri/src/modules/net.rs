@@ -118,7 +118,7 @@ async fn resolve_and_classify(host: &str) -> Result<(IpKind, Vec<IpAddr>), Strin
 
 use std::net::ToSocketAddrs;
 
-fn validate_url(url: &str, allow_private: bool) -> Result<reqwest::Url, String> {
+pub(crate) fn validate_url(url: &str, allow_private: bool) -> Result<reqwest::Url, String> {
     let parsed = reqwest::Url::parse(url).map_err(|e| format!("invalid url: {e}"))?;
     match parsed.scheme() {
         "http" | "https" => {}
@@ -141,7 +141,7 @@ fn validate_url(url: &str, allow_private: bool) -> Result<reqwest::Url, String> 
 /// Classify the host AND return safe IPs to pin reqwest's resolver to.
 /// Defeats DNS rebinding (second-lookup-returns-different-IP) by reusing
 /// exactly the addresses that passed `ip_kind`.
-async fn classify_and_collect_safe_ips(
+pub(crate) async fn classify_and_collect_safe_ips(
     host: &str,
     allow_private: bool,
 ) -> Result<Vec<IpAddr>, String> {
@@ -242,7 +242,7 @@ fn build_request(
     Ok(req)
 }
 
-fn build_safe_client(
+pub(crate) fn build_safe_client(
     allow_private: bool,
     pinned: &[(String, Vec<IpAddr>)],
 ) -> Result<reqwest::Client, String> {

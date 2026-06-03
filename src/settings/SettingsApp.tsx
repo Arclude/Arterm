@@ -3,6 +3,7 @@ import {
   InformationCircleIcon,
   KeyboardIcon,
   PaintBoardIcon,
+  PuzzleIcon,
   ServerStack01Icon,
   Settings01Icon,
   UserMultiple02Icon,
@@ -13,10 +14,12 @@ import { JSX, useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WindowControls } from "@/components/WindowControls";
 import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
+import { loadExtensions, onExtensionsChange } from "@/modules/extensions";
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { AboutSection } from "./sections/AboutSection";
 import { AgentsSection } from "./sections/AgentsSection";
+import { ExtensionsSection } from "./sections/ExtensionsSection";
 import { GeneralSection } from "./sections/GeneralSection";
 import { LanguageServersSection } from "./sections/LanguageServersSection";
 import { ModelsSection } from "./sections/ModelsSection";
@@ -61,6 +64,12 @@ const TABS: {
     component: LanguageServersSection,
   },
   {
+    id: "extensions",
+    label: "Extensions",
+    icon: PuzzleIcon,
+    component: ExtensionsSection,
+  },
+  {
     id: "about",
     label: "About",
     icon: InformationCircleIcon,
@@ -75,6 +84,7 @@ const VALID_TABS: SettingsTab[] = [
   "models",
   "agents",
   "language-servers",
+  "extensions",
   "about",
 ];
 
@@ -96,6 +106,17 @@ export function SettingsApp() {
   useEffect(() => {
     void init();
   }, [init]);
+
+  // Load extensions at the settings-window root (not only when the Extensions
+  // tab mounts) so contributed themes resolve even on the Themes tab, and stay
+  // in sync when another window changes them.
+  useEffect(() => {
+    void loadExtensions();
+    const unlisten = onExtensionsChange(() => void loadExtensions());
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
 
   useEffect(() => {
     const apply = (detail: string) => {
@@ -128,10 +149,10 @@ export function SettingsApp() {
           value={active}
           onValueChange={(v) => setActive(v as SettingsTab)}
           orientation="horizontal"
-          className="flex-1 items-center"
+          className="min-w-0 flex-1 items-center"
           data-tauri-drag-region
         >
-          <TabsList className="mx-auto h-7 bg-muted/40 px-2">
+          <TabsList className="mx-auto h-7 max-w-full overflow-x-auto bg-muted/40 px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.id}

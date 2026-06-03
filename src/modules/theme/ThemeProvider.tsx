@@ -18,6 +18,7 @@ import {
   type EditorThemeId,
   type ThemePref,
 } from "@/modules/settings/store";
+import { useExtensionsStore } from "@/modules/extensions";
 import { applyTheme, clearTheme } from "./applyTheme";
 import {
   listCustomThemes,
@@ -40,6 +41,8 @@ type ThemeProviderState = {
   resolvedMode: "dark" | "light";
   themeId: string;
   customThemes: Theme[];
+  /** Themes contributed by enabled extensions (read-only in the UI). */
+  extensionThemes: Theme[];
   setMode: (mode: ThemePref) => void;
   setThemeId: (id: string) => void;
 };
@@ -76,6 +79,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   const [mode, setModeState] = useState<ThemePref>(() => readFastMode(defaultMode));
   const [themeId, setThemeIdState] = useState<string>(() => readFastThemeId());
   const [customThemes, setCustomThemes] = useState<Theme[]>([]);
+  const extensionThemes = useExtensionsStore((s) => s.enabledThemes);
   const [systemDark, setSystemDark] = useState<boolean>(() =>
     typeof window === "undefined"
       ? true
@@ -141,7 +145,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       lastEditorPairRef.current = null;
       return;
     }
-    const theme = resolveTheme(themeId, customThemes);
+    const theme = resolveTheme(themeId, [...customThemes, ...extensionThemes]);
     applyTheme(theme, resolvedMode);
     const editorPair = theme.editorTheme?.[resolvedMode];
     if (
@@ -152,7 +156,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       lastEditorPairRef.current = editorPair;
       void persistEditorTheme(editorPair as EditorThemeId);
     }
-  }, [themeId, resolvedMode, customThemes]);
+  }, [themeId, resolvedMode, customThemes, extensionThemes]);
 
   const setMode = useCallback((next: ThemePref) => {
     setModeState(next);
@@ -167,8 +171,8 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, []);
 
   const value = useMemo<ThemeProviderState>(
-    () => ({ mode, resolvedMode, themeId, customThemes, setMode, setThemeId }),
-    [mode, resolvedMode, themeId, customThemes, setMode, setThemeId],
+    () => ({ mode, resolvedMode, themeId, customThemes, extensionThemes, setMode, setThemeId }),
+    [mode, resolvedMode, themeId, customThemes, extensionThemes, setMode, setThemeId],
   );
 
   return (

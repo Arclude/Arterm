@@ -70,7 +70,12 @@ function detectFileTrigger(value: string, caret: number): FileTrigger | null {
 
 export function AiInputBar() {
   const c = useComposer();
-  const snippets = useSnippetsStore((s) => s.snippets);
+  const userSnippets = useSnippetsStore((s) => s.snippets);
+  const extSnippets = useSnippetsStore((s) => s.extensionSnippets);
+  const snippets = useMemo(
+    () => (extSnippets.length ? [...userSnippets, ...extSnippets] : userSnippets),
+    [userSnippets, extSnippets],
+  );
   const workspaceRoot = useChatStore((s) => s.live.getWorkspaceRoot());
 
   const [trigger, setTrigger] = useState<SnippetTrigger | null>(null);
