@@ -1,9 +1,10 @@
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { invoke } from "@tauri-apps/api/core";
+import { homeDir } from "@tauri-apps/api/path";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import type { SearchAddon } from "@xterm/addon-search";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,47 +15,49 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { getLaunchDir } from "@/lib/launchDir";
+import { quoteShellArg } from "@/lib/shellQuote";
+import { useZoom } from "@/lib/useZoom";
 import { cn } from "@/lib/utils";
 import { AgentNotificationsBridge } from "@/modules/agents";
 import { firePendingReviewForSession } from "@/modules/agents/lib/review";
 import { useManagedAgentsStore } from "@/modules/agents/store/managedAgentsStore";
-import { Toaster } from "@/components/ui/sonner";
 import {
   AgentRunBridge,
   AiInputBar,
   AiInputBarConnect,
   AiMiniWindow,
-  getAllKeys,
   getAllCustomEndpointKeys,
+  getAllKeys,
   hasAnyKey,
   LocalAgentNotificationsBridge,
   SelectionAskAi,
   useChatStore,
 } from "@/modules/ai";
 import { AiComposerProvider } from "@/modules/ai/lib/composer";
-import { redactSensitive } from "@/modules/ai/lib/redact";
 import { native } from "@/modules/ai/lib/native";
+import { redactSensitive } from "@/modules/ai/lib/redact";
 import { useAgentsStore } from "@/modules/ai/store/agentsStore";
 import { useSnippetsStore } from "@/modules/ai/store/snippetsStore";
-import {
-  AiDiffStack,
-  EditorStack,
-  GitDiffStack,
-  NewEditorDialog,
-  type EditorPaneHandle,
-} from "@/modules/editor";
-import {
-  GitHistoryStack,
-  type GitHistorySearchHandle,
-} from "@/modules/git-history";
-import { getLaunchDir } from "@/lib/launchDir";
-import { quoteShellArg } from "@/lib/shellQuote";
-import { useZoom } from "@/lib/useZoom";
-import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import {
   CommandPalette,
   createCommandPaletteActions,
 } from "@/modules/command-palette";
+import {
+  AiDiffStack,
+  type EditorPaneHandle,
+  EditorStack,
+  GitDiffStack,
+  NewEditorDialog,
+} from "@/modules/editor";
+import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import {
   listenFsChanged,
   parentDir,
@@ -62,28 +65,38 @@ import {
   watchRemove,
 } from "@/modules/explorer/lib/watch";
 import {
+  type GitHistorySearchHandle,
+  GitHistoryStack,
+} from "@/modules/git-history";
+import {
   Header,
   type SearchInlineHandle,
   type SearchTarget,
 } from "@/modules/header";
+import { lspManager } from "@/modules/lsp";
 import { MarkdownStack } from "@/modules/markdown";
-import { PreviewStack, type PreviewPaneHandle } from "@/modules/preview";
+import { type PreviewPaneHandle, PreviewStack } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { onKeysChanged, setThemeId as persistThemeId } from "@/modules/settings/store";
 import {
-  ShortcutsDialog,
-  useGlobalShortcuts,
+  onKeysChanged,
+  setThemeId as persistThemeId,
+} from "@/modules/settings/store";
+import {
   type ShortcutHandlers,
   type ShortcutId,
+  ShortcutsDialog,
+  useGlobalShortcuts,
 } from "@/modules/shortcuts";
 import { SidebarRail, type SidebarViewId } from "@/modules/sidebar";
-import {
-  SourceControlPanel,
-  useSourceControl,
-} from "@/modules/source-control";
+import { SourceControlPanel, useSourceControl } from "@/modules/source-control";
 import { StatusBar } from "@/modules/statusbar";
-import { MAX_PANES_PER_TAB, useTabs, useWindowTitle, useWorkspaceCwd } from "@/modules/tabs";
+import {
+  MAX_PANES_PER_TAB,
+  useTabs,
+  useWindowTitle,
+  useWorkspaceCwd,
+} from "@/modules/tabs";
 import {
   clearFocusedTerminal,
   disposeSession,
@@ -92,14 +105,17 @@ import {
   leafHasForegroundProcess,
   leafIds,
   respawnSession,
+  type TerminalPaneHandle,
   TerminalStack,
+  useTerminalFileDrop,
   whenSessionReady,
   writeToSession,
-  type TerminalPaneHandle,
-  useTerminalFileDrop,
 } from "@/modules/terminal";
 import { ThemeProvider } from "@/modules/theme";
-import { listCustomThemes, saveCustomTheme } from "@/modules/theme/customThemes";
+import {
+  listCustomThemes,
+  saveCustomTheme,
+} from "@/modules/theme/customThemes";
 import {
   isThemeFilePath,
   onThemeEdit,
@@ -116,13 +132,6 @@ import {
   useWorkspaceEnvStore,
   type WorkspaceEnv,
 } from "@/modules/workspace";
-import { invoke } from "@tauri-apps/api/core";
-import { homeDir } from "@tauri-apps/api/path";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { SearchAddon } from "@xterm/addon-search";
-import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
 
 type TuiWaitResult = "ready" | "gone" | "timeout";
 
@@ -151,8 +160,8 @@ function dirname(path: string | null): string | null {
 const SIDEBAR_DEFAULT_WIDTH = 260;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
-const SIDEBAR_WIDTH_STORAGE_KEY = "terax.sidebar.width";
-const SIDEBAR_VIEW_STORAGE_KEY = "terax.sidebar.view";
+const SIDEBAR_WIDTH_STORAGE_KEY = "artex.sidebar.width";
+const SIDEBAR_VIEW_STORAGE_KEY = "artex.sidebar.view";
 
 function clampSidebarWidth(width: number): number {
   return Math.min(
@@ -242,7 +251,8 @@ export default function App() {
   const sidebarRef = useRef<PanelImperativeHandle | null>(null);
   const sidebarWidthRef = useRef(readSidebarWidth());
   const sidebarWidthWriteTimerRef = useRef(0);
-  const [sidebarView, setSidebarViewState] = useState<SidebarViewId>(readSidebarView);
+  const [sidebarView, setSidebarViewState] =
+    useState<SidebarViewId>(readSidebarView);
   const persistSidebarView = useCallback((view: SidebarViewId) => {
     setSidebarViewState(view);
     try {
@@ -330,7 +340,9 @@ export default function App() {
 
   const [home, setHome] = useState<string | null>(null);
   const [pendingCloseTab, setPendingCloseTab] = useState<number | null>(null);
-  const [pendingTerminalCloseTab, setPendingTerminalCloseTab] = useState<number | null>(null);
+  const [pendingTerminalCloseTab, setPendingTerminalCloseTab] = useState<
+    number | null
+  >(null);
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const setWorkspaceEnv = useWorkspaceEnvStore((s) => s.setEnv);
   const [launchCwd, setLaunchCwd] = useState<string | null>(null);
@@ -363,7 +375,9 @@ export default function App() {
       }
       const dirty = tabsRef.current.some((t) => t.kind === "editor" && t.dirty);
       if (dirty) {
-        window.alert("Save or close unsaved editor tabs before switching workspace.");
+        window.alert(
+          "Save or close unsaved editor tabs before switching workspace.",
+        );
         return;
       }
 
@@ -446,7 +460,9 @@ export default function App() {
     (ollamaBaseURL.trim().length > 0 && ollamaModelId.trim().length > 0) ||
     (openaiCompatibleBaseURL.trim().length > 0 &&
       openaiCompatibleModelId.trim().length > 0) ||
-    customEndpoints.some((e) => e.baseURL.trim().length > 0 && e.modelId.trim().length > 0);
+    customEndpoints.some(
+      (e) => e.baseURL.trim().length > 0 && e.modelId.trim().length > 0,
+    );
   const hasComposer = hasAnyKey(apiKeys) || hasLocalModel;
 
   const prefsHydrated = usePreferencesStore((s) => s.hydrated);
@@ -525,20 +541,21 @@ export default function App() {
 
   useEffect(() => {
     type FileWrittenPayload = { path: string; source?: string };
-    const unlistenPromise = getCurrentWebviewWindow().listen<FileWrittenPayload>(
-      "fs:file-written",
-      (event) => {
-        if (event.payload.source === "editor") return;
-        const normalizedPath = event.payload.path.replace(/\\/g, "/");
-        const currentTabs = tabsRef.current;
-        for (const t of currentTabs) {
-          if (t.kind !== "editor") continue;
-          if (t.path.replace(/\\/g, "/") === normalizedPath) {
-            editorRefs.current.get(t.id)?.reload();
+    const unlistenPromise =
+      getCurrentWebviewWindow().listen<FileWrittenPayload>(
+        "fs:file-written",
+        (event) => {
+          if (event.payload.source === "editor") return;
+          const normalizedPath = event.payload.path.replace(/\\/g, "/");
+          const currentTabs = tabsRef.current;
+          for (const t of currentTabs) {
+            if (t.kind !== "editor") continue;
+            if (t.path.replace(/\\/g, "/") === normalizedPath) {
+              editorRefs.current.get(t.id)?.reload();
+            }
           }
-        }
-      },
-    );
+        },
+      );
     return () => {
       void unlistenPromise.then((un) => un());
     };
@@ -581,30 +598,32 @@ export default function App() {
   // the code editor. Saving it re-ingests into the runtime store + applies live.
   useEffect(() => {
     type FileWrittenPayload = { path: string; source?: string };
-    const unlistenPromise = getCurrentWebviewWindow().listen<FileWrittenPayload>(
-      "fs:file-written",
-      (event) => {
-        if (event.payload.source !== "editor") return;
-        if (!isThemeFilePath(event.payload.path)) return;
-        void (async () => {
-          try {
-            const res = await invoke<{ kind: string; content?: string }>(
-              "fs_read_file",
-              { path: event.payload.path, workspace: currentWorkspaceEnv() },
-            );
-            if (res.kind !== "text" || typeof res.content !== "string") return;
-            const parsed = parseThemeFile(res.content);
-            if (!parsed.ok) {
-              console.warn("[terax] theme not applied:", parsed.error);
-              return;
+    const unlistenPromise =
+      getCurrentWebviewWindow().listen<FileWrittenPayload>(
+        "fs:file-written",
+        (event) => {
+          if (event.payload.source !== "editor") return;
+          if (!isThemeFilePath(event.payload.path)) return;
+          void (async () => {
+            try {
+              const res = await invoke<{ kind: string; content?: string }>(
+                "fs_read_file",
+                { path: event.payload.path, workspace: currentWorkspaceEnv() },
+              );
+              if (res.kind !== "text" || typeof res.content !== "string")
+                return;
+              const parsed = parseThemeFile(res.content);
+              if (!parsed.ok) {
+                console.warn("[artex] theme not applied:", parsed.error);
+                return;
+              }
+              await saveCustomTheme(parsed.theme);
+            } catch (e) {
+              console.warn("[artex] theme ingest failed:", e);
             }
-            await saveCustomTheme(parsed.theme);
-          } catch (e) {
-            console.warn("[terax] theme ingest failed:", e);
-          }
-        })();
-      },
-    );
+          })();
+        },
+      );
     return () => {
       void unlistenPromise.then((un) => un());
     };
@@ -638,6 +657,18 @@ export default function App() {
     };
   }, [openFileTab]);
 
+  // Reap language servers orphaned by a previous webview load, and open the
+  // target file when go-to-definition lands in another file.
+  useEffect(() => {
+    void lspManager.stopOrphanedServers();
+    const onLspGoto = (e: Event) => {
+      const detail = (e as CustomEvent<{ path: string }>).detail;
+      if (detail?.path) openFileTab(detail.path);
+    };
+    window.addEventListener("artex:lsp-goto", onLspGoto);
+    return () => window.removeEventListener("artex:lsp-goto", onLspGoto);
+  }, [openFileTab]);
+
   const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
     activeTab,
     tabs,
@@ -648,7 +679,9 @@ export default function App() {
 
   useEffect(() => {
     setActiveSearchAddon(
-      activeLeafId !== null ? (searchAddons.current.get(activeLeafId) ?? null) : null,
+      activeLeafId !== null
+        ? (searchAddons.current.get(activeLeafId) ?? null)
+        : null,
     );
     setActiveEditorHandle(editorRefs.current.get(activeId) ?? null);
   }, [activeId, activeLeafId]);
@@ -771,7 +804,7 @@ export default function App() {
       // Dispatch a window event the composer listens for. Same pattern as
       // selections — keeps file-explorer decoupled from the AI module.
       window.dispatchEvent(
-        new CustomEvent<string>("terax:ai-attach-file", { detail: path }),
+        new CustomEvent<string>("artex:ai-attach-file", { detail: path }),
       );
       openPanel();
       focusInput(null);
@@ -989,8 +1022,7 @@ export default function App() {
       ),
     [tabs],
   );
-  const sourceControlActive =
-    hasOpenGitTab || sidebarView === "source-control";
+  const sourceControlActive = hasOpenGitTab || sidebarView === "source-control";
   // Stable per-session path so switching tabs / cd-ing in a shell does NOT
   // re-fire git IPC for the badge. The active panel resolves the current
   // context path on its own when the user actually opens git.
@@ -1337,7 +1369,11 @@ export default function App() {
     const findCwd = () => {
       const active = tabs.find((x) => x.id === activeId);
       if (active?.kind === "terminal") {
-        return findLeafCwd(active.paneTree, active.activeLeafId) ?? active.cwd ?? null;
+        return (
+          findLeafCwd(active.paneTree, active.activeLeafId) ??
+          active.cwd ??
+          null
+        );
       }
       for (let i = tabs.length - 1; i >= 0; i--) {
         const t = tabs[i];
@@ -1384,8 +1420,12 @@ export default function App() {
         if (!trimmed) return null;
         const oneLine = trimmed.replace(/\s*\r?\n\s*/g, " ");
         const cwd = findCwd();
-        const short = oneLine.length > 32 ? `${oneLine.slice(0, 32)}…` : oneLine;
-        const { tabId, leafId } = newAgentTab(cwd ?? undefined, `claude · ${short}`);
+        const short =
+          oneLine.length > 32 ? `${oneLine.slice(0, 32)}…` : oneLine;
+        const { tabId, leafId } = newAgentTab(
+          cwd ?? undefined,
+          `claude · ${short}`,
+        );
         useManagedAgentsStore
           .getState()
           .register({ leafId, tabId, sessionId, task: oneLine, cwd });
@@ -1404,7 +1444,7 @@ export default function App() {
           if (result !== "ready") {
             if (result === "timeout") {
               console.warn(
-                "[terax] Claude TUI did not appear in time; aborting prompt send",
+                "[artex] Claude TUI did not appear in time; aborting prompt send",
               );
             }
             useManagedAgentsStore.getState().remove(leafId);
@@ -1538,28 +1578,28 @@ export default function App() {
         <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
           {!zenMode && (
             <Header
-            tabs={tabs}
-            activeId={activeId}
-            onSelect={setActiveId}
-            onNew={openNewTab}
-            onNewPrivate={openNewPrivateTab}
-            onNewPreview={() => openPreviewTab("")}
-            onNewEditor={() => setNewEditorOpen(true)}
-            onNewGitGraph={openGitGraphFromContext}
-            onClose={handleClose}
-            onPin={pinTab}
-            onRename={handleRenameTab}
-            onToggleSidebar={toggleSidebar}
-            onSplit={splitActivePaneInActiveTab}
-            canSplit={
-              activeTerminalTab !== null &&
-              leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
-            }
-            onActivateAgent={onActivateAgent}
-            onActivateLocalAgent={onActivateLocalAgent}
-            onOpenSettings={() => void openSettingsWindow()}
-            searchTarget={searchTarget}
-            searchRef={searchInlineRef}
+              tabs={tabs}
+              activeId={activeId}
+              onSelect={setActiveId}
+              onNew={openNewTab}
+              onNewPrivate={openNewPrivateTab}
+              onNewPreview={() => openPreviewTab("")}
+              onNewEditor={() => setNewEditorOpen(true)}
+              onNewGitGraph={openGitGraphFromContext}
+              onClose={handleClose}
+              onPin={pinTab}
+              onRename={handleRenameTab}
+              onToggleSidebar={toggleSidebar}
+              onSplit={splitActivePaneInActiveTab}
+              canSplit={
+                activeTerminalTab !== null &&
+                leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
+              }
+              onActivateAgent={onActivateAgent}
+              onActivateLocalAgent={onActivateLocalAgent}
+              onOpenSettings={() => void openSettingsWindow()}
+              searchTarget={searchTarget}
+              searchRef={searchInlineRef}
             />
           )}
 
@@ -1646,16 +1686,16 @@ export default function App() {
 
           {!zenMode && (
             <StatusBar
-            cwd={activeCwd}
-            filePath={activeFilePath}
-            home={home}
-            onCd={sendCd}
-            onWorkspaceChange={switchWorkspace}
-            onOpenMini={openMini}
-            hasComposer={hasComposer}
-            privateActive={
-              activeTab?.kind === "terminal" && activeTab.private === true
-            }
+              cwd={activeCwd}
+              filePath={activeFilePath}
+              home={home}
+              onCd={sendCd}
+              onWorkspaceChange={switchWorkspace}
+              onOpenMini={openMini}
+              hasComposer={hasComposer}
+              privateActive={
+                activeTab?.kind === "terminal" && activeTab.private === true
+              }
             />
           )}
 

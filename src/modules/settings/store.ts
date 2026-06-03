@@ -1,23 +1,27 @@
+import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
+  type AutocompleteProviderId,
+  type CustomEndpoint,
   DEFAULT_AUTOCOMPLETE_MODEL,
   DEFAULT_MODEL_ID,
   isKnownModelId,
   LMSTUDIO_DEFAULT_BASE_URL,
   MLX_DEFAULT_BASE_URL,
-  OLLAMA_DEFAULT_BASE_URL,
-  migrateLegacyCompatEndpoint,
-  OPENAI_COMPATIBLE_DEFAULT_BASE_URL,
-  type AutocompleteProviderId,
-  type CustomEndpoint,
   type ModelId,
+  migrateLegacyCompatEndpoint,
+  OLLAMA_DEFAULT_BASE_URL,
+  OPENAI_COMPATIBLE_DEFAULT_BASE_URL,
 } from "@/modules/ai/config";
+import type { LspServerConfig } from "@/modules/lsp/config";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+
+export type { LspServerConfig };
+
 import { LazyStore } from "@tauri-apps/plugin-store";
 
 export type ThemePref = "system" | "light" | "dark";
 
-export const DEFAULT_THEME_ID = "terax-default";
+export const DEFAULT_THEME_ID = "artex-default";
 
 export type BackgroundKind = "none" | "image";
 
@@ -90,9 +94,11 @@ export type Preferences = {
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
+  lspEnabled: boolean;
+  lspServers: Record<string, LspServerConfig>;
 };
 
-const STORE_PATH = "terax-settings.json";
+const STORE_PATH = "artex-settings.json";
 const KEY_THEME = "theme";
 const KEY_THEME_ID = "themeId";
 const KEY_BG_KIND = "backgroundKind";
@@ -134,6 +140,8 @@ const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
+const KEY_LSP_ENABLED = "lspEnabled";
+const KEY_LSP_SERVERS = "lspServers";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -191,6 +199,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
+  lspEnabled: true,
+  lspServers: {},
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
@@ -199,7 +209,7 @@ const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
 // page lives in a separate webview, so writes there never reach the main
 // window's subscribers. Mirror every setter through a Tauri event so any
 // window can listen.
-const PREFS_CHANGED_EVENT = "terax://prefs-changed";
+const PREFS_CHANGED_EVENT = "artex://prefs-changed";
 
 async function writePref<T>(key: string, value: T): Promise<void> {
   await store.set(key, value);
@@ -255,10 +265,8 @@ export async function loadPreferences(): Promise<Preferences> {
       get<string>(KEY_LMSTUDIO_BASE_URL) ?? DEFAULT_PREFERENCES.lmstudioBaseURL,
     lmstudioModelId:
       get<string>(KEY_LMSTUDIO_MODEL_ID) ?? DEFAULT_PREFERENCES.lmstudioModelId,
-    mlxBaseURL:
-      get<string>(KEY_MLX_BASE_URL) ?? DEFAULT_PREFERENCES.mlxBaseURL,
-    mlxModelId:
-      get<string>(KEY_MLX_MODEL_ID) ?? DEFAULT_PREFERENCES.mlxModelId,
+    mlxBaseURL: get<string>(KEY_MLX_BASE_URL) ?? DEFAULT_PREFERENCES.mlxBaseURL,
+    mlxModelId: get<string>(KEY_MLX_MODEL_ID) ?? DEFAULT_PREFERENCES.mlxModelId,
     ollamaBaseURL:
       get<string>(KEY_OLLAMA_BASE_URL) ?? DEFAULT_PREFERENCES.ollamaBaseURL,
     ollamaModelId:
@@ -286,8 +294,7 @@ export async function loadPreferences(): Promise<Preferences> {
       get<string>(KEY_OPENROUTER_MODEL_ID) ??
       DEFAULT_PREFERENCES.openrouterModelId,
     favoriteModelIds: (
-      get<string[]>(KEY_FAVORITE_MODELS) ??
-      DEFAULT_PREFERENCES.favoriteModelIds
+      get<string[]>(KEY_FAVORITE_MODELS) ?? DEFAULT_PREFERENCES.favoriteModelIds
     ).filter(isKnownModelId),
     recentModelIds: (
       get<string[]>(KEY_RECENT_MODELS) ?? DEFAULT_PREFERENCES.recentModelIds
@@ -324,12 +331,15 @@ export async function loadPreferences(): Promise<Preferences> {
       get<Record<ShortcutId, KeyBinding[]>>(KEY_SHORTCUTS) ??
       DEFAULT_PREFERENCES.shortcuts,
     editorAutoSave:
-      get<boolean>(KEY_EDITOR_AUTO_SAVE) ??
-      DEFAULT_PREFERENCES.editorAutoSave,
+      get<boolean>(KEY_EDITOR_AUTO_SAVE) ?? DEFAULT_PREFERENCES.editorAutoSave,
     editorAutoSaveDelay: clampAutoSaveDelay(
       get<number>(KEY_EDITOR_AUTO_SAVE_DELAY) ??
         DEFAULT_PREFERENCES.editorAutoSaveDelay,
     ),
+    lspEnabled: get<boolean>(KEY_LSP_ENABLED) ?? DEFAULT_PREFERENCES.lspEnabled,
+    lspServers:
+      get<Record<string, LspServerConfig>>(KEY_LSP_SERVERS) ??
+      DEFAULT_PREFERENCES.lspServers,
   };
 }
 
@@ -359,7 +369,9 @@ export async function setBackgroundKind(value: BackgroundKind): Promise<void> {
   await writePref(KEY_BG_KIND, value);
 }
 
-export async function setBackgroundImageId(value: string | null): Promise<void> {
+export async function setBackgroundImageId(
+  value: string | null,
+): Promise<void> {
   await writePref(KEY_BG_IMAGE_ID, value);
 }
 
@@ -370,7 +382,6 @@ export async function setBackgroundOpacity(value: number): Promise<void> {
 export async function setBackgroundBlur(value: number): Promise<void> {
   await writePref(KEY_BG_BLUR, clampBlur(value));
 }
-
 
 export async function setDefaultModel(value: ModelId): Promise<void> {
   await writePref(KEY_DEFAULT_MODEL, value);
@@ -482,7 +493,9 @@ export async function setTerminalFontFamily(value: string): Promise<void> {
 }
 
 export async function setTerminalLetterSpacing(value: number): Promise<void> {
-  const clamped = Number.isFinite(value) ? Math.max(-10, Math.min(10, Math.round(value))) : 0;
+  const clamped = Number.isFinite(value)
+    ? Math.max(-10, Math.min(10, Math.round(value)))
+    : 0;
   await writePref(KEY_TERMINAL_LETTER_SPACING, clamped);
 }
 
@@ -527,6 +540,16 @@ export async function setEditorAutoSave(value: boolean): Promise<void> {
 
 export async function setEditorAutoSaveDelay(value: number): Promise<void> {
   await writePref(KEY_EDITOR_AUTO_SAVE_DELAY, clampAutoSaveDelay(value));
+}
+
+export async function setLspEnabled(value: boolean): Promise<void> {
+  await writePref(KEY_LSP_ENABLED, value);
+}
+
+export async function setLspServers(
+  value: Record<string, LspServerConfig>,
+): Promise<void> {
+  await writePref(KEY_LSP_SERVERS, value);
 }
 
 export async function setAgentNotifications(value: boolean): Promise<void> {
@@ -590,6 +613,8 @@ export async function onPreferencesChange(
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
+    [KEY_LSP_ENABLED]: "lspEnabled",
+    [KEY_LSP_SERVERS]: "lspServers",
   };
   // Same-process writes still fire onChange immediately; cross-window writes
   // arrive via the Tauri event emitted by writePref().
@@ -612,7 +637,7 @@ export async function onPreferencesChange(
 
 // API key changes are stored in OS keychain (not the prefs store),
 // so we broadcast via a Tauri event for cross-window listeners.
-const KEYS_CHANGED_EVENT = "terax://ai-keys-changed";
+const KEYS_CHANGED_EVENT = "artex://ai-keys-changed";
 
 export async function emitKeysChanged(): Promise<void> {
   await emit(KEYS_CHANGED_EVENT);

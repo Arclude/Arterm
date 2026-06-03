@@ -72,7 +72,7 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
-      document.getElementById("terax-command-palette-input")?.focus();
+      document.getElementById("artex-command-palette-input")?.focus();
     }, 0);
     return () => window.clearTimeout(handle);
   }, [open]);
@@ -191,7 +191,7 @@ export function CommandPalette({
         onKeyDown={onCommandKeyDown}
       >
         <CommandInput
-          id="terax-command-palette-input"
+          id="artex-command-palette-input"
           value={query}
           onValueChange={setQuery}
           placeholder="Run a command or open a file..."

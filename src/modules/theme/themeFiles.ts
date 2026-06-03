@@ -5,8 +5,8 @@ import { appConfigDir, join } from "@tauri-apps/api/path";
 import type { Theme } from "./types";
 import { validateTheme, type ValidationResult } from "./validateTheme";
 
-const THEME_FILE_EXT = ".terax-theme";
-const THEME_EDIT_EVENT = "terax://theme-edit";
+const THEME_FILE_EXT = ".artex-theme";
+const THEME_EDIT_EVENT = "artex://theme-edit";
 
 export type ThemeEditRequest =
   | { action: "create" }

@@ -165,7 +165,7 @@
   --app-zoom: 1;
 }
 
-html[data-chrome="borderless"] .terax-bg-surface {
+html[data-chrome="borderless"] .artex-bg-surface {
   border-radius: 12px;
 }
 .zoom-content {
@@ -316,7 +316,7 @@ html *::-webkit-scrollbar {
   display: none;
 }
 
-@keyframes terax-collapsible-down {
+@keyframes artex-collapsible-down {
   from {
     height: 0;
     opacity: 0;
@@ -327,7 +327,7 @@ html *::-webkit-scrollbar {
   }
 }
 
-@keyframes terax-collapsible-up {
+@keyframes artex-collapsible-up {
   from {
     height: var(--radix-collapsible-content-height);
     opacity: 1;
@@ -338,12 +338,12 @@ html *::-webkit-scrollbar {
   }
 }
 
-.terax-collapsible-content {
+.artex-collapsible-content {
   overflow: hidden;
 }
-.terax-collapsible-content[data-state="open"] {
-  animation: terax-collapsible-down 180ms cubic-bezier(0.4, 0, 0.2, 1);
+.artex-collapsible-content[data-state="open"] {
+  animation: artex-collapsible-down 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.terax-collapsible-content[data-state="closed"] {
-  animation: terax-collapsible-up 160ms cubic-bezier(0.4, 0, 0.2, 1);
+.artex-collapsible-content[data-state="closed"] {
+  animation: artex-collapsible-up 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }

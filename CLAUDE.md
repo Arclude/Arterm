@@ -1,1 +1,1 @@
-TERAX.md
+ARTEX.md

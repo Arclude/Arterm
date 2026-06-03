@@ -91,6 +91,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
+name = "artex"
+version = "0.7.3"
+dependencies = [
+ "bytes",
+ "dirs 6.0.0",
+ "futures-util",
+ "globset",
+ "grep-matcher",
+ "grep-regex",
+ "grep-searcher",
+ "ignore",
+ "keyring",
+ "libc",
+ "log",
+ "notify",
+ "portable-pty",
+ "proptest",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "shared_child",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-log",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-process",
+ "tauri-plugin-store",
+ "tauri-plugin-updater",
+ "tauri-plugin-window-state",
+ "tempfile",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5345,44 +5383,6 @@ checksum = "c4790fc369d5a530f4b544b094e31388b9b3a37c0f4652ade4505945f5660d24"
 dependencies = [
  "new_debug_unreachable",
  "utf-8",
-]
-
-[[package]]
-name = "terax"
-version = "0.7.3"
-dependencies = [
- "bytes",
- "dirs 6.0.0",
- "futures-util",
- "globset",
- "grep-matcher",
- "grep-regex",
- "grep-searcher",
- "ignore",
- "keyring",
- "libc",
- "log",
- "notify",
- "portable-pty",
- "proptest",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "shared_child",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-log",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-process",
- "tauri-plugin-store",
- "tauri-plugin-updater",
- "tauri-plugin-window-state",
- "tempfile",
- "tokio",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

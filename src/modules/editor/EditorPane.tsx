@@ -5,10 +5,10 @@ import {
   SearchQuery,
   setSearchQuery,
 } from "@codemirror/search";
+import { type Extension, Prec } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
-import { usePreferencesStore } from "@/modules/settings/preferences";
+import { vim } from "@replit/codemirror-vim";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { EDITOR_THEME_EXT } from "./lib/themes";
 import {
   forwardRef,
   useEffect,
@@ -16,21 +16,33 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { Prec, type Extension } from "@codemirror/state";
-import { vim } from "@replit/codemirror-vim";
+import {
+  type LspClient,
+  type LspGotoTarget,
+  languageInfoForPath,
+  acquire as lspAcquire,
+  lspExtensions,
+  release as lspRelease,
+  pathToUri,
+  uriToPath,
+} from "@/modules/lsp";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   buildSharedExtensions,
   languageCompartment,
+  lspCompartment,
   vimCompartment,
 } from "./lib/extensions";
+import { EDITOR_THEME_EXT } from "./lib/themes";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
 
 initVimGlobals();
-import { resolveLanguage } from "./lib/languageResolver";
-import { useDocument } from "./lib/useDocument";
-import { inlineCompletion } from "./lib/autocomplete/inlineExtension";
+
 import { getKey } from "@/modules/ai/lib/keyring";
 import { onKeysChanged } from "@/modules/settings/store";
+import { inlineCompletion } from "./lib/autocomplete/inlineExtension";
+import { resolveLanguage } from "./lib/languageResolver";
+import { useDocument } from "./lib/useDocument";
 
 export type EditorPaneHandle = {
   setQuery: (q: string) => void;
@@ -62,12 +74,21 @@ function formatBytes(n: number): string {
 
 export const EditorPane = forwardRef<EditorPaneHandle, Props>(
   function EditorPane({ path, onDirtyChange, onSaved, onClose }, ref) {
-    const { doc, onChange, save, reload } = useDocument({ path, onDirtyChange });
+    const { doc, onChange, save, reload } = useDocument({
+      path,
+      onDirtyChange,
+    });
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
     const cmRef = useRef<ReactCodeMirrorRef>(null);
     const editorThemeId = usePreferencesStore((s) => s.editorTheme);
     const vimMode = usePreferencesStore((s) => s.vimMode);
+    const lspEnabled = usePreferencesStore((s) => s.lspEnabled);
+    const lspServers = usePreferencesStore((s) => s.lspServers);
+    const lspServersKey = useMemo(
+      () => JSON.stringify(lspServers),
+      [lspServers],
+    );
     const languageRef = useRef<string | null>(null);
     const apiKeyRef = useRef<string | null>(null);
 
@@ -75,7 +96,11 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       let cancelled = false;
       const refresh = async () => {
         const provider = usePreferencesStore.getState().autocompleteProvider;
-        if (provider === "lmstudio" || provider === "mlx" || provider === "ollama") {
+        if (
+          provider === "lmstudio" ||
+          provider === "mlx" ||
+          provider === "ollama"
+        ) {
           apiKeyRef.current = null;
           return;
         }
@@ -98,7 +123,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         unsubPrefs();
       };
     }, []);
-    const themeExt = EDITOR_THEME_EXT[editorThemeId] ?? EDITOR_THEME_EXT.atomone;
+    const themeExt =
+      EDITOR_THEME_EXT[editorThemeId] ?? EDITOR_THEME_EXT.atomone;
 
     // Stabilize save + onSaved via refs so the extensions array never changes
     // identity — a new identity makes @uiw/react-codemirror reconfigure the
@@ -131,6 +157,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         })),
         ...buildSharedExtensions(),
         languageCompartment.of([]),
+        lspCompartment.of([]),
         inlineCompletion({
           getPrefs: () => {
             const s = usePreferencesStore.getState();
@@ -182,9 +209,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       const view = cmRef.current?.view;
       if (!view) return;
       view.dispatch({
-        effects: vimCompartment.reconfigure(
-          vimMode ? Prec.highest(vim()) : [],
-        ),
+        effects: vimCompartment.reconfigure(vimMode ? Prec.highest(vim()) : []),
       });
     }, [vimMode]);
 
@@ -193,7 +218,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       const ext = path.split(".").pop()?.toLowerCase() ?? null;
       languageRef.current = ext;
       const resolve = async (): Promise<Extension> => {
-        if (path.toLowerCase().endsWith(".terax-theme")) {
+        if (path.toLowerCase().endsWith(".artex-theme")) {
           const [{ json }, { colorSwatches }] = await Promise.all([
             import("@codemirror/lang-json"),
             import("./lib/colorSwatches"),
@@ -214,6 +239,69 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         cancelled = true;
       };
     }, [path, doc.status]);
+
+    // Attach a language server (completion, hover, go-to-definition,
+    // diagnostics) for this file. Lazy: skipped entirely when LSP is off or no
+    // server is configured for the file type. Re-runs when LSP config changes.
+    useEffect(() => {
+      if (!lspEnabled || doc.status !== "ready") return;
+      const info = languageInfoForPath(path);
+      if (!info) return;
+      let cancelled = false;
+      let active: LspClient | null = null;
+      const uri = pathToUri(path);
+      const normalizedPath = path.replace(/\\/g, "/").toLowerCase();
+
+      const onGoto = (target: LspGotoTarget) => {
+        const view = cmRef.current?.view;
+        if (view && uriToPath(target.uri).toLowerCase() === normalizedPath) {
+          const lineNo = Math.min(target.line + 1, view.state.doc.lines);
+          const lineObj = view.state.doc.line(lineNo);
+          const offset = Math.min(
+            lineObj.from + target.character,
+            view.state.doc.length,
+          );
+          view.dispatch({
+            selection: { anchor: offset },
+            scrollIntoView: true,
+          });
+          view.focus();
+          return;
+        }
+        window.dispatchEvent(
+          new CustomEvent("artex:lsp-goto", {
+            detail: {
+              path: uriToPath(target.uri),
+              line: target.line,
+              character: target.character,
+            },
+          }),
+        );
+      };
+
+      void (async () => {
+        const client = await lspAcquire(path, info);
+        if (cancelled || !client) return;
+        active = client;
+        const view = cmRef.current?.view;
+        if (!view) return;
+        client.didOpen(uri, info.languageId, view.state.doc.toString());
+        view.dispatch({
+          effects: lspCompartment.reconfigure(
+            lspExtensions(client, uri, onGoto),
+          ),
+        });
+      })();
+
+      return () => {
+        cancelled = true;
+        active?.didClose(uri);
+        cmRef.current?.view?.dispatch({
+          effects: lspCompartment.reconfigure([]),
+        });
+        lspRelease(path);
+      };
+    }, [path, doc.status, lspEnabled, lspServersKey]);
 
     useImperativeHandle(
       ref,

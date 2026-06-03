@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, fs, git, net, pty, secrets, shell, workspace};
+use modules::{agent, fs, git, lsp, net, pty, secrets, shell, workspace};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
@@ -46,7 +46,7 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         if let Some(t) = tab.as_deref().filter(|s| !s.is_empty()) {
             // emit() serializes via JSON — no string-escape footgun, unlike
             // eval() with format!(). Frontend listens via Tauri event API.
-            let _ = window.emit("terax:settings-tab", t);
+            let _ = window.emit("artex:settings-tab", t);
         }
         return Ok(());
     }
@@ -156,6 +156,7 @@ pub fn run() {
             Ok(())
         })
         .manage(pty::PtyState::default())
+        .manage(lsp::LspState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
         .manage(fs::watch::FsWatchState::default())
@@ -175,6 +176,10 @@ pub fn run() {
             pty::pty_close,
             pty::pty_close_all,
             pty::pty_has_foreground_process,
+            lsp::lsp_start,
+            lsp::lsp_send,
+            lsp::lsp_stop,
+            lsp::lsp_stop_all,
             fs::tree::list_subdirs,
             fs::tree::fs_read_dir,
             fs::file::fs_read_file,
