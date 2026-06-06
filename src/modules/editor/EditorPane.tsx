@@ -247,9 +247,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         if (cancelled) return;
         const view = cmRef.current?.view;
         if (!view) return;
-        view.dispatch({
-          effects: languageCompartment.reconfigure(extension),
-        });
+        // The minimap samples token colors from the active highlighter when it
+        // builds. Language (and thus syntax highlighting) loads async after the
+        // editor mounts, so rebuild the minimap in the same transaction to pick
+        // up the colors immediately instead of only after the first scroll/edit.
+        const effects = [languageCompartment.reconfigure(extension)];
+        if (usePreferencesStore.getState().minimap) {
+          effects.push(minimapCompartment.reconfigure(minimapExtension()));
+        }
+        view.dispatch({ effects });
       });
       return () => {
         cancelled = true;
