@@ -21,7 +21,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { segmentsFromCwd } from "./lib/pathUtils";
@@ -176,24 +176,39 @@ function CurrentSegmentDropdown({
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every load/close so stale async responses can't overwrite the
+  // current list — otherwise reopening could briefly show a previous folder's
+  // contents and a click would cd into the wrong directory.
+  const reqId = useRef(0);
 
   const load = useCallback(async () => {
+    const id = ++reqId.current;
     setError(null);
+    // Always show "Loading…" first so a stale list is never clickable.
+    setChildren(null);
     try {
       const dirs = await invoke<string[]>("list_subdirs", {
         path,
         showHidden,
         workspace: currentWorkspaceEnv(),
       });
+      if (id !== reqId.current) return;
       setChildren(dirs);
     } catch (e) {
+      if (id !== reqId.current) return;
       setError(String(e));
       setChildren([]);
     }
   }, [path, showHidden]);
 
   useEffect(() => {
-    if (open) load();
+    if (open) {
+      load();
+    } else {
+      // Invalidate any in-flight load and drop the stale list on close.
+      reqId.current++;
+      setChildren(null);
+    }
   }, [open, load]);
 
   return (
