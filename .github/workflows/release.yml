@@ -66,6 +66,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Artex ${{ github.ref_name }}"
           releaseBody: "See the assets to download and install. Auto-update is built in."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
