@@ -227,6 +227,34 @@ function createSlot(): Slot {
       event.preventDefault();
       return false;
     }
+    // Plain Ctrl+C: copy when there's a selection so it doesn't interrupt the
+    // running program (e.g. Claude Code). With no selection it falls through to
+    // xterm and sends ^C (SIGINT) as usual, preserving interrupt.
+    if (isPlainCtrlC(event)) {
+      if (slot.term.hasSelection()) {
+        if (event.type === "keydown") {
+          const sel = slot.term.getSelection();
+          if (sel) void navigator.clipboard.writeText(sel).catch(() => {});
+          slot.term.clearSelection();
+        }
+        event.preventDefault();
+        return false;
+      }
+      return true;
+    }
+    // Plain Ctrl+V: paste from the clipboard.
+    if (isPlainCtrlV(event)) {
+      if (event.type === "keydown") {
+        void navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (text) slot.term.paste(text);
+          })
+          .catch(() => {});
+      }
+      event.preventDefault();
+      return false;
+    }
     return true;
   });
 
@@ -742,6 +770,30 @@ function isTerminalPaste(e: KeyboardEvent): boolean {
     !IS_MAC &&
     e.ctrlKey &&
     e.shiftKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    (e.code === "KeyV" || e.key === "v" || e.key === "V")
+  );
+}
+
+// Plain Ctrl+C / Ctrl+V (no Shift) — used for selection-aware copy and paste
+// so users don't need the Shift modifier. macOS is excluded (it uses Cmd).
+function isPlainCtrlC(e: KeyboardEvent): boolean {
+  return (
+    !IS_MAC &&
+    e.ctrlKey &&
+    !e.shiftKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    (e.code === "KeyC" || e.key === "c" || e.key === "C")
+  );
+}
+
+function isPlainCtrlV(e: KeyboardEvent): boolean {
+  return (
+    !IS_MAC &&
+    e.ctrlKey &&
+    !e.shiftKey &&
     !e.altKey &&
     !e.metaKey &&
     (e.code === "KeyV" || e.key === "v" || e.key === "V")
