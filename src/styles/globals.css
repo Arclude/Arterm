@@ -226,16 +226,42 @@ html[data-chrome="borderless"] #settings-root {
   outline: none !important;
 }
 
-.cm-editor,
+/* The code editor opts back IN to a scrollbar (the global rule below hides
+ * them everywhere). Slim, rounded, theme-aware, and auto-hiding on idle so it
+ * doesn't fight the chrome. */
 .cm-scroller {
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent)
+    transparent;
 }
-.cm-editor::-webkit-scrollbar,
 .cm-scroller::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;
+  width: 12px !important;
+  height: 12px !important;
+  display: block !important;
+}
+.cm-scroller::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.cm-scroller::-webkit-scrollbar-thumb {
+  background-color: color-mix(
+    in srgb,
+    var(--foreground) 20%,
+    transparent
+  ) !important;
+  border-radius: 8px !important;
+  border: 3px solid transparent !important;
+  background-clip: content-box !important;
+}
+.cm-scroller::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--foreground) 38%,
+    transparent
+  ) !important;
+}
+.cm-scroller::-webkit-scrollbar-corner {
+  background: transparent !important;
 }
 
 body {

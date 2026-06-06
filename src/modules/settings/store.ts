@@ -155,6 +155,7 @@ export type Preferences = {
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
+  minimap: boolean;
   lspEnabled: boolean;
   lspServers: Record<string, LspServerConfig>;
   statusBar: StatusBarVisibility;
@@ -202,6 +203,7 @@ const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
+const KEY_MINIMAP = "minimap";
 const KEY_LSP_ENABLED = "lspEnabled";
 const KEY_LSP_SERVERS = "lspServers";
 const KEY_STATUS_BAR = "statusBar";
@@ -262,6 +264,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
+  minimap: true,
   lspEnabled: true,
   lspServers: {},
   statusBar: DEFAULT_STATUS_BAR,
@@ -400,6 +403,7 @@ export async function loadPreferences(): Promise<Preferences> {
       get<number>(KEY_EDITOR_AUTO_SAVE_DELAY) ??
         DEFAULT_PREFERENCES.editorAutoSaveDelay,
     ),
+    minimap: get<boolean>(KEY_MINIMAP) ?? DEFAULT_PREFERENCES.minimap,
     lspEnabled: get<boolean>(KEY_LSP_ENABLED) ?? DEFAULT_PREFERENCES.lspEnabled,
     lspServers:
       get<Record<string, LspServerConfig>>(KEY_LSP_SERVERS) ??
@@ -610,6 +614,10 @@ export async function setEditorAutoSaveDelay(value: number): Promise<void> {
   await writePref(KEY_EDITOR_AUTO_SAVE_DELAY, clampAutoSaveDelay(value));
 }
 
+export async function setMinimap(value: boolean): Promise<void> {
+  await writePref(KEY_MINIMAP, value);
+}
+
 export async function setLspEnabled(value: boolean): Promise<void> {
   await writePref(KEY_LSP_ENABLED, value);
 }
@@ -690,6 +698,7 @@ export async function onPreferencesChange(
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
+    [KEY_MINIMAP]: "minimap",
     [KEY_LSP_ENABLED]: "lspEnabled",
     [KEY_LSP_SERVERS]: "lspServers",
     [KEY_STATUS_BAR]: "statusBar",

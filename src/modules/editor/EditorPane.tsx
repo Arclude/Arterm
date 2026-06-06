@@ -31,8 +31,10 @@ import {
   buildSharedExtensions,
   languageCompartment,
   lspCompartment,
+  minimapCompartment,
   vimCompartment,
 } from "./lib/extensions";
+import { minimapExtension } from "./lib/minimap";
 import { EDITOR_THEME_EXT } from "./lib/themes";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
 
@@ -83,6 +85,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const cmRef = useRef<ReactCodeMirrorRef>(null);
     const editorThemeId = usePreferencesStore((s) => s.editorTheme);
     const vimMode = usePreferencesStore((s) => s.vimMode);
+    const minimap = usePreferencesStore((s) => s.minimap);
     const lspEnabled = usePreferencesStore((s) => s.lspEnabled);
     const lspServers = usePreferencesStore((s) => s.lspServers);
     const lspServersKey = useMemo(
@@ -158,6 +161,9 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         ...buildSharedExtensions(),
         languageCompartment.of([]),
         lspCompartment.of([]),
+        minimapCompartment.of(
+          usePreferencesStore.getState().minimap ? minimapExtension() : [],
+        ),
         inlineCompletion({
           getPrefs: () => {
             const s = usePreferencesStore.getState();
@@ -212,6 +218,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         effects: vimCompartment.reconfigure(vimMode ? Prec.highest(vim()) : []),
       });
     }, [vimMode]);
+
+    useEffect(() => {
+      const view = cmRef.current?.view;
+      if (!view) return;
+      view.dispatch({
+        effects: minimapCompartment.reconfigure(
+          minimap ? minimapExtension() : [],
+        ),
+      });
+    }, [minimap]);
 
     useEffect(() => {
       let cancelled = false;

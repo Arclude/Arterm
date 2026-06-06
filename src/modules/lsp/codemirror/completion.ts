@@ -9,24 +9,39 @@ import type { CompletionItem } from "vscode-languageserver-protocol";
 import { LspClient } from "@/modules/lsp/client";
 import { offsetToPosition } from "@/modules/lsp/codemirror/position";
 
+// Maps LSP CompletionItemKind (1–25) to CodeMirror's known completion icon
+// types so each suggestion gets a meaningful, color-coded glyph.
 function kindToType(kind: number | undefined): string {
   switch (kind) {
-    case 2:
+    case 2: // Method
       return "method";
-    case 3:
+    case 3: // Function
+    case 4: // Constructor
       return "function";
-    case 5:
+    case 5: // Field
+    case 10: // Property
       return "property";
-    case 6:
+    case 6: // Variable
+    case 12: // Value
       return "variable";
-    case 7:
+    case 7: // Class
+    case 22: // Struct
       return "class";
-    case 8:
+    case 8: // Interface
       return "interface";
-    case 9:
+    case 9: // Module
       return "namespace";
-    case 14:
+    case 13: // Enum
+    case 20: // EnumMember
+      return "enum";
+    case 14: // Keyword
+    case 24: // Operator
       return "keyword";
+    case 21: // Constant
+    case 11: // Unit
+      return "constant";
+    case 25: // TypeParameter
+      return "type";
     default:
       return "text";
   }

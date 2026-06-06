@@ -26,6 +26,7 @@ import {
   setAutostart,
   setEditorAutoSave,
   setEditorAutoSaveDelay,
+  setMinimap,
   setRestoreWindowState,
   setShowHidden,
   setStatusBarItem,
@@ -73,6 +74,7 @@ export function GeneralSection() {
   const autostart = usePreferencesStore((s) => s.autostart);
   const restoreWindowState = usePreferencesStore((s) => s.restoreWindowState);
   const vimMode = usePreferencesStore((s) => s.vimMode);
+  const minimap = usePreferencesStore((s) => s.minimap);
   const editorAutoSave = usePreferencesStore((s) => s.editorAutoSave);
   const editorAutoSaveDelay = usePreferencesStore((s) => s.editorAutoSaveDelay);
   const showHidden = usePreferencesStore((s) => s.showHidden);
@@ -174,6 +176,15 @@ export function GeneralSection() {
           <Switch
             checked={vimMode}
             onCheckedChange={(v) => void setVimMode(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Minimap"
+          description="Show a code overview map on the right edge of the editor."
+        >
+          <Switch
+            checked={minimap}
+            onCheckedChange={(v) => void setMinimap(v)}
           />
         </SettingRow>
         <SettingRow
