@@ -8,12 +8,34 @@ type ReadResult =
   | { kind: "binary"; size: number }
   | { kind: "toolarge"; size: number; limit: number };
 
+type DataUrlResult = { dataUrl: string; size: number };
+
 export type DocumentState =
   | { status: "loading" }
   | { status: "ready"; content: string; size: number }
+  | { status: "image"; dataUrl: string; size: number }
   | { status: "binary"; size: number }
   | { status: "toolarge"; size: number; limit: number }
   | { status: "error"; message: string };
+
+const IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "ico",
+  "avif",
+]);
+
+/** Raster image types we render inline instead of opening in CodeMirror.
+ *  SVG is intentionally excluded so it stays editable as markup. */
+export function isImagePath(path: string): boolean {
+  const dot = path.lastIndexOf(".");
+  if (dot < 0) return false;
+  return IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
+}
 
 type Options = {
   path: string;
@@ -74,7 +96,27 @@ export function useDocument({ path, onDirtyChange }: Options) {
     setDoc({ status: "loading" });
     setDirty(false);
 
-    invoke<ReadResult>("fs_read_file", { path, workspace: currentWorkspaceEnv() })
+    if (isImagePath(path)) {
+      invoke<DataUrlResult>("fs_read_file_data_url", {
+        path,
+        workspace: currentWorkspaceEnv(),
+      })
+        .then((res) => {
+          if (cancelled) return;
+          setDoc({ status: "image", dataUrl: res.dataUrl, size: res.size });
+        })
+        .catch((e) => {
+          if (!cancelled) setDoc({ status: "error", message: String(e) });
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    invoke<ReadResult>("fs_read_file", {
+      path,
+      workspace: currentWorkspaceEnv(),
+    })
       .then((res) => {
         if (cancelled) return;
         if (res.kind === "text") {
@@ -108,6 +150,17 @@ export function useDocument({ path, onDirtyChange }: Options) {
   // matches the buffer (self-save / duplicate watcher event → no re-render).
   const reload = useCallback((): boolean => {
     if (dirtyRef.current) return false;
+    if (isImagePath(path)) {
+      void invoke<DataUrlResult>("fs_read_file_data_url", {
+        path,
+        workspace: currentWorkspaceEnv(),
+      })
+        .then((res) =>
+          setDoc({ status: "image", dataUrl: res.dataUrl, size: res.size }),
+        )
+        .catch((e) => setDoc({ status: "error", message: String(e) }));
+      return true;
+    }
     void invoke<ReadResult>("fs_read_file", {
       path,
       workspace: currentWorkspaceEnv(),

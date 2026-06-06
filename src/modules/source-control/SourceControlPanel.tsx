@@ -201,7 +201,6 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   const canPull =
     hasUpstream &&
     !!scm.status &&
-    scm.status.behind > 0 &&
     !isDiverged &&
     !scm.actionBusy &&
     !sourceControl.busyAction;
@@ -484,7 +483,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                     : !hasUpstream
                       ? "No upstream configured"
                       : (scm.status?.behind ?? 0) === 0
-                        ? "Already up to date"
+                        ? "Fetch and pull from remote (fast-forward)"
                         : `Pull ${scm.status?.behind ?? 0} commits (fast-forward)`
               }
               disabled={!canPull}

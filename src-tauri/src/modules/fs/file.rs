@@ -10,6 +10,7 @@ use crate::modules::workspace::{resolve_path, WorkspaceEnv};
 
 const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 const BINARY_SNIFF_BYTES: usize = 8 * 1024;
+const MAX_IMAGE_BYTES: u64 = 25 * 1024 * 1024; // 25 MB
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -76,6 +77,60 @@ pub fn fs_read_file(path: String, workspace: Option<WorkspaceEnv>) -> Result<Rea
         Ok(content) => Ok(ReadResult::Text { content, size }),
         Err(_) => Ok(ReadResult::Binary { size }),
     }
+}
+
+/// MIME type for the image extensions we render inline. Returns None for
+/// anything we don't preview, so the command can't be used as a generic
+/// "read any file as a data URL" exfiltration helper.
+fn image_mime_from_path(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        "svg" => "image/svg+xml",
+        _ => return None,
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataUrlResult {
+    pub data_url: String,
+    pub size: u64,
+}
+
+/// Read a (small) image file and return it as a base64 `data:` URL for inline
+/// rendering. Scoped to known image extensions and a 25 MB ceiling.
+#[tauri::command]
+pub fn fs_read_file_data_url(
+    path: String,
+    workspace: Option<WorkspaceEnv>,
+) -> Result<DataUrlResult, String> {
+    use base64::Engine as _;
+
+    let workspace = WorkspaceEnv::from_option(workspace);
+    let p = resolve_path(&path, &workspace);
+    let mime = image_mime_from_path(&p).ok_or_else(|| "unsupported preview type".to_string())?;
+
+    let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
+    let size = meta.len();
+    if size > MAX_IMAGE_BYTES {
+        return Err(format!(
+            "image too large to preview ({size} bytes, max {MAX_IMAGE_BYTES})"
+        ));
+    }
+
+    let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(DataUrlResult {
+        data_url: format!("data:{mime};base64,{encoded}"),
+        size,
+    })
 }
 
 #[derive(Serialize, Clone)]
@@ -200,6 +255,48 @@ mod tests {
             fs_read_file(f.to_string_lossy().into_owned(), None).unwrap(),
             ReadResult::Binary { .. }
         ));
+    }
+
+    #[test]
+    fn image_mime_maps_known_extensions_only() {
+        assert_eq!(
+            image_mime_from_path(Path::new("a/b/photo.PNG")),
+            Some("image/png")
+        );
+        assert_eq!(
+            image_mime_from_path(Path::new("pic.jpeg")),
+            Some("image/jpeg")
+        );
+        assert_eq!(
+            image_mime_from_path(Path::new("icon.svg")),
+            Some("image/svg+xml")
+        );
+        assert_eq!(image_mime_from_path(Path::new("notes.txt")), None);
+        assert_eq!(image_mime_from_path(Path::new("Cargo.lock")), None);
+        assert_eq!(image_mime_from_path(Path::new("noext")), None);
+    }
+
+    #[test]
+    fn data_url_round_trips_a_png() {
+        use base64::Engine as _;
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("p.png");
+        std::fs::write(&f, b"\x89PNG\r\n\x1a\n_fake_bytes").unwrap();
+        let res = fs_read_file_data_url(f.to_string_lossy().into_owned(), None).unwrap();
+        assert!(res.data_url.starts_with("data:image/png;base64,"));
+        let b64 = res.data_url.trim_start_matches("data:image/png;base64,");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
+        assert_eq!(decoded, b"\x89PNG\r\n\x1a\n_fake_bytes");
+    }
+
+    #[test]
+    fn data_url_rejects_non_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("a.txt");
+        std::fs::write(&f, b"hello").unwrap();
+        assert!(fs_read_file_data_url(f.to_string_lossy().into_owned(), None).is_err());
     }
 
     #[test]

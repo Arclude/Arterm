@@ -208,7 +208,11 @@ export function MarketplaceSection() {
             disabled={loading}
             onClick={() => void refresh()}
           >
-            <HugeiconsIcon icon={ArrowReloadHorizontalIcon} size={11} strokeWidth={2} />
+            <HugeiconsIcon
+              icon={ArrowReloadHorizontalIcon}
+              size={11}
+              strokeWidth={2}
+            />
             Refresh
           </Button>
         </div>
@@ -239,7 +243,9 @@ export function MarketplaceSection() {
             >
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-[12.5px] font-medium">{entry.name}</span>
+                  <span className="truncate text-[12.5px] font-medium">
+                    {entry.name}
+                  </span>
                   <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     v{entry.version}
                   </span>
@@ -267,7 +273,11 @@ export function MarketplaceSection() {
               <div className="shrink-0">
                 {status.kind === "installed" ? (
                   <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <HugeiconsIcon icon={CheckmarkCircle02Icon} size={13} strokeWidth={1.75} />
+                    <HugeiconsIcon
+                      icon={CheckmarkCircle02Icon}
+                      size={13}
+                      strokeWidth={1.75}
+                    />
                     Installed
                   </span>
                 ) : (
@@ -277,10 +287,16 @@ export function MarketplaceSection() {
                     className="h-7 gap-1.5 px-2 text-[11px]"
                     disabled={busy}
                     onClick={() =>
-                      void runInstall(entry.id, () => installFromRegistry(entry))
+                      void runInstall(entry.id, () =>
+                        installFromRegistry(entry),
+                      )
                     }
                   >
-                    <HugeiconsIcon icon={Download04Icon} size={11} strokeWidth={2} />
+                    <HugeiconsIcon
+                      icon={Download04Icon}
+                      size={11}
+                      strokeWidth={2}
+                    />
                     {status.kind === "update" ? "Update" : "Install"}
                   </Button>
                 )}

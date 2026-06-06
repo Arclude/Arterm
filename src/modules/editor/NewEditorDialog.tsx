@@ -69,7 +69,10 @@ export function NewEditorDialog({
       ? trimmed
       : joinPath(rootPath, trimmed);
     try {
-      await invoke("fs_create_file", { path, workspace: currentWorkspaceEnv() });
+      await invoke("fs_create_file", {
+        path,
+        workspace: currentWorkspaceEnv(),
+      });
       onCreated(path);
       onOpenChange(false);
     } catch (e) {

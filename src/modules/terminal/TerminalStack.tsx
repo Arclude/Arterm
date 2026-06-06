@@ -71,7 +71,8 @@ export function TerminalStack({
 
   useEffect(() => {
     const live = new Set<number>();
-    for (const t of terminals) for (const id of leafIds(t.paneTree)) live.add(id);
+    for (const t of terminals)
+      for (const id of leafIds(t.paneTree)) live.add(id);
     for (const id of bundles.current.keys()) {
       if (!live.has(id)) bundles.current.delete(id);
     }

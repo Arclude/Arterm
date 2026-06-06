@@ -96,6 +96,12 @@ export type GitPushResult = {
   pushed: boolean;
 };
 
+export type GitBranchList = {
+  current: string | null;
+  detached: boolean;
+  local: string[];
+};
+
 export type GitLogEntry = {
   sha: string;
   shortSha: string;
@@ -186,11 +192,7 @@ export const native = {
       maxResults: params.maxResults ?? null,
       workspace: currentWorkspaceEnv(),
     }),
-  runCommand: (
-    command: string,
-    cwd?: string | null,
-    timeoutSecs?: number,
-  ) =>
+  runCommand: (command: string, cwd?: string | null, timeoutSecs?: number) =>
     invoke<CommandOutput>("shell_run_command", {
       command,
       cwd: cwd ?? null,
@@ -330,7 +332,22 @@ export const native = {
       repoRoot,
       workspace: currentWorkspaceEnv(),
     }),
-  gitLog: (repoRoot: string, options?: { limit?: number; beforeSha?: string }) =>
+  gitListBranches: (repoRoot: string) =>
+    invoke<GitBranchList>("git_list_branches", {
+      repoRoot,
+      workspace: currentWorkspaceEnv(),
+    }),
+  gitCheckoutBranch: (repoRoot: string, branch: string, create: boolean) =>
+    invoke<void>("git_checkout_branch", {
+      repoRoot,
+      branch,
+      create,
+      workspace: currentWorkspaceEnv(),
+    }),
+  gitLog: (
+    repoRoot: string,
+    options?: { limit?: number; beforeSha?: string },
+  ) =>
     invoke<GitLogEntry[]>("git_log", {
       repoRoot,
       limit: options?.limit ?? null,

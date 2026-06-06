@@ -73,7 +73,8 @@ export function AiInputBar() {
   const userSnippets = useSnippetsStore((s) => s.snippets);
   const extSnippets = useSnippetsStore((s) => s.extensionSnippets);
   const snippets = useMemo(
-    () => (extSnippets.length ? [...userSnippets, ...extSnippets] : userSnippets),
+    () =>
+      extSnippets.length ? [...userSnippets, ...extSnippets] : userSnippets,
     [userSnippets, extSnippets],
   );
   const workspaceRoot = useChatStore((s) => s.live.getWorkspaceRoot());

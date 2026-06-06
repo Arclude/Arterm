@@ -53,6 +53,67 @@ export const EDITOR_THEME_LABELS: Record<EditorThemeId, string> = {
   "xcode-light": "Xcode Light",
 };
 
+export const STATUS_BAR_ITEMS = [
+  "newTab",
+  "voice",
+  "explorer",
+  "gitStats",
+  "workspace",
+  "cwd",
+  "gitBranch",
+  "clock",
+] as const;
+
+export type StatusBarItemId = (typeof STATUS_BAR_ITEMS)[number];
+
+export type StatusBarVisibility = Record<StatusBarItemId, boolean>;
+
+export const STATUS_BAR_ITEM_LABELS: Record<
+  StatusBarItemId,
+  { label: string; description: string }
+> = {
+  newTab: {
+    label: "New tab button",
+    description: "The + button that opens a new terminal tab.",
+  },
+  voice: {
+    label: "Voice input",
+    description: "Microphone button for dictating into the active terminal.",
+  },
+  explorer: {
+    label: "Explorer toggle",
+    description: "Button that shows or hides the file explorer sidebar.",
+  },
+  gitStats: {
+    label: "Git change stats",
+    description: "Changed-file count with insertions and deletions.",
+  },
+  workspace: {
+    label: "Workspace selector",
+    description: "Local / WSL environment switcher.",
+  },
+  cwd: {
+    label: "Current path",
+    description: "Breadcrumb of the active working directory.",
+  },
+  gitBranch: {
+    label: "Git branch",
+    description: "Current branch with ahead / behind counts.",
+  },
+  clock: { label: "Clock", description: "Current time." },
+};
+
+export const DEFAULT_STATUS_BAR: StatusBarVisibility = {
+  newTab: true,
+  voice: true,
+  explorer: true,
+  gitStats: true,
+  workspace: true,
+  cwd: true,
+  gitBranch: true,
+  clock: true,
+};
+
 export type Preferences = {
   theme: ThemePref;
   themeId: string;
@@ -96,6 +157,7 @@ export type Preferences = {
   editorAutoSaveDelay: number;
   lspEnabled: boolean;
   lspServers: Record<string, LspServerConfig>;
+  statusBar: StatusBarVisibility;
 };
 
 const STORE_PATH = "artex-settings.json";
@@ -142,6 +204,7 @@ const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
 const KEY_LSP_ENABLED = "lspEnabled";
 const KEY_LSP_SERVERS = "lspServers";
+const KEY_STATUS_BAR = "statusBar";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -201,6 +264,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorAutoSaveDelay: 1000,
   lspEnabled: true,
   lspServers: {},
+  statusBar: DEFAULT_STATUS_BAR,
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
@@ -340,6 +404,10 @@ export async function loadPreferences(): Promise<Preferences> {
     lspServers:
       get<Record<string, LspServerConfig>>(KEY_LSP_SERVERS) ??
       DEFAULT_PREFERENCES.lspServers,
+    statusBar: {
+      ...DEFAULT_PREFERENCES.statusBar,
+      ...(get<Partial<StatusBarVisibility>>(KEY_STATUS_BAR) ?? {}),
+    },
   };
 }
 
@@ -552,6 +620,15 @@ export async function setLspServers(
   await writePref(KEY_LSP_SERVERS, value);
 }
 
+export async function setStatusBarItem(
+  id: StatusBarItemId,
+  visible: boolean,
+): Promise<void> {
+  const current = await store.get<StatusBarVisibility>(KEY_STATUS_BAR);
+  const next = { ...DEFAULT_STATUS_BAR, ...current, [id]: visible };
+  await writePref(KEY_STATUS_BAR, next);
+}
+
 export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
 }
@@ -615,6 +692,7 @@ export async function onPreferencesChange(
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
     [KEY_LSP_ENABLED]: "lspEnabled",
     [KEY_LSP_SERVERS]: "lspServers",
+    [KEY_STATUS_BAR]: "statusBar",
   };
   // Same-process writes still fire onChange immediately; cross-window writes
   // arrive via the Tauri event emitted by writePref().

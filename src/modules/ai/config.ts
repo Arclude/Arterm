@@ -109,7 +109,8 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     label: "MLX",
     keyringAccount: "",
     keyPrefix: null,
-    consoleUrl: "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md",
+    consoleUrl:
+      "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md",
   },
   {
     id: "ollama",
@@ -538,7 +539,9 @@ export function getCompatModelInfo(
     provider: "openai-compatible",
     label: ep?.modelId || name,
     hint: name,
-    description: ep ? `${name} — ${ep.baseURL}` : "Custom OpenAI-compatible endpoint",
+    description: ep
+      ? `${name} — ${ep.baseURL}`
+      : "Custom OpenAI-compatible endpoint",
     capabilities: { intelligence: 3, speed: 3, cost: 3 },
   };
 }
@@ -573,7 +576,10 @@ const FREEFORM_PROVIDERS: ReadonlySet<ProviderId> = new Set([
 
 // Reasoning models reject tool-call turns whose reasoning was stripped; keep it.
 export function modelKeepsReasoning(m: ModelInfo): boolean {
-  return (m.tags?.includes("reasoning") ?? false) || FREEFORM_PROVIDERS.has(m.provider);
+  return (
+    (m.tags?.includes("reasoning") ?? false) ||
+    FREEFORM_PROVIDERS.has(m.provider)
+  );
 }
 
 export const DEFAULT_MODEL_ID: ModelId = "gpt-5.4-mini";
@@ -662,7 +668,11 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
 
 export function estimateCost(
   modelId: string | undefined,
-  usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number },
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens: number;
+  },
 ): number | null {
   if (!modelId) return null;
   const p = MODEL_PRICING[modelId];
@@ -670,7 +680,9 @@ export function estimateCost(
   const fresh = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
   const cached = usage.cachedInputTokens;
   return (
-    (fresh * p.input + cached * (p.cacheRead ?? p.input) + usage.outputTokens * p.output) /
+    (fresh * p.input +
+      cached * (p.cacheRead ?? p.input) +
+      usage.outputTokens * p.output) /
     1_000_000
   );
 }

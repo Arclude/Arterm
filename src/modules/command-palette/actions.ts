@@ -74,8 +74,7 @@ export function createCommandPaletteActions(
   ctx: CommandPaletteActionContext,
 ): CommandPaletteAction[] {
   const activeTab = ctx.tabs.find((tab) => tab.id === ctx.activeId);
-  const activeTerminalTab =
-    activeTab?.kind === "terminal" ? activeTab : null;
+  const activeTerminalTab = activeTab?.kind === "terminal" ? activeTab : null;
   const activePaneCount = activeTerminalTab
     ? leafIds(activeTerminalTab.paneTree).length
     : 0;

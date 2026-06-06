@@ -44,7 +44,7 @@ export function ShortcutsSection() {
     return base.filter(
       (s) =>
         s.label.toLowerCase().includes(lower) ||
-        s.group.toLowerCase().includes(lower)
+        s.group.toLowerCase().includes(lower),
     );
   }, [search]);
 

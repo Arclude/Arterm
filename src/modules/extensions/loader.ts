@@ -4,7 +4,11 @@ import type { Snippet } from "@/modules/ai/lib/snippets";
 import { useSnippetsStore } from "@/modules/ai/store/snippetsStore";
 import type { Theme } from "@/modules/theme/types";
 import { emitExtensionsChanged } from "./events";
-import { getDisabledIds, setExtensionEnabled, useExtensionsStore } from "./store";
+import {
+  getDisabledIds,
+  setExtensionEnabled,
+  useExtensionsStore,
+} from "./store";
 import {
   type ContributedSnippet,
   type ExtensionManifest,
@@ -24,7 +28,8 @@ export function parseManifest(raw: unknown): ExtensionManifest {
   if (!isObj(raw)) throw new Error("manifest is not an object");
   const { id, name, version } = raw;
   if (typeof id !== "string" || !id.trim()) throw new Error("missing 'id'");
-  if (typeof name !== "string" || !name.trim()) throw new Error("missing 'name'");
+  if (typeof name !== "string" || !name.trim())
+    throw new Error("missing 'name'");
   if (typeof version !== "string") throw new Error("missing 'version'");
   return raw as ExtensionManifest;
 }
@@ -33,7 +38,8 @@ export function parseManifest(raw: unknown): ExtensionManifest {
 export function resolveThemes(manifest: ExtensionManifest): Theme[] {
   const out: Theme[] = [];
   for (const t of manifest.contributes?.themes ?? []) {
-    if (!isObj(t) || typeof t.id !== "string" || typeof t.name !== "string") continue;
+    if (!isObj(t) || typeof t.id !== "string" || typeof t.name !== "string")
+      continue;
     if (!isObj(t.variants)) continue;
     out.push({ ...t, id: `${EXT_THEME_PREFIX}${manifest.id}:${t.id}` });
   }
@@ -44,7 +50,8 @@ export function resolveSnippets(manifest: ExtensionManifest): Snippet[] {
   const out: Snippet[] = [];
   for (const s of manifest.contributes?.snippets ?? []) {
     const c = s as ContributedSnippet;
-    if (!c || typeof c.handle !== "string" || !HANDLE_RE.test(c.handle)) continue;
+    if (!c || typeof c.handle !== "string" || !HANDLE_RE.test(c.handle))
+      continue;
     if (typeof c.content !== "string") continue;
     out.push({
       id: `${EXT_THEME_PREFIX}${manifest.id}:${c.handle}`,
@@ -116,7 +123,10 @@ export async function reloadAfterInstall(): Promise<void> {
   await emitExtensionsChanged();
 }
 
-export async function toggleExtension(id: string, enabled: boolean): Promise<void> {
+export async function toggleExtension(
+  id: string,
+  enabled: boolean,
+): Promise<void> {
   await setExtensionEnabled(id, enabled);
   await reloadAfterInstall();
 }
@@ -146,7 +156,8 @@ const SAMPLE_EXTENSION: ExtensionManifest = {
   name: "Sample Pack",
   version: "1.0.0",
   author: "Artex",
-  description: "Demo extension — adds an 'Midnight Ocean' theme and a /snippet.",
+  description:
+    "Demo extension — adds an 'Midnight Ocean' theme and a /snippet.",
   engines: { artex: "^0.7.0" },
   permissions: [],
   contributes: {
@@ -170,10 +181,22 @@ const SAMPLE_EXTENSION: ExtensionManifest = {
               cursor: "#4cc9f0",
               selection: "#1d3a5f",
               ansi: [
-                "#1b2733", "#ff6b6b", "#7bdcb5", "#ffd166",
-                "#4cc9f0", "#b39ddb", "#2a9d8f", "#cdd9e5",
-                "#3a4a5a", "#ff8787", "#a0e8c8", "#ffe0a3",
-                "#82dbff", "#d1c4e9", "#5fc7b8", "#ffffff",
+                "#1b2733",
+                "#ff6b6b",
+                "#7bdcb5",
+                "#ffd166",
+                "#4cc9f0",
+                "#b39ddb",
+                "#2a9d8f",
+                "#cdd9e5",
+                "#3a4a5a",
+                "#ff8787",
+                "#a0e8c8",
+                "#ffe0a3",
+                "#82dbff",
+                "#d1c4e9",
+                "#5fc7b8",
+                "#ffffff",
               ],
             },
           },
@@ -185,7 +208,8 @@ const SAMPLE_EXTENSION: ExtensionManifest = {
         handle: "explain",
         name: "Explain this",
         description: "Ask the AI to explain the selected/last output.",
-        content: "Explain what the following command output means, concisely:\n",
+        content:
+          "Explain what the following command output means, concisely:\n",
       },
     ],
   },

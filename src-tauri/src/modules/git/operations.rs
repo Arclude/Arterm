@@ -9,7 +9,8 @@ use crate::modules::git::process::{
 };
 use crate::modules::git::types::{
     DiscardEntry, GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult,
-    GitDiffStat, GitLogEntry, GitOutput, GitPanelSnapshot, GitPushResult, GitRepoInfo,
+    GitBranchList, GitDiffStat, GitLogEntry, GitOutput, GitPanelSnapshot, GitPushResult,
+    GitRepoInfo,
     GitStatusSnapshot,
     TextSource, DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
 };
@@ -525,6 +526,100 @@ pub fn push(
         branch,
         pushed: true,
     })
+}
+
+/// Conservative git branch-name guard. Not a full check-ref-format clone; it
+/// rejects the dangerous shapes (leading dash that git would read as a flag,
+/// path traversal, control/whitespace) and the obviously-invalid ones.
+fn branch_name_is_safe(name: &str) -> bool {
+    if name.is_empty() || name.len() > 255 {
+        return false;
+    }
+    if name.starts_with('-') || name.starts_with('/') || name.ends_with('/') {
+        return false;
+    }
+    if name.starts_with('.') || name.ends_with('.') || name.ends_with(".lock") {
+        return false;
+    }
+    if name.contains("..") || name.contains("//") || name.contains("@{") {
+        return false;
+    }
+    !name.chars().any(|c| {
+        c.is_control() || matches!(c, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\' | '\x7f')
+    })
+}
+
+pub fn list_branches(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<GitBranchList> {
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let local = git_stdout_lines(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        [
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "--sort=refname",
+            "refs/heads/",
+        ],
+    )?
+    .into_iter()
+    .filter(|line| !line.is_empty())
+    .collect::<Vec<_>>();
+
+    let head = git_stdout_line_opt(
+        &repo_root.workspace,
+        &repo_root.git_path,
+        ["rev-parse", "--abbrev-ref", "HEAD"],
+    )?;
+    let detached = head.as_deref() == Some("HEAD") || head.is_none();
+    let current = if detached { None } else { head };
+
+    Ok(GitBranchList {
+        current,
+        detached,
+        local,
+    })
+}
+
+pub fn checkout_branch(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    branch: &str,
+    create: bool,
+    workspace: &WorkspaceEnv,
+) -> Result<()> {
+    if !branch_name_is_safe(branch) {
+        return Err(GitError::command("invalid branch name", branch.to_string()));
+    }
+    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
+    ensure_git_available(&repo_root.workspace)?;
+
+    let mut args: Vec<&OsStr> = vec![OsStr::new("switch")];
+    if create {
+        args.push(OsStr::new("-c"));
+    }
+    args.push(OsStr::new(branch));
+
+    let output = run_git(
+        &repo_root.workspace,
+        Some(&repo_root.git_path),
+        args,
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(
+        &output,
+        if create {
+            "git switch -c failed"
+        } else {
+            "git switch failed"
+        },
+    )?;
+    Ok(())
 }
 
 const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
@@ -1112,5 +1207,32 @@ mod tests {
             "fatal: your current branch 'main' does not have any commits yet"
         )));
         assert!(!looks_like_no_head(&mk("fatal: pathspec did not match")));
+    }
+
+    #[test]
+    fn branch_name_is_safe_accepts_ordinary_names() {
+        assert!(branch_name_is_safe("main"));
+        assert!(branch_name_is_safe("feature/new-statusbar"));
+        assert!(branch_name_is_safe("release-1.2.3"));
+        assert!(branch_name_is_safe("user/fix_bug"));
+    }
+
+    #[test]
+    fn branch_name_is_safe_rejects_dangerous_or_invalid() {
+        assert!(!branch_name_is_safe(""));
+        assert!(!branch_name_is_safe("-rf"));
+        assert!(!branch_name_is_safe("--force"));
+        assert!(!branch_name_is_safe("/leading"));
+        assert!(!branch_name_is_safe("trailing/"));
+        assert!(!branch_name_is_safe(".hidden"));
+        assert!(!branch_name_is_safe("ends.lock"));
+        assert!(!branch_name_is_safe("a..b"));
+        assert!(!branch_name_is_safe("has space"));
+        assert!(!branch_name_is_safe("tilde~1"));
+        assert!(!branch_name_is_safe("colon:name"));
+        assert!(!branch_name_is_safe("star*"));
+        assert!(!branch_name_is_safe("back\\slash"));
+        assert!(!branch_name_is_safe("ref@{0}"));
+        assert!(!branch_name_is_safe("ctrl\u{7}char"));
     }
 }

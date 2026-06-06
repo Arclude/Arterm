@@ -22,7 +22,9 @@ type State = {
 };
 
 /** All snippets visible to the composer: user snippets + extension snippets. */
-export function allSnippets(state: Pick<State, "snippets" | "extensionSnippets">): Snippet[] {
+export function allSnippets(
+  state: Pick<State, "snippets" | "extensionSnippets">,
+): Snippet[] {
   return state.extensionSnippets.length === 0
     ? state.snippets
     : [...state.snippets, ...state.extensionSnippets];
@@ -47,7 +49,9 @@ export const useSnippetsStore = create<State>((set, get) => ({
     const list = get().snippets;
     const idx = list.findIndex((s) => s.id === snippet.id);
     const next =
-      idx === -1 ? [...list, snippet] : list.map((s) => (s.id === snippet.id ? snippet : s));
+      idx === -1
+        ? [...list, snippet]
+        : list.map((s) => (s.id === snippet.id ? snippet : s));
     set({ snippets: next });
     void saveSnippets(next).then(() => emit(CHANGED_EVENT));
   },

@@ -62,7 +62,9 @@ function EntryRowImpl(props: EntryRowProps) {
 
   const [isConfirming, setIsConfirming] = useState(false);
   const iconUrl = isDir ? folderIconUrl(name, isExpanded) : fileIconUrl(name);
-  const createTarget = isDir ? path : path.slice(0, path.lastIndexOf("/")) || rootPath;
+  const createTarget = isDir
+    ? path
+    : path.slice(0, path.lastIndexOf("/")) || rootPath;
   const paddingLeft = 6 + depth * 12;
 
   const handleClick = () => {
@@ -225,7 +227,12 @@ export type PendingRowProps = {
   onCancel: () => void;
 };
 
-export function PendingRow({ depth, kind, onCommit, onCancel }: PendingRowProps) {
+export function PendingRow({
+  depth,
+  kind,
+  onCommit,
+  onCancel,
+}: PendingRowProps) {
   return (
     <div
       className="flex h-6 w-full min-w-0 items-center gap-2 px-1.5 text-[13px]"
@@ -233,7 +240,9 @@ export function PendingRow({ depth, kind, onCommit, onCancel }: PendingRowProps)
     >
       <span className="size-3.5 shrink-0" />
       <img
-        src={kind === "dir" ? folderIconUrl("", false) : fileIconUrl("untitled")}
+        src={
+          kind === "dir" ? folderIconUrl("", false) : fileIconUrl("untitled")
+        }
         alt=""
         className="size-4 shrink-0 opacity-70"
       />

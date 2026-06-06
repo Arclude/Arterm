@@ -54,8 +54,13 @@ export async function fetchRegistry(url?: string): Promise<RegistryEntry[]> {
   if (!isObj(parsed) || !Array.isArray(parsed.extensions)) {
     throw new Error("registry has no 'extensions' array");
   }
-  if (typeof parsed.schema === "number" && parsed.schema > REGISTRY_SCHEMA_MAX) {
-    console.warn(`[artex] registry schema ${parsed.schema} newer than supported`);
+  if (
+    typeof parsed.schema === "number" &&
+    parsed.schema > REGISTRY_SCHEMA_MAX
+  ) {
+    console.warn(
+      `[artex] registry schema ${parsed.schema} newer than supported`,
+    );
   }
   const byId = new Map<string, RegistryEntry>();
   for (const e of parsed.extensions as unknown[]) {
@@ -131,7 +136,9 @@ function normalizeInstallUrl(input: string): string {
   throw new Error("enter an https raw manifest URL or owner/repo");
 }
 
-export async function installFromUrl(input: string): Promise<ExtensionManifest> {
+export async function installFromUrl(
+  input: string,
+): Promise<ExtensionManifest> {
   return installFromManifestText(await fetchText(normalizeInstallUrl(input)));
 }
 

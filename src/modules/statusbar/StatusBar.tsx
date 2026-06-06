@@ -1,7 +1,6 @@
 import {
   Add01Icon,
   File01Icon,
-  GitBranchIcon,
   IncognitoIcon,
   SidebarLeft01Icon,
 } from "@hugeicons/core-free-icons";
@@ -15,7 +14,9 @@ import { cn } from "@/lib/utils";
 import { useChatStore } from "@/modules/ai";
 import { AgentStatusPill } from "@/modules/ai/components/AgentStatusPill";
 import { AiStatusBarControls } from "@/modules/ai/components/AiStatusBarControls";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { WorkspaceEnv } from "@/modules/workspace";
+import { BranchSwitcher } from "./BranchSwitcher";
 import { Clock } from "./Clock";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { useGitStatus } from "./useGitStatus";
@@ -55,27 +56,41 @@ export function StatusBar({
   privateActive,
 }: Props) {
   const panelOpen = useChatStore((s) => s.panelOpen);
-  const git = useGitStatus(cwd);
+  const { status: git, refresh: refreshGit } = useGitStatus(cwd);
+  const items = usePreferencesStore((s) => s.statusBar);
 
   return (
     <footer className="flex h-8 shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-card/60 px-2 text-[11px]">
       {/* Left: app + quick actions + git change stats */}
       <div className="flex shrink-0 items-center gap-1">
         <AgentStatusPill onClick={onOpenMini} />
-        <button type="button" title="New tab" onClick={onNewTab} className={cn(ICON_BTN, "w-6")}>
-          <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2} />
-        </button>
-        <VoiceButton activeLeafId={activeLeafId} />
-        <button
-          type="button"
-          title="Toggle file explorer"
-          onClick={onToggleSidebar}
-          className={cn(ICON_BTN, "gap-1.5 px-2")}
-        >
-          <HugeiconsIcon icon={SidebarLeft01Icon} size={12} strokeWidth={1.75} />
-          <span className="text-[10.5px]">Explorer</span>
-        </button>
-        {git && git.changeCount > 0 ? (
+        {items.newTab ? (
+          <button
+            type="button"
+            title="New tab"
+            onClick={onNewTab}
+            className={cn(ICON_BTN, "w-6")}
+          >
+            <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2} />
+          </button>
+        ) : null}
+        {items.voice ? <VoiceButton activeLeafId={activeLeafId} /> : null}
+        {items.explorer ? (
+          <button
+            type="button"
+            title="Toggle file explorer"
+            onClick={onToggleSidebar}
+            className={cn(ICON_BTN, "gap-1.5 px-2")}
+          >
+            <HugeiconsIcon
+              icon={SidebarLeft01Icon}
+              size={12}
+              strokeWidth={1.75}
+            />
+            <span className="text-[10.5px]">Explorer</span>
+          </button>
+        ) : null}
+        {items.gitStats && git && git.changeCount > 0 ? (
           <span
             title={`${git.changeCount} changed file${git.changeCount > 1 ? "s" : ""}`}
             className="flex shrink-0 items-center gap-1 pl-1 text-[10.5px] text-muted-foreground tabular-nums"
@@ -102,7 +117,10 @@ export function StatusBar({
                 <span>Private</span>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-64 text-[11px] leading-relaxed">
+            <TooltipContent
+              side="top"
+              className="max-w-64 text-[11px] leading-relaxed"
+            >
               AI can't see this terminal's output. Use it for secrets, SSH, or
               anything you don't want sent to the model.
             </TooltipContent>
@@ -112,22 +130,28 @@ export function StatusBar({
 
       {/* Right: path + branch + clock + AI controls */}
       <div className="flex min-w-0 items-center justify-end gap-2">
-        <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
-        <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
-        {git ? (
-          <span
-            title={git.detached ? "Detached HEAD" : `Branch ${git.branch}`}
-            className="flex shrink-0 items-center gap-1 text-[10.5px] text-muted-foreground"
-          >
-            <HugeiconsIcon icon={GitBranchIcon} size={11} strokeWidth={1.75} />
-            <span className="max-w-32 truncate">
-              {git.detached ? "detached" : git.branch}
-            </span>
-            {git.ahead > 0 ? <span>↑{git.ahead}</span> : null}
-            {git.behind > 0 ? <span>↓{git.behind}</span> : null}
-          </span>
+        {items.workspace ? (
+          <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
         ) : null}
-        <Clock />
+        {items.cwd ? (
+          <CwdBreadcrumb
+            cwd={cwd}
+            filePath={filePath}
+            home={home}
+            onCd={onCd}
+          />
+        ) : null}
+        {items.gitBranch && git ? (
+          <BranchSwitcher
+            repoRoot={git.repoRoot}
+            branch={git.branch}
+            detached={git.detached}
+            ahead={git.ahead}
+            behind={git.behind}
+            onChanged={refreshGit}
+          />
+        ) : null}
+        {items.clock ? <Clock /> : null}
         {panelOpen && hasComposer ? <AiStatusBarControls /> : null}
       </div>
     </footer>

@@ -93,10 +93,7 @@ export function CommandPalette({
 
     if (!showFiles || !workspaceRoot) return actionValues;
     if (error) return [...actionValues, RETRY_VALUE];
-    return [
-      ...actionValues,
-      ...results.map((hit) => fileValue(hit)),
-    ];
+    return [...actionValues, ...results.map((hit) => fileValue(hit))];
   }, [error, results, showFiles, visibleActions, workspaceRoot]);
 
   useEffect(() => {

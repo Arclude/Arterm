@@ -12,11 +12,7 @@ import { Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
-import {
-  getBindingTokens,
-  SHORTCUTS,
-  SHORTCUT_GROUPS,
-} from "./shortcuts";
+import { getBindingTokens, SHORTCUTS, SHORTCUT_GROUPS } from "./shortcuts";
 
 type Props = {
   open: boolean;

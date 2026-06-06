@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { native } from "@/modules/ai/lib/native";
 import { listenFsChanged, watchAdd } from "@/modules/explorer/lib/watch";
 
 export type GitStatusInfo = {
+  repoRoot: string;
   branch: string;
   detached: boolean;
   ahead: number;
@@ -12,16 +13,22 @@ export type GitStatusInfo = {
   deletions: number;
 };
 
+export type UseGitStatus = {
+  status: GitStatusInfo | null;
+  refresh: () => void;
+};
+
 /**
  * Git status for a directory (the active terminal's cwd): branch, ahead/behind,
  * changed-file count, and +/- line totals. Returns null when not a git repo.
- * Refreshes on cwd change, window focus, and working-tree file changes.
+ * Refreshes on cwd change, window focus, working-tree file changes, and via the
+ * returned `refresh` (e.g. after a branch switch).
  */
-export function useGitStatus(cwd: string | null): GitStatusInfo | null {
+export function useGitStatus(cwd: string | null): UseGitStatus {
   const [info, setInfo] = useState<GitStatusInfo | null>(null);
   const repoRootRef = useRef<string | null>(null);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     const root = repoRootRef.current;
     if (!root) return;
     try {
@@ -31,6 +38,7 @@ export function useGitStatus(cwd: string | null): GitStatusInfo | null {
       ]);
       if (repoRootRef.current !== root) return; // cwd moved on
       setInfo({
+        repoRoot: root,
         branch: status.branch,
         detached: status.isDetached,
         ahead: status.ahead,
@@ -42,7 +50,11 @@ export function useGitStatus(cwd: string | null): GitStatusInfo | null {
     } catch {
       /* transient errors are non-fatal; keep prior info */
     }
-  };
+  }, []);
+
+  const refresh = useCallback(() => {
+    void fetchStatus();
+  }, [fetchStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +85,7 @@ export function useGitStatus(cwd: string | null): GitStatusInfo | null {
       cancelled = true;
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd]);
+  }, [cwd, fetchStatus]);
 
   useEffect(() => {
     const onFocus = () => void fetchStatus();
@@ -90,8 +101,7 @@ export function useGitStatus(cwd: string | null): GitStatusInfo | null {
       window.removeEventListener("focus", onFocus);
       unlisten?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchStatus]);
 
-  return info;
+  return { status: info, refresh };
 }

@@ -26,7 +26,12 @@ describe("labelFor (terminal tabs)", () => {
 
   it("prefers a custom title over the cwd-derived name", () => {
     expect(
-      labelFor(terminalTab({ cwd: "/Users/me/projects/artex-ai", customTitle: "Server" })),
+      labelFor(
+        terminalTab({
+          cwd: "/Users/me/projects/artex-ai",
+          customTitle: "Server",
+        }),
+      ),
     ).toBe("Server");
   });
 

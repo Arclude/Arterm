@@ -29,7 +29,6 @@ import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement, memo, useState } from "react";
 
-
 export type ToolPart = ToolUIPart | DynamicToolUIPart;
 
 const TOOL_META: Record<string, { label: string; icon: typeof File01Icon }> = {
@@ -155,8 +154,7 @@ const ToolImpl = ({
   // body, which is huge and re-renders per token.
   const showInputBody = !isHeavy && Boolean(input);
   const showOutputBody = !isHeavy && output !== undefined;
-  const hasDetails =
-    showInputBody || showOutputBody || Boolean(errorText);
+  const hasDetails = showInputBody || showOutputBody || Boolean(errorText);
 
   return (
     <Collapsible
@@ -199,9 +197,7 @@ const ToolImpl = ({
       </CollapsibleTrigger>
 
       {hasDetails && (
-        <CollapsibleContent
-          className={cn("artex-collapsible-content")}
-        >
+        <CollapsibleContent className={cn("artex-collapsible-content")}>
           <div className="ml-3 mt-1 space-y-2 border-l border-border/60 pl-3 pb-1">
             {showInputBody ? (
               <ToolInput toolName={toolName} input={input} />
@@ -229,8 +225,9 @@ export const Tool = memo(ToolImpl, (a, b) => {
   if (a.output !== b.output) return false;
   if (a.className !== b.className) return false;
   if (HEAVY_CONTENT_TOOLS.has(a.toolName)) {
-    return deriveSummary(a.toolName, a.input) ===
-      deriveSummary(b.toolName, b.input);
+    return (
+      deriveSummary(a.toolName, a.input) === deriveSummary(b.toolName, b.input)
+    );
   }
   return a.input === b.input;
 });
@@ -710,9 +707,7 @@ function SuggestCommandCard({
 }) {
   const [inserted, setInserted] = useState(false);
   const onInsert = () => {
-    const ok = useChatStore
-      .getState()
-      .live.injectIntoActivePty(command);
+    const ok = useChatStore.getState().live.injectIntoActivePty(command);
     if (ok) setInserted(true);
   };
   return (

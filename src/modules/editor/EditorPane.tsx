@@ -369,6 +369,19 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         </div>
       );
     }
+    if (doc.status === "image") {
+      return (
+        <div className="flex h-full min-h-0 items-center justify-center overflow-auto p-4">
+          <img
+            src={doc.dataUrl}
+            alt={path}
+            draggable={false}
+            className="max-h-full max-w-full object-contain"
+            style={{ imageRendering: "auto" }}
+          />
+        </div>
+      );
+    }
     if (doc.status === "binary") {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
