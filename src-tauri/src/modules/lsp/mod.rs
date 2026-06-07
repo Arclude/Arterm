@@ -6,7 +6,12 @@
 //! initialize handshake, document sync) live in the TypeScript client.
 
 mod framing;
+mod install;
 mod process;
+
+// Glob re-export so `tauri::generate_handler!` can reach the hidden `__cmd__*`
+// items the `#[tauri::command]` macro generates alongside each function.
+pub use install::*;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};

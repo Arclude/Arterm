@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 *.tsbuildinfo
+
+# Claude Code assistant memory (local, not part of the project)
+memory/

@@ -6,6 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { DEFAULT_LSP_SERVERS } from "@/modules/lsp/config";
+import {
+  installServer,
+  listInstalled,
+  uninstallServer,
+} from "@/modules/lsp/install";
+import {
+  assetFor,
+  INSTALL_REGISTRY,
+  type InstallEntry,
+} from "@/modules/lsp/installRegistry";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   type LspServerConfig,
@@ -31,6 +41,14 @@ function effectiveConfig(
 export function LanguageServersSection() {
   const lspEnabled = usePreferencesStore((s) => s.lspEnabled);
   const lspServers = usePreferencesStore((s) => s.lspServers);
+
+  const [installed, setInstalled] = useState<Set<string>>(new Set());
+  const refreshInstalled = () => {
+    void listInstalled()
+      .then((list) => setInstalled(new Set(list.map((s) => s.serverId))))
+      .catch((e) => console.warn("lsp: list installed failed:", e));
+  };
+  useEffect(refreshInstalled, []);
 
   const langIds = Object.keys(DEFAULT_LSP_SERVERS);
 
@@ -75,6 +93,8 @@ export function LanguageServersSection() {
           const def = DEFAULT_LSP_SERVERS[langId];
           const override = lspServers[langId];
           const config = effectiveConfig(def, override);
+          const entry = INSTALL_REGISTRY[langId];
+          const installable = entry ? assetFor(entry) != null : false;
           return (
             <ServerRow
               key={langId}
@@ -83,6 +103,9 @@ export function LanguageServersSection() {
               config={config}
               isOverridden={override !== undefined}
               disabled={!lspEnabled}
+              entry={installable ? entry : undefined}
+              installed={installed.has(langId)}
+              onInstalledChange={refreshInstalled}
               onChange={(next) => writeConfig(langId, next)}
               onReset={() => resetConfig(langId)}
             />
@@ -99,6 +122,9 @@ function ServerRow({
   config,
   isOverridden,
   disabled,
+  entry,
+  installed,
+  onInstalledChange,
   onChange,
   onReset,
 }: {
@@ -107,12 +133,49 @@ function ServerRow({
   config: Required<LspServerConfig>;
   isOverridden: boolean;
   disabled: boolean;
+  entry?: InstallEntry;
+  installed: boolean;
+  onInstalledChange: () => void;
   onChange: (next: LspServerConfig) => void;
   onReset: () => void;
 }) {
   const argsText = config.args.join(" ");
   const [commandDraft, setCommandDraft] = useState(config.command);
   const [argsDraft, setArgsDraft] = useState(argsText);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+
+  const handleInstall = async () => {
+    if (!entry) return;
+    setBusy(true);
+    setProgress(0);
+    try {
+      await installServer(entry, (p) => {
+        setProgress(
+          p.total ? Math.round((p.downloaded / p.total) * 100) : null,
+        );
+      });
+      onInstalledChange();
+    } catch (e) {
+      console.error("lsp: install failed:", e);
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  const handleUninstall = async () => {
+    if (!entry) return;
+    setBusy(true);
+    try {
+      await uninstallServer(entry.id);
+      onInstalledChange();
+    } catch (e) {
+      console.error("lsp: uninstall failed:", e);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     setCommandDraft(config.command);
@@ -150,6 +213,28 @@ function ServerRow({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {entry ? (
+            <Button
+              size="sm"
+              variant={installed ? "ghost" : "secondary"}
+              className="h-7 px-2 text-[11px]"
+              disabled={busy || disabled}
+              onClick={installed ? handleUninstall : handleInstall}
+              title={
+                installed
+                  ? "Remove the managed binary"
+                  : `Download ${entry.label}`
+              }
+            >
+              {busy
+                ? progress != null
+                  ? `${progress}%`
+                  : "…"
+                : installed
+                  ? "Uninstall"
+                  : "Install"}
+            </Button>
+          ) : null}
           {isOverridden ? (
             <Button
               size="icon"
