@@ -242,6 +242,11 @@ export default function App() {
   const previewRefs = useRef<Map<number, PreviewPaneHandle>>(new Map());
   const [activeEditorHandle, setActiveEditorHandle] =
     useState<EditorPaneHandle | null>(null);
+  // Split editor: pin one editor tab into a second pane beside the main column.
+  const [editorSplitDir, setEditorSplitDir] = useState<"row" | "col" | null>(
+    null,
+  );
+  const [editorSplitPath, setEditorSplitPath] = useState<string | null>(null);
   const [gitHistoryHandle, setGitHistoryHandle] =
     useState<GitHistorySearchHandle | null>(null);
   const { zoomIn, zoomOut, zoomReset } = useZoom();
@@ -1097,6 +1102,26 @@ export default function App() {
     [activeId, splitActivePane],
   );
 
+  const closeEditorSplit = useCallback(() => {
+    setEditorSplitPath(null);
+    setEditorSplitDir(null);
+  }, []);
+
+  // Route the toolbar split button: editors open a synced second view of the
+  // current file; terminals keep their existing pane split.
+  const handleSplitActive = useCallback(
+    (dir: "row" | "col") => {
+      const t = tabsRef.current.find((x) => x.id === activeId);
+      if (t?.kind === "editor") {
+        setEditorSplitPath(t.path);
+        setEditorSplitDir(dir);
+        return;
+      }
+      splitActivePaneInActiveTab(dir);
+    },
+    [activeId, splitActivePaneInActiveTab],
+  );
+
   const handleCloseTabOrPane = useCallback(() => {
     const t = tabsRef.current.find((x) => x.id === activeId);
     if (t?.kind === "terminal" && leafIds(t.paneTree).length > 1) {
@@ -1515,6 +1540,9 @@ export default function App() {
           registerHandle={registerEditorHandle}
           onDirtyChange={handleEditorDirty}
           onCloseTab={disposeTab}
+          splitPath={editorSplitPath}
+          splitDir={editorSplitDir}
+          onCloseSplit={closeEditorSplit}
         />
       </div>
       <div
@@ -1598,10 +1626,12 @@ export default function App() {
               onPin={pinTab}
               onRename={handleRenameTab}
               onToggleSidebar={toggleSidebar}
-              onSplit={splitActivePaneInActiveTab}
+              onSplit={handleSplitActive}
               canSplit={
-                activeTerminalTab !== null &&
-                leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
+                (activeTerminalTab !== null &&
+                  leafIds(activeTerminalTab.paneTree).length <
+                    MAX_PANES_PER_TAB) ||
+                (isEditorTab && editorSplitPath === null)
               }
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}

@@ -37,6 +37,40 @@ export function isImagePath(path: string): boolean {
   return IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
 }
 
+// --- Shared text-document registry -------------------------------------------
+// When the same file is open in more than one editor pane (e.g. a split view),
+// every pane must edit ONE underlying buffer so typing in one is reflected in
+// the others and saves never clobber each other. Each text document is shared
+// here, keyed by path, with the set of live panes subscribed to it. The entry
+// is created synchronously on first load so a sibling pane mounting in the same
+// commit reuses it instead of racing a second disk read.
+
+type DocSnapshot = { buffer: string; saved: string; size: number };
+type SharedListener = (snapshot: DocSnapshot) => void;
+
+type SharedDoc = {
+  saved: string;
+  buffer: string;
+  size: number;
+  loaded: boolean;
+  listeners: Set<SharedListener>;
+};
+
+const sharedDocs = new Map<string, SharedDoc>();
+
+function notifyShared(path: string, except?: SharedListener | null): void {
+  const entry = sharedDocs.get(path);
+  if (!entry) return;
+  const snapshot: DocSnapshot = {
+    buffer: entry.buffer,
+    saved: entry.saved,
+    size: entry.size,
+  };
+  for (const listener of entry.listeners) {
+    if (listener !== except) listener(snapshot);
+  }
+}
+
 type Options = {
   path: string;
   onDirtyChange?: (dirty: boolean) => void;
@@ -49,7 +83,8 @@ export function useDocument({ path, onDirtyChange }: Options) {
   const autoSave = usePreferencesStore((s) => s.editorAutoSave);
   const autoSaveDelay = usePreferencesStore((s) => s.editorAutoSaveDelay);
 
-  // Track the saved buffer so we can detect changes cheaply.
+  // Track the saved/current buffer so we can detect changes cheaply. These
+  // mirror this path's shared registry entry.
   const savedRef = useRef<string>("");
   const bufferRef = useRef<string>("");
   const dirtyRef = useRef(false);
@@ -69,6 +104,10 @@ export function useDocument({ path, onDirtyChange }: Options) {
     }
   }, []);
 
+  // This pane's listener identity, so siblings can push live updates and so we
+  // can exclude ourselves when broadcasting our own edits.
+  const listenerRef = useRef<SharedListener | null>(null);
+
   const saveNow = useCallback(async () => {
     const content = bufferRef.current;
     await invoke("fs_write_file", {
@@ -78,6 +117,11 @@ export function useDocument({ path, onDirtyChange }: Options) {
       source: "editor",
     });
     savedRef.current = content;
+    const entry = sharedDocs.get(path);
+    if (entry) {
+      entry.saved = content;
+      notifyShared(path, listenerRef.current);
+    }
     setDirty(false);
   }, [path]);
 
@@ -90,13 +134,24 @@ export function useDocument({ path, onDirtyChange }: Options) {
     onDirtyChangeRef.current?.(dirty);
   }, [dirty]);
 
-  // Load on path change or explicit reload.
+  // Load on path change (or reuse a buffer already shared by another pane) and
+  // subscribe this pane to live updates from siblings editing the same file.
   useEffect(() => {
     let cancelled = false;
-    setDoc({ status: "loading" });
-    setDirty(false);
 
+    const listener: SharedListener = ({ buffer, saved, size }) => {
+      if (cancelled) return;
+      bufferRef.current = buffer;
+      savedRef.current = saved;
+      setDirty(buffer !== saved);
+      setDoc({ status: "ready", content: buffer, size });
+    };
+    listenerRef.current = listener;
+
+    // Images / binaries aren't text and aren't shared.
     if (isImagePath(path)) {
+      setDoc({ status: "loading" });
+      setDirty(false);
       invoke<DataUrlResult>("fs_read_file_data_url", {
         path,
         workspace: currentWorkspaceEnv(),
@@ -110,39 +165,83 @@ export function useDocument({ path, onDirtyChange }: Options) {
         });
       return () => {
         cancelled = true;
+        listenerRef.current = null;
       };
     }
+
+    // Another pane already holds this file — reuse its live buffer.
+    const existing = sharedDocs.get(path);
+    if (existing) {
+      existing.listeners.add(listener);
+      if (existing.loaded) {
+        bufferRef.current = existing.buffer;
+        savedRef.current = existing.saved;
+        setDirty(existing.buffer !== existing.saved);
+        setDoc({
+          status: "ready",
+          content: existing.buffer,
+          size: existing.size,
+        });
+      } else {
+        setDoc({ status: "loading" });
+        setDirty(false);
+      }
+      return () => {
+        cancelled = true;
+        existing.listeners.delete(listener);
+        if (existing.listeners.size === 0) sharedDocs.delete(path);
+        listenerRef.current = null;
+      };
+    }
+
+    // First pane for this path: reserve the entry synchronously, then fill it.
+    const entry: SharedDoc = {
+      saved: "",
+      buffer: "",
+      size: 0,
+      loaded: false,
+      listeners: new Set([listener]),
+    };
+    sharedDocs.set(path, entry);
+    setDoc({ status: "loading" });
+    setDirty(false);
 
     invoke<ReadResult>("fs_read_file", {
       path,
       workspace: currentWorkspaceEnv(),
     })
       .then((res) => {
-        if (cancelled) return;
         if (res.kind === "text") {
-          savedRef.current = res.content;
-          bufferRef.current = res.content;
-          setDoc({
-            status: "ready",
-            content: res.content,
-            size: res.size,
-          });
-        } else if (res.kind === "binary") {
-          setDoc({ status: "binary", size: res.size });
-        } else if (res.kind === "toolarge") {
-          setDoc({
-            status: "toolarge",
-            size: res.size,
-            limit: res.limit,
-          });
+          entry.saved = res.content;
+          entry.buffer = res.content;
+          entry.size = res.size;
+          entry.loaded = true;
+          // Notify all subscribers (including this pane) → ready.
+          notifyShared(path);
+        } else {
+          // Not text — drop the shared entry and render locally.
+          sharedDocs.delete(path);
+          if (cancelled) return;
+          if (res.kind === "binary") {
+            setDoc({ status: "binary", size: res.size });
+          } else if (res.kind === "toolarge") {
+            setDoc({ status: "toolarge", size: res.size, limit: res.limit });
+          }
         }
       })
       .catch((e) => {
+        sharedDocs.delete(path);
         if (!cancelled) setDoc({ status: "error", message: String(e) });
       });
 
     return () => {
       cancelled = true;
+      const e = sharedDocs.get(path);
+      if (e) {
+        e.listeners.delete(listener);
+        if (e.listeners.size === 0) sharedDocs.delete(path);
+      }
+      listenerRef.current = null;
     };
   }, [path]);
 
@@ -170,6 +269,14 @@ export function useDocument({ path, onDirtyChange }: Options) {
           if (res.content === savedRef.current) return;
           savedRef.current = res.content;
           bufferRef.current = res.content;
+          const entry = sharedDocs.get(path);
+          if (entry) {
+            entry.saved = res.content;
+            entry.buffer = res.content;
+            entry.size = res.size;
+            entry.loaded = true;
+            notifyShared(path, listenerRef.current);
+          }
           setDirty(false);
           setDoc({ status: "ready", content: res.content, size: res.size });
         } else if (res.kind === "binary") {
@@ -194,6 +301,14 @@ export function useDocument({ path, onDirtyChange }: Options) {
       const isDirty = next !== savedRef.current;
       setDirty(isDirty);
 
+      // Broadcast the edit to sibling panes (not ourselves). Guard against the
+      // echo when our own value prop updates from a sibling's change.
+      const entry = sharedDocs.get(path);
+      if (entry && entry.buffer !== next) {
+        entry.buffer = next;
+        notifyShared(path, listenerRef.current);
+      }
+
       clearAutoSaveTimer();
 
       const { autoSave: active, autoSaveDelay: delay } = autoSaveRef.current;
@@ -203,7 +318,7 @@ export function useDocument({ path, onDirtyChange }: Options) {
         }, delay);
       }
     },
-    [clearAutoSaveTimer, saveNow],
+    [path, clearAutoSaveTimer, saveNow],
   );
 
   useEffect(() => clearAutoSaveTimer, [path, clearAutoSaveTimer]);
