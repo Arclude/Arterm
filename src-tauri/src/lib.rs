@@ -246,6 +246,7 @@ pub fn run() {
             extensions::extensions_list,
             extensions::extensions_dir_path,
             extensions::extensions_write,
+            extensions::extensions_read_file,
             extensions::extensions_uninstall,
             extensions::extensions_fetch_text,
             secrets::secrets_get,

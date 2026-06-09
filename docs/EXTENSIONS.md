@@ -1,11 +1,19 @@
 # Writing Artex Extensions
 
-Artex extensions (Phase 1) are **declarative packages** — a single JSON file that
-contributes **themes** and **snippets**. They run **no code**, so installing one
-is safe and needs no zip or build step.
+Artex extensions come in two flavors:
 
-> Code extensions (commands, keybindings, AI tools) are a planned Phase 2 and
-> will require a sandbox; this document covers the declarative format only.
+- **Declarative** (Phase 1) — a single JSON file that contributes **themes** and
+  **snippets**. Runs **no code**; installing one is completely safe.
+- **Executable** (Phase 2) — ships a JavaScript entry file that runs inside a
+  **sandboxed Web Worker** and can register **commands** that call a host API.
+  See [Executable extensions](#executable-extensions-phase-2) below.
+
+> **Status / scope.** The **declarative** path (themes + snippets, distributed
+> via a GitHub static registry) is the supported, public path. **Executable
+> extensions are experimental** and surfaced under a *Beta* label — the public
+> marketplace lists declarative packages only. The packaging/signing/hosted-
+> marketplace pieces below are kept for future "open ecosystem" work and are not
+> part of the public launch.
 
 ## Package format
 
@@ -82,6 +90,76 @@ A package is one file named **`artex-extension.json`**. Authors may share it as
 
 Type `#handle` in the AI composer to expand the snippet.
 
+## Executable extensions (Phase 2)
+
+An executable extension adds a JS entry file plus a few manifest fields. The code
+runs in a **Web Worker sandbox** — no DOM, no `window`, no direct filesystem.
+Everything it can do comes from the injected `artex` API, and anything that
+touches the user's files or environment is gated by a declared **permission**.
+
+### Extra manifest fields
+
+```jsonc
+{
+  // …all the Phase-1 fields…
+  "main": "main.js",                 // entry file, stored next to the manifest
+  "activationEvents": [              // when the code is loaded (lazy by default)
+    "onCommand:hello.world",         //   activate when this command runs
+    "onStartup"                      //   or eagerly at app start ("*" = always)
+  ],
+  "permissions": ["fs:read"],        // ENFORCED — see the table below
+  "contributes": {
+    "commands": [
+      { "command": "hello.world", "title": "Hello World", "category": "Hello" }
+    ]
+  }
+}
+```
+
+Contributed commands appear in the command palette immediately (under their
+`category`/title). The extension's code is **not** run until one of its commands
+is invoked or an activation event fires — so a big extension costs nothing until
+it is actually used.
+
+### The entry file
+
+`main.js` receives `artex`, `module`, `exports`, and `console`. Set
+`exports.activate(context)`; push disposables to `context.subscriptions`:
+
+```js
+exports.activate = (context) => {
+  context.subscriptions.push(
+    artex.commands.registerCommand("hello.world", () => {
+      artex.window.showInformationMessage("👋 Hello!");
+    }),
+  );
+};
+exports.deactivate = () => {};
+```
+
+A complete, copy-pasteable template lives in
+[`examples/extensions/hello-command/`](../examples/extensions/hello-command/).
+
+### The `artex` API (so far)
+
+| Method | Permission | Notes |
+| --- | --- | --- |
+| `artex.commands.registerCommand(id, fn)` | — | bind a command handler; returns a disposable |
+| `artex.commands.executeCommand(id, ...args)` | — | run another registered command |
+| `artex.window.showInformationMessage(msg)` | — | toast |
+| `artex.window.showWarningMessage(msg)` | — | toast |
+| `artex.window.showErrorMessage(msg)` | — | error toast |
+| `artex.workspace.fs.readTextFile(path)` | `fs:read` | returns file text (throws on binary/too-large) |
+| `artex.workspace.fs.writeTextFile(path, text)` | `fs:write` | writes atomically in the workspace |
+
+Calling a gated method without declaring its permission is **rejected** by the
+host with a clear error — the worker can never reach a capability you did not ask
+for. The API surface grows over time; this table is the current contract.
+
+> Inline alternative: instead of `main` + `main.js`, a tiny extension may set
+> `"mainSource"` to the JS source as a string. Handy for a single-file JSON you
+> share directly; `main` takes precedence when both are present.
+
 ## Installing & testing locally
 
 1. **Settings → Extensions → From file** — pick your `artex-extension.json`.
@@ -123,6 +201,14 @@ complete sample packages.
 
 ## Security model
 
-- **No code executes** — only declarative data; a malicious package cannot run code.
+- **Declarative packages run no code** — a theme/snippet package cannot execute.
+- **Executable packages run only in a Web Worker sandbox** — no DOM, no `window`,
+  no Tauri/filesystem globals. The worker reaches the app solely through the
+  `artex` API over a message bridge.
+- **Capabilities are permission-gated** — sensitive `artex` methods (e.g.
+  `workspace.fs.*`) are denied unless the manifest declares the matching
+  permission. Enforcement happens on the main thread (the host), not in the
+  worker, so extension code cannot bypass it.
 - Remote fetches are **https-only**, SSRF-hardened, and size-capped in the backend.
-- The `id` is sanitized into a folder name; path traversal is rejected.
+- The `id` is sanitized into a folder name; sibling file names are validated and
+  path traversal is rejected; written files are size- and count-capped.

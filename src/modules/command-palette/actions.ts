@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+import { type ExtensionCommand, extensionHost } from "@/modules/extensions";
 import type { SearchTarget } from "@/modules/header";
 import type { ShortcutId } from "@/modules/shortcuts";
 import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
@@ -12,6 +14,7 @@ import {
   KeyboardIcon,
   LayoutTwoColumnIcon,
   LayoutTwoRowIcon,
+  PuzzleIcon,
   Search01Icon,
   Settings01Icon,
   SidebarLeftIcon,
@@ -27,7 +30,8 @@ export type CommandPaletteActionGroup =
   | "Panes"
   | "View"
   | "Search"
-  | "AI";
+  | "AI"
+  | "Extensions";
 
 export type CommandPaletteAction = {
   id: string;
@@ -42,7 +46,7 @@ export type CommandPaletteAction = {
 };
 
 export const COMMAND_PALETTE_ACTION_GROUPS: readonly CommandPaletteActionGroup[] =
-  ["General", "Tabs", "Panes", "View", "Search", "AI"] as const;
+  ["General", "Tabs", "Panes", "View", "Search", "AI", "Extensions"] as const;
 
 export type CommandPaletteActionContext = {
   tabs: Tab[];
@@ -272,4 +276,31 @@ export function createCommandPaletteActions(
       run: ctx.askAiSelection,
     },
   ];
+}
+
+/**
+ * Turn the commands contributed by executable extensions into palette actions.
+ * Invoking one routes through the extension host, which lazily activates the
+ * owning extension and runs its bound handler in the worker sandbox.
+ */
+export function extensionCommandsToActions(
+  commands: ExtensionCommand[],
+): CommandPaletteAction[] {
+  return commands.map((c) => ({
+    id: `ext:${c.extensionId}:${c.command}`,
+    label: c.category ? `${c.category}: ${c.title}` : c.title,
+    group: "Extensions",
+    keywords: ["extension", c.extensionId, c.command],
+    icon: PuzzleIcon,
+    run: () => {
+      void extensionHost
+        .executeCommand(c.extensionId, c.command)
+        .catch((err) => {
+          const detail = err instanceof Error ? err.message : String(err);
+          console.error(`[artex] command ${c.command} failed:`, err);
+          toast.error(`"${c.title}" failed: ${detail}`);
+        });
+    },
+    deferRun: true,
+  }));
 }

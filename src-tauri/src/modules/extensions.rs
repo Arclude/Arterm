@@ -1,12 +1,18 @@
-//! Declarative extension packages (Phase 1).
+//! Extension packages.
 //!
 //! Extensions live as folders under `{app_local_data}/extensions/<folder>/`,
-//! each containing an `artex-extension.json` manifest. This module only reads,
+//! each containing an `artex-extension.json` manifest plus optional sibling
+//! files (e.g. an executable extension's `main.js`). This module only reads,
 //! writes, and removes those folders — it runs NO extension code. The manifest
 //! is returned to the frontend as raw JSON; all schema validation happens in
-//! TypeScript (`src/modules/extensions`). Contributions in Phase 1 are purely
-//! declarative (themes, snippets), so there is no sandbox concern here.
+//! TypeScript (`src/modules/extensions`).
+//!
+//! Executable extensions (Phase 2) ship a JS entry file that the FRONTEND runs
+//! inside a Web Worker sandbox — never here. This module is purely a safe
+//! file store: every folder/file name is validated against traversal, and
+//! writes are size- and count-capped.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -19,6 +25,13 @@ const MANIFEST_FILE: &str = "artex-extension.json";
 /// Max bytes for a fetched registry index or remote manifest. Declarative
 /// packages are tiny; this caps a hostile/huge response.
 const FETCH_CAP: usize = 512 * 1024;
+
+/// Max bytes for a single sibling file written alongside a manifest (e.g. a
+/// bundled `main.js`). Keeps a hostile package from filling the disk.
+const MAX_FILE_BYTES: usize = 2 * 1024 * 1024;
+
+/// Max number of sibling files an extension may write.
+const MAX_FILES: usize = 64;
 
 #[derive(Serialize)]
 pub struct RawExtension {
@@ -52,6 +65,25 @@ fn safe_folder(name: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+/// Reject sibling file names that could escape the extension folder or hide
+/// in subdirectories. Allows a single flat name like `main.js` only.
+fn safe_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed.contains("..")
+        || trimmed.starts_with('.')
+    {
+        return Err(format!("unsafe file name: {name:?}"));
+    }
+    // Reserve the manifest name so a `files` entry can't shadow it.
+    if trimmed == MANIFEST_FILE {
+        return Err(format!("file name {name:?} is reserved"));
+    }
+    Ok(trimmed.to_string())
+}
+
 /// Map an extension id to a filesystem-safe folder name.
 fn folder_from_id(id: &str) -> String {
     id.chars()
@@ -68,9 +100,7 @@ fn folder_from_id(id: &str) -> String {
 /// Ensure `child` is actually inside `root` (defense in depth vs. traversal).
 fn assert_within(root: &Path, child: &Path) -> Result<(), String> {
     let root = root.canonicalize().map_err(|e| e.to_string())?;
-    let child = child
-        .canonicalize()
-        .unwrap_or_else(|_| child.to_path_buf());
+    let child = child.canonicalize().unwrap_or_else(|_| child.to_path_buf());
     if child.starts_with(&root) {
         Ok(())
     } else {
@@ -111,18 +141,64 @@ pub fn extensions_list(app: AppHandle) -> Result<Vec<RawExtension>, String> {
     Ok(out)
 }
 
-/// Write (or overwrite) an extension's manifest, creating its folder. Used to
-/// install a package programmatically (e.g. the bundled sample) without a
-/// native file dialog. `id` becomes the folder name (sanitized).
+/// Write (or overwrite) an extension's manifest plus optional sibling files,
+/// creating its folder. Used to install a package programmatically (e.g. the
+/// bundled sample, or an unpacked `.artex-ext`) without a native file dialog.
+/// `id` becomes the folder name (sanitized). `files` maps a flat file name
+/// (e.g. `main.js`) to its UTF-8 contents.
 #[tauri::command]
-pub fn extensions_write(app: AppHandle, id: String, manifest: String) -> Result<(), String> {
+pub fn extensions_write(
+    app: AppHandle,
+    id: String,
+    manifest: String,
+    files: Option<HashMap<String, String>>,
+) -> Result<(), String> {
     serde_json::from_str::<serde_json::Value>(&manifest)
         .map_err(|e| format!("invalid manifest JSON: {e}"))?;
+
+    // Validate every sibling file up front so a bad one writes nothing.
+    let files = files.unwrap_or_default();
+    if files.len() > MAX_FILES {
+        return Err(format!("too many files (max {MAX_FILES})"));
+    }
+    let mut validated: Vec<(String, &String)> = Vec::with_capacity(files.len());
+    for (name, contents) in &files {
+        if contents.len() > MAX_FILE_BYTES {
+            return Err(format!("file {name:?} exceeds {MAX_FILE_BYTES} bytes"));
+        }
+        validated.push((safe_file_name(name)?, contents));
+    }
+
     let folder = safe_folder(&folder_from_id(&id))?;
     let dir = extensions_root(&app)?.join(&folder);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     fs::write(dir.join(MANIFEST_FILE), manifest).map_err(|e| e.to_string())?;
+    for (name, contents) in validated {
+        fs::write(dir.join(name), contents).map_err(|e| e.to_string())?;
+    }
     Ok(())
+}
+
+/// Read one sibling file from an installed extension folder as UTF-8 text.
+/// Used by the frontend to load an executable extension's entry source before
+/// running it in the worker sandbox. Path-traversal hardened.
+#[tauri::command]
+pub fn extensions_read_file(
+    app: AppHandle,
+    folder: String,
+    file: String,
+) -> Result<String, String> {
+    let folder = safe_folder(&folder)?;
+    let file = safe_file_name(&file)?;
+    let root = extensions_root(&app)?;
+    let dir = root.join(&folder);
+    let path = dir.join(&file);
+    assert_within(&dir, &path)?;
+    let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+    if bytes.len() > MAX_FILE_BYTES {
+        return Err("file too large".to_string());
+    }
+    String::from_utf8(bytes).map_err(|_| "file is not valid UTF-8".to_string())
 }
 
 /// Fetch a remote registry index or extension manifest as text.

@@ -4,6 +4,11 @@ export {
   onExtensionsChange,
 } from "./events";
 export {
+  type ExtensionCommand,
+  extensionHost,
+  useExtensionCommandsStore,
+} from "./host";
+export {
   installSampleExtension,
   loadExtensions,
   openExtensionsFolder,

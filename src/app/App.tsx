@@ -46,10 +46,15 @@ import { native } from "@/modules/ai/lib/native";
 import { redactSensitive } from "@/modules/ai/lib/redact";
 import { useAgentsStore } from "@/modules/ai/store/agentsStore";
 import { useSnippetsStore } from "@/modules/ai/store/snippetsStore";
-import { loadExtensions, onExtensionsChange } from "@/modules/extensions";
+import {
+  loadExtensions,
+  onExtensionsChange,
+  useExtensionCommandsStore,
+} from "@/modules/extensions";
 import {
   CommandPalette,
   createCommandPaletteActions,
+  extensionCommandsToActions,
 } from "@/modules/command-palette";
 import {
   AiDiffStack,
@@ -1402,6 +1407,15 @@ export default function App() {
     ],
   );
 
+  const extensionCommands = useExtensionCommandsStore((s) => s.commands);
+  const allCommandPaletteActions = useMemo(
+    () => [
+      ...commandPaletteActions,
+      ...extensionCommandsToActions(extensionCommands),
+    ],
+    [commandPaletteActions, extensionCommands],
+  );
+
   const activeCwd = activeTerminalLeafCwd;
 
   useEffect(() => {
@@ -1790,7 +1804,7 @@ export default function App() {
             open={commandPaletteOpen}
             onOpenChange={setCommandPaletteOpen}
             fileMode={paletteFileMode}
-            actions={commandPaletteActions}
+            actions={allCommandPaletteActions}
             workspaceRoot={explorerRoot}
             onOpenFile={handleOpenFile}
           />

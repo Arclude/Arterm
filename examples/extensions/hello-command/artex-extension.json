@@ -1,0 +1,21 @@
+{
+  "id": "example.hello-command",
+  "name": "Hello Command",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "description": "Example executable extension — adds palette commands and reads a workspace file.",
+  "engines": { "artex": "^0.8.0" },
+  "permissions": ["fs:read"],
+  "main": "main.js",
+  "activationEvents": ["onCommand:hello.world", "onCommand:hello.readPackage"],
+  "contributes": {
+    "commands": [
+      { "command": "hello.world", "title": "Hello World", "category": "Hello" },
+      {
+        "command": "hello.readPackage",
+        "title": "Show package.json size",
+        "category": "Hello"
+      }
+    ]
+  }
+}

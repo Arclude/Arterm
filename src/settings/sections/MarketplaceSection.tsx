@@ -107,8 +107,8 @@ export function MarketplaceSection() {
   return (
     <div className="flex flex-col gap-5">
       <p className="text-[11.5px] text-muted-foreground">
-        Browse and install extensions from a GitHub registry. Packages are
-        declarative — no code runs, so installing is safe.
+        Browse and install theme and snippet packages from a GitHub registry.
+        These are declarative — no code runs, so installing is safe.
       </p>
 
       {/* Install from URL / file */}

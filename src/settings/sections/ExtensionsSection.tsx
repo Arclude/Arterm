@@ -37,7 +37,8 @@ export function ExtensionsSection() {
     <div className="flex flex-col gap-5">
       <SectionHeader
         title="Extensions"
-        description="Declarative packages that add themes and snippets. No code runs — installing one is safe."
+        badge="Beta"
+        description="Install theme and snippet packages from a registry — these run no code and are safe. Command-running (executable) extensions are experimental: they run sandboxed in a worker and only get the permissions they declare."
       />
 
       <div className="flex w-fit items-center gap-0.5 rounded-lg bg-muted/40 p-0.5">

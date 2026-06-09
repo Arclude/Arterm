@@ -5,6 +5,12 @@ import { useSnippetsStore } from "@/modules/ai/store/snippetsStore";
 import type { Theme } from "@/modules/theme/types";
 import { emitExtensionsChanged } from "./events";
 import {
+  type ExtensionCommand,
+  type ExtensionRuntime,
+  extensionHost,
+  useExtensionCommandsStore,
+} from "./host";
+import {
   getDisabledIds,
   setExtensionEnabled,
   useExtensionsStore,
@@ -64,6 +70,62 @@ export function resolveSnippets(manifest: ExtensionManifest): Snippet[] {
   return out;
 }
 
+/** Command ids: dotted lowercase segments, e.g. "hello.world". */
+const COMMAND_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
+
+/** An extension is executable when it ships entry code (a `main` file or
+ *  inline `mainSource`). Only then are its `contributes.commands` live. */
+export function isExecutable(manifest: ExtensionManifest): boolean {
+  return (
+    typeof manifest.main === "string" || typeof manifest.mainSource === "string"
+  );
+}
+
+/** Resolve an executable extension's entry source: inline `mainSource`, or the
+ *  `main` file read from the extension folder on disk. Null when neither
+ *  yields usable code. */
+export async function resolveSource(
+  folder: string,
+  manifest: ExtensionManifest,
+): Promise<string | null> {
+  if (typeof manifest.mainSource === "string") return manifest.mainSource;
+  if (typeof manifest.main === "string") {
+    try {
+      return await invoke<string>("extensions_read_file", {
+        folder,
+        file: manifest.main,
+      });
+    } catch (e) {
+      console.error(
+        `[artex] failed reading ${manifest.id}/${manifest.main}:`,
+        e,
+      );
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Keep only well-formed contributed commands for an executable extension. */
+export function resolveCommands(
+  manifest: ExtensionManifest,
+): ExtensionCommand[] {
+  if (!isExecutable(manifest)) return [];
+  const out: ExtensionCommand[] = [];
+  for (const c of manifest.contributes?.commands ?? []) {
+    if (!isObj(c)) continue;
+    if (typeof c.command !== "string" || !COMMAND_RE.test(c.command)) continue;
+    if (typeof c.title !== "string" || !c.title.trim()) continue;
+    out.push({
+      extensionId: manifest.id,
+      command: c.command,
+      title: c.title,
+      category: typeof c.category === "string" ? c.category : undefined,
+    });
+  }
+  return out;
+}
+
 /** Read all installed packages, validate, and publish their contributions. */
 export async function loadExtensions(): Promise<void> {
   let raw: RawExtension[];
@@ -72,6 +134,8 @@ export async function loadExtensions(): Promise<void> {
   } catch (e) {
     console.error("[artex] extensions_list failed:", e);
     useExtensionsStore.getState().set([], []);
+    extensionHost.syncExtensions(new Map());
+    useExtensionCommandsStore.getState().set([]);
     return;
   }
 
@@ -79,6 +143,12 @@ export async function loadExtensions(): Promise<void> {
   const extensions: LoadedExtension[] = [];
   const enabledThemes: Theme[] = [];
   const enabledSnippets: Snippet[] = [];
+  const enabledCommands: ExtensionCommand[] = [];
+  /** Enabled executable extensions whose entry source must be resolved. */
+  const pendingExec: Array<{
+    folder: string;
+    manifest: ExtensionManifest;
+  }> = [];
 
   for (const r of raw) {
     let manifest: ExtensionManifest | null = null;
@@ -108,11 +178,48 @@ export async function loadExtensions(): Promise<void> {
     if (enabled) {
       enabledThemes.push(...themes);
       enabledSnippets.push(...snippets);
+      if (manifest && isExecutable(manifest)) {
+        enabledCommands.push(...resolveCommands(manifest));
+        pendingExec.push({ folder: r.folder, manifest });
+      }
     }
   }
 
+  // Resolve executable entry sources (inline or read from disk) in parallel,
+  // pairing each with the permissions its manifest declared.
+  const runtimes = new Map<string, ExtensionRuntime>();
+  const startupIds: string[] = [];
+  await Promise.all(
+    pendingExec.map(async ({ folder, manifest }) => {
+      const source = await resolveSource(folder, manifest);
+      if (source == null) return;
+      const permissions = new Set(
+        (manifest.permissions ?? []).filter(
+          (p): p is string => typeof p === "string",
+        ),
+      );
+      runtimes.set(manifest.id, { source, permissions });
+      const events = manifest.activationEvents ?? [];
+      if (events.includes("onStartup") || events.includes("*")) {
+        startupIds.push(manifest.id);
+      }
+    }),
+  );
+
   useExtensionsStore.getState().set(extensions, enabledThemes);
   useSnippetsStore.getState().setExtensionSnippets(enabledSnippets);
+  // Hand executable extensions to the host (lazy activation) and surface their
+  // declared commands to the palette. Code does not run until a command fires…
+  extensionHost.syncExtensions(runtimes);
+  useExtensionCommandsStore.getState().set(enabledCommands);
+  // …except extensions that asked to run at startup, which we activate now.
+  for (const id of startupIds) {
+    void extensionHost
+      .ensureActivated(id)
+      .catch((e) =>
+        console.error(`[artex] startup activation ${id} failed:`, e),
+      );
+  }
 }
 
 /** Reload this window's extension state and tell the other window to do the
@@ -141,26 +248,51 @@ export async function openExtensionsFolder(): Promise<void> {
   await openPath(dir);
 }
 
-/** Install the bundled demo pack so users can see the system working at once. */
+/** Install the bundled demo pack so users can see the system working at once.
+ *  Writes the manifest plus its `main.js` as separate files, exercising the
+ *  same file-based storage a real packaged extension uses. */
 export async function installSampleExtension(): Promise<void> {
   await invoke("extensions_write", {
     id: SAMPLE_EXTENSION.id,
     manifest: JSON.stringify(SAMPLE_EXTENSION, null, 2),
+    files: { "main.js": SAMPLE_MAIN_JS },
   });
   await reloadAfterInstall();
 }
 
-/** A self-contained demo: one theme + one snippet, no code. */
+/** The sample extension's entry code, stored on disk as `main.js`. */
+const SAMPLE_MAIN_JS = [
+  "exports.activate = (context) => {",
+  '  const cmd = artex.commands.registerCommand("sample.hello", () => {',
+  '    artex.window.showInformationMessage("Hello from the Sample Extension! \\uD83C\\uDF89");',
+  "  });",
+  "  context.subscriptions.push(cmd);",
+  '  console.log("sample-pack activated");',
+  "};",
+  "exports.deactivate = () => {};",
+].join("\n");
+
+/** A self-contained demo: one theme, one snippet, and one executable command
+ *  that runs in the worker sandbox and calls back into the host API. */
 const SAMPLE_EXTENSION: ExtensionManifest = {
   id: "artex.sample-pack",
   name: "Sample Pack",
-  version: "1.0.0",
+  version: "1.1.0",
   author: "Artex",
   description:
-    "Demo extension — adds an 'Midnight Ocean' theme and a /snippet.",
-  engines: { artex: "^0.7.0" },
+    "Demo extension — a 'Midnight Ocean' theme, a /snippet, and a Hello command.",
+  engines: { artex: "^0.8.0" },
   permissions: [],
+  activationEvents: ["onCommand:sample.hello"],
+  main: "main.js",
   contributes: {
+    commands: [
+      {
+        command: "sample.hello",
+        title: "Hello from Sample Extension",
+        category: "Sample",
+      },
+    ],
     themes: [
       {
         id: "midnight-ocean",
