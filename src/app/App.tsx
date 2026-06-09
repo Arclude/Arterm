@@ -118,6 +118,7 @@ import {
   whenSessionReady,
   writeToSession,
 } from "@/modules/terminal";
+import { TerminalErrorBridge } from "@/modules/terminal/TerminalErrorBridge";
 import { ThemeProvider } from "@/modules/theme";
 import {
   listCustomThemes,
@@ -1771,6 +1772,11 @@ export default function App() {
           )}
 
           <AgentNotificationsBridge
+            tabs={tabs}
+            activeId={activeId}
+            onActivate={onActivateAgent}
+          />
+          <TerminalErrorBridge
             tabs={tabs}
             activeId={activeId}
             onActivate={onActivateAgent}

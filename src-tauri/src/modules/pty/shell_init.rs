@@ -47,10 +47,12 @@ fn fish_init_script() -> &'static str {
     FISH_INIT_SCRIPT
 }
 
+/// Returns the spawn command plus a static shell label ("bash" | "zsh" |
+/// "fish" | "pwsh" | "powershell" | "cmd"; WSL reports the inner shell).
 pub fn build_command(
     cwd: Option<String>,
     workspace: WorkspaceEnv,
-) -> Result<CommandBuilder, String> {
+) -> Result<(CommandBuilder, &'static str), String> {
     #[cfg(unix)]
     {
         let _ = workspace;
@@ -158,12 +160,12 @@ mod unix {
         }
     }
 
-    pub fn build(cwd: Option<String>) -> Result<CommandBuilder, String> {
+    pub fn build(cwd: Option<String>) -> Result<(CommandBuilder, &'static str), String> {
         let (shell, shell_path) = Shell::detect();
         let mut cmd = CommandBuilder::new(&shell_path);
         super::apply_common(&mut cmd, cwd);
 
-        match shell {
+        let label = match shell {
             Shell::Zsh => {
                 match prepare_zdotdir() {
                     Ok(zdotdir) => {
@@ -182,6 +184,7 @@ mod unix {
                 // Login shell so /etc/zprofile runs path_helper on macOS — without
                 // this, GUI-launched apps get a minimal PATH missing Homebrew.
                 cmd.arg("-l");
+                "zsh"
             }
             Shell::Bash => {
                 match prepare_bash_rcfile() {
@@ -196,21 +199,25 @@ mod unix {
                 // bash ignores --rcfile under -l, so we use -i and source
                 // /etc/profile from inside our rcfile to emulate login init.
                 cmd.arg("-i");
+                "bash"
             }
             Shell::Fish => {
                 if let Err(e) = prepare_fish_conf_d() {
                     log::warn!("fish shell integration disabled: {e}");
                 }
                 cmd.arg("-i");
+                "fish"
             }
             Shell::Other => {
                 log::info!(
                     "unsupported shell '{}', spawning without integration",
                     shell_path
                 );
+                // No integration => no OSC 133 => the label never surfaces.
+                "sh"
             }
-        }
-        Ok(cmd)
+        };
+        Ok((cmd, label))
     }
 
     fn integration_root() -> Result<PathBuf, String> {
@@ -292,6 +299,16 @@ mod windows {
                 _ => Self::Other,
             }
         }
+
+        fn label(self) -> &'static str {
+            match self {
+                Self::Zsh => "zsh",
+                Self::Bash => "bash",
+                Self::Fish => "fish",
+                // No integration => no OSC 133 => the label never surfaces.
+                Self::Other => "sh",
+            }
+        }
     }
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -312,7 +329,10 @@ mod windows {
         args: Vec<String>,
     }
 
-    pub fn build(cwd: Option<String>, workspace: WorkspaceEnv) -> Result<CommandBuilder, String> {
+    pub fn build(
+        cwd: Option<String>,
+        workspace: WorkspaceEnv,
+    ) -> Result<(CommandBuilder, &'static str), String> {
         if let WorkspaceEnv::Wsl { distro } = workspace {
             return build_wsl(cwd, distro);
         }
@@ -345,11 +365,19 @@ mod windows {
             log::info!("spawning {} without shell integration", shell_name);
         }
 
+        let label = match shell_name.as_str() {
+            "pwsh.exe" => "pwsh",
+            "powershell.exe" => "powershell",
+            _ => "cmd",
+        };
         log::info!("spawning Windows shell: {}", shell_path.display());
-        Ok(cmd)
+        Ok((cmd, label))
     }
 
-    fn build_wsl(cwd: Option<String>, distro: String) -> Result<CommandBuilder, String> {
+    fn build_wsl(
+        cwd: Option<String>,
+        distro: String,
+    ) -> Result<(CommandBuilder, &'static str), String> {
         crate::modules::workspace::validate_wsl_distro_name(&distro)?;
         let shell_path = crate::modules::workspace::wsl_login_shell(distro.clone())?;
         let shell_kind = ShellKind::from_path(&shell_path);
@@ -412,7 +440,7 @@ mod windows {
         cmd.env("ARTEX_TERMINAL", "1");
         super::ensure_utf8_locale(&mut cmd);
         log::info!("spawning WSL shell: {distro} ({shell_path})");
-        Ok(cmd)
+        Ok((cmd, shell_kind.label()))
     }
 
     fn build_wsl_launch_spec(

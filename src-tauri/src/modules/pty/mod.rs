@@ -1,4 +1,5 @@
 mod agent_detect;
+mod command_detect;
 mod da_filter;
 #[cfg(windows)]
 mod job;

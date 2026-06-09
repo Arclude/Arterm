@@ -423,6 +423,43 @@ export function disposeSession(leafId: number): void {
   }
 }
 
+export function readLeafBuffer(leafId: number, maxLines = 80): string | null {
+  const s = sessions.get(leafId);
+  if (!s) return null;
+  const slot = getSlotForLeaf(leafId);
+  if (slot) {
+    const buf = slot.term.buffer.active;
+    const total = buf.length;
+    const lines: string[] = [];
+    const start = Math.max(0, total - maxLines);
+    for (let i = start; i < total; i++) {
+      lines.push(buf.getLine(i)?.translateToString(true) ?? "");
+    }
+    while (lines.length && lines[lines.length - 1] === "") lines.pop();
+    return lines.join("\n");
+  }
+  // Dormant leaf: the snapshot was taken at unbind time, so output that
+  // arrived while dormant lives only in the ring. Append it (non-destructively
+  // — drain still replays into xterm on rebind) so callers such as
+  // TerminalErrorBridge see the failed command's output without rebinding.
+  let raw = s.snapshot ?? "";
+  if (s.dormantRing.byteLength() > 0) {
+    const decoder = new TextDecoder();
+    const parts: string[] = [];
+    s.dormantRing.peek((bytes) => {
+      parts.push(decoder.decode(bytes, { stream: true }));
+    });
+    parts.push(decoder.decode());
+    raw += parts.join("");
+  }
+  if (!raw) return "";
+  const plain = stripAnsi(raw);
+  const lines = plain.split(/\r?\n/);
+  const tail = lines.slice(-maxLines);
+  while (tail.length && tail[tail.length - 1] === "") tail.pop();
+  return tail.join("\n");
+}
+
 type Options = {
   leafId: number;
   container: React.RefObject<HTMLDivElement | null>;
@@ -522,28 +559,7 @@ export function useTerminalSession({
   const focus = useCallback(() => focusSlot(leafId), [leafId]);
 
   const getBuffer = useCallback(
-    (maxLines = 200): string | null => {
-      const s = sessions.get(leafId);
-      if (!s) return null;
-      const slot = getSlotForLeaf(leafId);
-      if (slot) {
-        const buf = slot.term.buffer.active;
-        const total = buf.length;
-        const lines: string[] = [];
-        const start = Math.max(0, total - maxLines);
-        for (let i = start; i < total; i++) {
-          lines.push(buf.getLine(i)?.translateToString(true) ?? "");
-        }
-        while (lines.length && lines[lines.length - 1] === "") lines.pop();
-        return lines.join("\n");
-      }
-      if (!s.snapshot) return "";
-      const plain = stripAnsi(s.snapshot);
-      const lines = plain.split(/\r?\n/);
-      const tail = lines.slice(-maxLines);
-      while (tail.length && tail[tail.length - 1] === "") tail.pop();
-      return tail.join("\n");
-    },
+    (maxLines = 200): string | null => readLeafBuffer(leafId, maxLines),
     [leafId],
   );
 

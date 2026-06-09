@@ -50,7 +50,8 @@ export class DormantRing {
     }
   }
 
-  drain(write: (bytes: Uint8Array) => void): void {
+  /** Non-destructively pass the buffered chunks, in order, to `write`. */
+  peek(write: (bytes: Uint8Array) => void): void {
     if (this.overflowed) {
       const first = this.chunks[this.head];
       if (first !== OVERFLOW_NOTICE) write(OVERFLOW_NOTICE);
@@ -60,6 +61,10 @@ export class DormantRing {
       const c = this.chunks[i];
       if (c) write(c);
     }
+  }
+
+  drain(write: (bytes: Uint8Array) => void): void {
+    this.peek(write);
     this.chunks = [];
     this.head = 0;
     this.size = 0;

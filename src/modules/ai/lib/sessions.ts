@@ -68,6 +68,7 @@ export function deriveTitle(messages: UIMessage[]): string {
       if (p.type !== "text") continue;
       const text = (p as { text: string }).text
         .replace(/<terminal-context[\s\S]*?<\/terminal-context>\s*/g, "")
+        .replace(/<terminal-error[\s\S]*?<\/terminal-error>\s*/g, "")
         .replace(/<selection[\s\S]*?<\/selection>\s*/g, "")
         .replace(/<file[\s\S]*?<\/file>\s*/g, "")
         .trim();
