@@ -45,7 +45,7 @@ impl FrameParser {
     /// Pull the next complete message. `None` means "need more bytes".
     /// `Some(Err(_))` is a framing violation; the offending header block is
     /// consumed so the caller can keep draining.
-    pub fn next(&mut self) -> Option<Result<String, FrameError>> {
+    pub fn next_message(&mut self) -> Option<Result<String, FrameError>> {
         let sep = match find(&self.buf, SEPARATOR) {
             Some(i) => i,
             None => {
@@ -132,7 +132,7 @@ mod tests {
 
     fn parse_all(parser: &mut FrameParser) -> Vec<Result<String, FrameError>> {
         let mut out = Vec::new();
-        while let Some(item) = parser.next() {
+        while let Some(item) = parser.next_message() {
             out.push(item);
         }
         out
@@ -162,9 +162,12 @@ mod tests {
         let (head, tail) = framed.split_at(framed.len() - 3);
         let mut p = FrameParser::new();
         p.push(head);
-        assert!(p.next().is_none(), "must wait for the rest of the body");
+        assert!(
+            p.next_message().is_none(),
+            "must wait for the rest of the body"
+        );
         p.push(tail);
-        assert_eq!(p.next(), Some(Ok(msg.to_string())));
+        assert_eq!(p.next_message(), Some(Ok(msg.to_string())));
     }
 
     #[test]
@@ -173,9 +176,9 @@ mod tests {
         let framed = encode(msg);
         let mut p = FrameParser::new();
         p.push(&framed[..8]); // "Content-" only
-        assert!(p.next().is_none());
+        assert!(p.next_message().is_none());
         p.push(&framed[8..]);
-        assert_eq!(p.next(), Some(Ok(msg.to_string())));
+        assert_eq!(p.next_message(), Some(Ok(msg.to_string())));
     }
 
     #[test]
@@ -202,7 +205,7 @@ mod tests {
         );
         let mut p = FrameParser::new();
         p.push(framed.as_bytes());
-        assert_eq!(p.next(), Some(Ok(msg.to_string())));
+        assert_eq!(p.next_message(), Some(Ok(msg.to_string())));
     }
 
     #[test]
@@ -223,7 +226,10 @@ mod tests {
     fn reports_invalid_content_length() {
         let mut p = FrameParser::new();
         p.push(b"Content-Length: notanumber\r\n\r\n");
-        assert_eq!(p.next(), Some(Err(FrameError::InvalidContentLength)));
+        assert_eq!(
+            p.next_message(),
+            Some(Err(FrameError::InvalidContentLength))
+        );
     }
 
     #[test]

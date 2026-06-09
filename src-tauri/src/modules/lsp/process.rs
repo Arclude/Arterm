@@ -100,7 +100,7 @@ pub fn spawn(
                     Ok(n) => {
                         parser.push(&buf[..n]);
                         loop {
-                            match parser.next() {
+                            match parser.next_message() {
                                 Some(Ok(msg)) => {
                                     if on_message.send(msg).is_err() {
                                         return; // frontend went away
