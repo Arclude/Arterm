@@ -194,21 +194,38 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
+    // Coalesce bursts: a single logical write often fires lock→tmp→rename in
+    // quick succession. Collect affected dirs and refetch once per window.
+    const pending = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      timer = null;
+      const dirs = [...pending];
+      pending.clear();
+      for (const d of dirs) {
+        if (nodesRef.current[d]?.status === "loaded") void fetchChildren(d);
+      }
+    };
     void listenFsChanged((paths) => {
       const current = nodesRef.current;
-      const dirs = new Set<string>();
+      // When hidden files aren't shown, churn in dotfiles (e.g. ~/.claude.json,
+      // .git) isn't visible anyway — don't reload the tree for it.
+      const skipHidden = !showHiddenRef.current;
       for (const p of paths) {
+        const base = p.split(/[\\/]/).pop() ?? p;
+        if (skipHidden && base.startsWith(".")) continue;
         const parent = dirname(p);
-        if (current[parent]?.status === "loaded") dirs.add(parent);
-        if (current[p]?.status === "loaded") dirs.add(p);
+        if (current[parent]?.status === "loaded") pending.add(parent);
+        if (current[p]?.status === "loaded") pending.add(p);
       }
-      for (const d of dirs) void fetchChildren(d);
+      if (pending.size > 0 && timer == null) timer = setTimeout(flush, 200);
     }).then((un) => {
       if (alive) unlisten = un;
       else un();
     });
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
       unlisten?.();
     };
   }, [fetchChildren]);
