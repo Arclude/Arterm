@@ -271,8 +271,7 @@ async fn fetch_following_redirects(start_url: &str) -> Result<reqwest::Response,
             .ok_or_else(|| "missing host".to_string())?
             .to_string();
         let safe_ips = net::classify_and_collect_safe_ips(&host, false).await?;
-        let addrs: Vec<SocketAddr> =
-            safe_ips.iter().map(|ip| SocketAddr::new(*ip, 0)).collect();
+        let addrs: Vec<SocketAddr> = safe_ips.iter().map(|ip| SocketAddr::new(*ip, 0)).collect();
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::none())

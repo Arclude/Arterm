@@ -57,7 +57,11 @@ pub async fn dap_start(
         e.to_string()
     })??;
 
-    state.adapters.write().unwrap().insert(id, Arc::new(adapter));
+    state
+        .adapters
+        .write()
+        .unwrap()
+        .insert(id, Arc::new(adapter));
     log::info!("dap_start id={id}");
     Ok(id)
 }

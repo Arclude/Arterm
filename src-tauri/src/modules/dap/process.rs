@@ -32,7 +32,10 @@ pub struct DebugAdapter {
 impl DebugAdapter {
     pub fn send(&self, message: &str) -> Result<(), String> {
         let framed = framing::encode(message);
-        let mut w = self.stdin.lock().map_err(|_| "dap stdin poisoned".to_string())?;
+        let mut w = self
+            .stdin
+            .lock()
+            .map_err(|_| "dap stdin poisoned".to_string())?;
         w.write_all(&framed).map_err(|e| e.to_string())?;
         w.flush().map_err(|e| e.to_string())
     }

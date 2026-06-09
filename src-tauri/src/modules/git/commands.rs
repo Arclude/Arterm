@@ -2,9 +2,9 @@ use tauri::{AppHandle, Manager};
 
 use crate::modules::git::operations;
 use crate::modules::git::types::{
-    DiscardEntry, GitCommitFileChange, GitCommitResult, GitDiffContentResult, GitDiffResult,
-    GitDiffStat,
-    GitBranchList, GitLogEntry, GitPanelSnapshot, GitPushResult, GitRepoInfo, GitStatusSnapshot,
+    DiscardEntry, GitBranchList, GitCommitFileChange, GitCommitResult, GitDiffContentResult,
+    GitDiffResult, GitDiffStat, GitLogEntry, GitPanelSnapshot, GitPushResult, GitRepoInfo,
+    GitStatusSnapshot,
 };
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
