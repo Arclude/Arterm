@@ -488,7 +488,20 @@ function autoresize(el: HTMLTextAreaElement | null) {
 
 export type AiInputBarProps = { tabId: number };
 
+const CONNECT_DISMISSED_KEY = "artex.ai.connectBannerDismissed";
+
 export function AiInputBarConnect({ onAdd }: { onAdd: () => void }) {
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem(CONNECT_DISMISSED_KEY) === "1",
+  );
+
+  if (dismissed) return null;
+
+  const dismiss = () => {
+    localStorage.setItem(CONNECT_DISMISSED_KEY, "1");
+    setDismissed(true);
+  };
+
   return (
     <div className="shrink-0 border-t border-border/60 bg-card/40 px-3 py-2">
       <div className="flex h-10 items-center justify-between gap-3 rounded-lg px-3 text-xs">
@@ -496,10 +509,21 @@ export function AiInputBarConnect({ onAdd }: { onAdd: () => void }) {
           Connect any AI provider (or use local models) - your key stays in your
           OS keychain.
         </span>
-        <Button size="xs" onClick={onAdd}>
-          <HugeiconsIcon icon={Key01Icon} />
-          Connect provider
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button size="xs" onClick={onAdd}>
+            <HugeiconsIcon icon={Key01Icon} />
+            Connect provider
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={dismiss}
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} />
+          </Button>
+        </div>
       </div>
     </div>
   );
