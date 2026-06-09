@@ -35,6 +35,8 @@ type Props = {
   actions: CommandPaletteAction[];
   workspaceRoot: string | null;
   onOpenFile: (path: string) => void;
+  /** File-only "go to file" mode (Ctrl+P): hides command actions. */
+  fileMode?: boolean;
 };
 
 const SHORTCUTS_BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]));
@@ -45,6 +47,7 @@ export function CommandPalette({
   actions,
   workspaceRoot,
   onOpenFile,
+  fileMode = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [selectedValue, setSelectedValue] = useState("");
@@ -82,8 +85,8 @@ export function CommandPalette({
     trimmedQuery.length >= COMMAND_PALETTE_FILE_SEARCH_MIN_QUERY_LENGTH;
 
   const visibleActions = useMemo(
-    () => filterActions(actions, trimmedQuery),
-    [actions, trimmedQuery],
+    () => (fileMode ? [] : filterActions(actions, trimmedQuery)),
+    [actions, trimmedQuery, fileMode],
   );
 
   const selectableValues = useMemo(() => {
@@ -191,7 +194,11 @@ export function CommandPalette({
           id="artex-command-palette-input"
           value={query}
           onValueChange={setQuery}
-          placeholder="Run a command or open a file..."
+          placeholder={
+            fileMode
+              ? "Go to file by name..."
+              : "Run a command or open a file..."
+          }
           autoFocus
         />
         <ScrollArea className="max-h-[420px]">
@@ -272,7 +279,9 @@ export function CommandPalette({
 
             {!hasAnyVisibleContent ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No commands found.
+                {fileMode
+                  ? "Type to search files by name."
+                  : "No commands found."}
               </div>
             ) : null}
           </CommandList>

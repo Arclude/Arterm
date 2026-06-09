@@ -12,6 +12,12 @@ export type CommandPaletteFileHit = {
   is_dir: boolean;
 };
 
+// Matches the Rust `fs_search` return shape (`SearchResult`).
+type FsSearchResult = {
+  hits: CommandPaletteFileHit[];
+  truncated: boolean;
+};
+
 type Params = {
   root: string | null;
   query: string;
@@ -53,14 +59,14 @@ export function useWorkspaceFileSearch({ root, query, enabled }: Params) {
     const requestId = ++requestIdRef.current;
     setSearching(true);
     setError(null);
-    void invoke<CommandPaletteFileHit[]>("fs_search", {
+    void invoke<FsSearchResult>("fs_search", {
       root: rootPath,
       query: q,
       limit: COMMAND_PALETTE_FILE_SEARCH_LIMIT,
     })
-      .then((hits) => {
+      .then((res) => {
         if (requestId !== requestIdRef.current) return;
-        applyHits(hits);
+        applyHits(res.hits);
       })
       .catch((e) => {
         if (requestId !== requestIdRef.current) return;
@@ -93,14 +99,14 @@ export function useWorkspaceFileSearch({ root, query, enabled }: Params) {
     setResults([]);
 
     const handle = window.setTimeout(() => {
-      void invoke<CommandPaletteFileHit[]>("fs_search", {
+      void invoke<FsSearchResult>("fs_search", {
         root,
         query: q,
         limit: COMMAND_PALETTE_FILE_SEARCH_LIMIT,
       })
-        .then((hits) => {
+        .then((res) => {
           if (requestId !== requestIdRef.current) return;
-          applyHits(hits);
+          applyHits(res.hits);
         })
         .catch((e) => {
           if (requestId !== requestIdRef.current) return;
