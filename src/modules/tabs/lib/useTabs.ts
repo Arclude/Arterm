@@ -12,6 +12,20 @@ import {
   type SplitDir,
 } from "@/modules/terminal/lib/panes";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
+import {
+  activateEditor as activateEditorOp,
+  activateTabInGroup as activateTabInGroupOp,
+  activeEditorTabId,
+  type EditorGroupsState,
+  EMPTY_GROUPS,
+  focusGroup as focusGroupOp,
+  groupOf,
+  moveTab as moveTabOp,
+  placeEditor,
+  removeEditor,
+  replaceEditor,
+  splitActiveGroup,
+} from "./editorGroups";
 
 // Matches the renderer slot pool size — over this we'd evict an active leaf.
 export const MAX_PANES_PER_TAB = 4;
@@ -152,12 +166,34 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     ];
   });
   const [activeId, setActiveId] = useState(1);
+  // VS Code-style editor groups: which editor tabs live in which grid pane.
+  // Editor tabs still live in `tabs` for their data; this tracks placement.
+  const [editorGroups, setEditorGroups] =
+    useState<EditorGroupsState>(EMPTY_GROUPS);
   const nextIdRef = useRef(3);
   const tabsRef = useRef(tabs);
+  const groupsRef = useRef(editorGroups);
 
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+  useEffect(() => {
+    groupsRef.current = editorGroups;
+  }, [editorGroups]);
+
+  // Apply a groups transform and keep the global activeId pointed at the
+  // focused group's active editor, so the editor grid shows the right surface.
+  const applyGroups = useCallback(
+    (next: EditorGroupsState, focusActiveEditor = true) => {
+      groupsRef.current = next;
+      setEditorGroups(next);
+      if (focusActiveEditor) {
+        const eid = activeEditorTabId(next);
+        if (eid != null) setActiveId(eid);
+      }
+    },
+    [],
+  );
 
   const newTab = useCallback((cwd?: string) => {
     const tabId = nextIdRef.current++;
@@ -224,78 +260,101 @@ export function useTabs(initial?: Partial<TerminalTab>) {
    *   reused: if a persistent tab for the path already exists it is activated;
    *   otherwise the current preview slot is replaced with the new path.
    */
-  const openFileTab = useCallback((path: string, pin = true) => {
-    let targetId: number | null = null;
-    setTabs((curr) => {
-      if (pin) {
-        // Persistent open: find any existing editor tab, pin it if needed.
-        const existing = curr.find(
-          (t) => t.kind === "editor" && t.path === path,
-        );
-        if (existing) {
-          targetId = existing.id;
-          if ((existing as EditorTab).preview) {
-            return curr.map((t) =>
-              t.id === existing.id ? { ...t, preview: false } : t,
-            );
+  const openFileTab = useCallback(
+    (path: string, pin = true) => {
+      let targetId: number | null = null;
+      let replacedPreviewId: number | null = null;
+      setTabs((curr) => {
+        if (pin) {
+          // Persistent open: find any existing editor tab, pin it if needed.
+          const existing = curr.find(
+            (t) => t.kind === "editor" && t.path === path,
+          );
+          if (existing) {
+            targetId = existing.id;
+            if ((existing as EditorTab).preview) {
+              return curr.map((t) =>
+                t.id === existing.id ? { ...t, preview: false } : t,
+              );
+            }
+            return curr;
           }
-          return curr;
-        }
-        const id = nextIdRef.current++;
-        targetId = id;
-        return [
-          ...curr,
-          {
+          const id = nextIdRef.current++;
+          targetId = id;
+          return [
+            ...curr,
+            {
+              id,
+              kind: "editor",
+              title: basename(path),
+              path,
+              dirty: false,
+              preview: false,
+            } satisfies EditorTab,
+          ];
+        } else {
+          // Preview open: persistent tab for this path takes priority.
+          const persistent = curr.find(
+            (t) =>
+              t.kind === "editor" &&
+              t.path === path &&
+              !(t as EditorTab).preview,
+          );
+          if (persistent) {
+            targetId = persistent.id;
+            return curr;
+          }
+          // Reuse the slot if it already shows the same path.
+          const existingPreview = curr.find(
+            (t) =>
+              t.kind === "editor" &&
+              t.path === path &&
+              (t as EditorTab).preview,
+          );
+          if (existingPreview) {
+            targetId = existingPreview.id;
+            return curr;
+          }
+          // Replace the current preview slot, or append a new one.
+          const previewIdx = curr.findIndex(
+            (t) => t.kind === "editor" && (t as EditorTab).preview,
+          );
+          const id = nextIdRef.current++;
+          targetId = id;
+          const tab: EditorTab = {
             id,
             kind: "editor",
             title: basename(path),
             path,
             dirty: false,
-            preview: false,
-          } satisfies EditorTab,
-        ];
-      } else {
-        // Preview open: persistent tab for this path takes priority.
-        const persistent = curr.find(
-          (t) =>
-            t.kind === "editor" && t.path === path && !(t as EditorTab).preview,
-        );
-        if (persistent) {
-          targetId = persistent.id;
-          return curr;
+            preview: true,
+          };
+          if (previewIdx === -1) return [...curr, tab];
+          replacedPreviewId = curr[previewIdx].id;
+          const next = [...curr];
+          next[previewIdx] = tab;
+          return next;
         }
-        // Reuse the slot if it already shows the same path.
-        const existingPreview = curr.find(
-          (t) =>
-            t.kind === "editor" && t.path === path && (t as EditorTab).preview,
-        );
-        if (existingPreview) {
-          targetId = existingPreview.id;
-          return curr;
+      });
+      if (targetId !== null) {
+        let gs = groupsRef.current;
+        if (
+          replacedPreviewId != null &&
+          groupOf(gs, replacedPreviewId) != null
+        ) {
+          // Preview slot reused for a different file — swap the id in place.
+          gs = replaceEditor(gs, replacedPreviewId, targetId);
+          applyGroups(activateEditorOp(gs, targetId));
+        } else if (groupOf(gs, targetId) != null) {
+          applyGroups(activateEditorOp(gs, targetId));
+        } else {
+          applyGroups(placeEditor(gs, targetId, nextIdRef.current++));
         }
-        // Replace the current preview slot, or append a new one.
-        const previewIdx = curr.findIndex(
-          (t) => t.kind === "editor" && (t as EditorTab).preview,
-        );
-        const id = nextIdRef.current++;
-        targetId = id;
-        const tab: EditorTab = {
-          id,
-          kind: "editor",
-          title: basename(path),
-          path,
-          dirty: false,
-          preview: true,
-        };
-        if (previewIdx === -1) return [...curr, tab];
-        const next = [...curr];
-        next[previewIdx] = tab;
-        return next;
       }
-    });
-    if (targetId !== null) setActiveId(targetId);
-    return targetId as number | null;
-  }, []);
+      return targetId as number | null;
+    },
+    [applyGroups],
+  );
 
   /**
    * Promotes a preview tab to a persistent one. Called on double-click of the
@@ -557,23 +616,48 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     [],
   );
 
-  const closeTab = useCallback((id: number) => {
-    let toDispose: number[] = [];
-    setTabs((curr) => {
-      if (curr.length <= 1) return curr;
-      const idx = curr.findIndex((t) => t.id === id);
-      const target = curr[idx];
-      if (target && target.kind === "terminal") {
-        toDispose = leafIds(target.paneTree);
-      }
-      const next = curr.filter((t) => t.id !== id);
-      setActiveId((active) =>
-        id === active ? next[Math.max(0, idx - 1)].id : active,
-      );
-      return next;
+  // Close an editor tab: drop it from its group (collapsing the pane if it
+  // empties) and repoint activeId at whatever should show next.
+  const closeEditorTab = useCallback((id: number) => {
+    if (tabsRef.current.length <= 1) return;
+    const gsNext = removeEditor(groupsRef.current, id);
+    groupsRef.current = gsNext;
+    setEditorGroups(gsNext);
+    setTabs((curr) => curr.filter((t) => t.id !== id));
+    const eid = activeEditorTabId(gsNext);
+    setActiveId((active) => {
+      if (active !== id) return active;
+      if (eid != null) return eid;
+      const remaining = tabsRef.current.filter((t) => t.id !== id);
+      return remaining.length ? remaining[remaining.length - 1].id : active;
     });
-    for (const lid of toDispose) disposeSession(lid);
   }, []);
+
+  const closeTab = useCallback(
+    (id: number) => {
+      const target = tabsRef.current.find((t) => t.id === id);
+      if (target?.kind === "editor") {
+        closeEditorTab(id);
+        return;
+      }
+      let toDispose: number[] = [];
+      setTabs((curr) => {
+        if (curr.length <= 1) return curr;
+        const idx = curr.findIndex((t) => t.id === id);
+        const t = curr[idx];
+        if (t && t.kind === "terminal") {
+          toDispose = leafIds(t.paneTree);
+        }
+        const next = curr.filter((x) => x.id !== id);
+        setActiveId((active) =>
+          id === active ? next[Math.max(0, idx - 1)].id : active,
+        );
+        return next;
+      });
+      for (const lid of toDispose) disposeSession(lid);
+    },
+    [closeEditorTab],
+  );
 
   const updateTab = useCallback((id: number, patch: TabPatch) => {
     setTabs((t) =>
@@ -773,7 +857,69 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return closedTab;
   }, []);
 
+  // --- editor groups (VS Code-style split) ---
+
+  /** Split the focused editor group along `dir`. The active editor's file opens
+   * in a new group beside it (a separate editor instance, content-synced via
+   * the shared document buffer). No-op when no editor is focused. */
+  const splitEditorGroup = useCallback(
+    (dir: SplitDir) => {
+      const gs = groupsRef.current;
+      const activeEid = activeEditorTabId(gs);
+      const src = tabsRef.current.find(
+        (t) => t.id === activeEid && t.kind === "editor",
+      ) as EditorTab | undefined;
+      if (!src) return;
+      const newTabId = nextIdRef.current++;
+      const newSplitId = nextIdRef.current++;
+      const newGroupId = nextIdRef.current++;
+      setTabs((curr) => [
+        ...curr,
+        {
+          id: newTabId,
+          kind: "editor",
+          title: src.title,
+          path: src.path,
+          dirty: false,
+          preview: false,
+        } satisfies EditorTab,
+      ]);
+      applyGroups(splitActiveGroup(gs, dir, newSplitId, newGroupId, newTabId));
+    },
+    [applyGroups],
+  );
+
+  const focusEditorGroup = useCallback(
+    (gid: number) => {
+      applyGroups(focusGroupOp(groupsRef.current, gid));
+    },
+    [applyGroups],
+  );
+
+  const activateEditorInGroup = useCallback(
+    (gid: number, tabId: number) => {
+      applyGroups(activateTabInGroupOp(groupsRef.current, gid, tabId));
+    },
+    [applyGroups],
+  );
+
+  const moveEditorTab = useCallback(
+    (tabId: number, toGroupId: number, index: number) => {
+      applyGroups(moveTabOp(groupsRef.current, tabId, toGroupId, index));
+    },
+    [applyGroups],
+  );
+
+  /** Bring the editor grid to the foreground (the "Editors" entry in the global
+   * tab strip). No-op when no editors are open. */
+  const showEditors = useCallback(() => {
+    const eid = activeEditorTabId(groupsRef.current);
+    if (eid != null) setActiveId(eid);
+  }, []);
+
   const resetWorkspace = useCallback((cwd?: string) => {
+    groupsRef.current = EMPTY_GROUPS;
+    setEditorGroups(EMPTY_GROUPS);
     const tabId = nextIdRef.current++;
     const leafId = nextIdRef.current++;
     let toDispose: number[] = [];
@@ -800,6 +946,13 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     tabs,
     activeId,
     setActiveId,
+    editorGroups,
+    splitEditorGroup,
+    focusEditorGroup,
+    activateEditorInGroup,
+    moveEditorTab,
+    showEditors,
+    closeEditorTab,
     newTab,
     newAgentTab,
     newPrivateTab,

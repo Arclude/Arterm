@@ -14,5 +14,9 @@ export {
   type AiDiffStatus,
   type TabPatch,
 } from "./lib/useTabs";
+export {
+  type EditorGroup,
+  type EditorGroupsState,
+} from "./lib/editorGroups";
 export { useWorkspaceCwd } from "./lib/useWorkspaceCwd";
 export { useWindowTitle } from "./lib/useWindowTitle";

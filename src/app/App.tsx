@@ -89,6 +89,7 @@ import {
   ShortcutsDialog,
   useGlobalShortcuts,
 } from "@/modules/shortcuts";
+import { DebugPanel, stopAllDebugAdapters } from "@/modules/dap";
 import { SidebarRail, type SidebarViewId } from "@/modules/sidebar";
 import { SourceControlPanel, useSourceControl } from "@/modules/source-control";
 import { StatusBar } from "@/modules/statusbar";
@@ -220,6 +221,12 @@ export default function App() {
     closeActivePane,
     closePaneByLeaf,
     resetWorkspace,
+    editorGroups,
+    splitEditorGroup,
+    focusEditorGroup,
+    activateEditorInGroup,
+    moveEditorTab,
+    showEditors,
   } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
@@ -242,11 +249,6 @@ export default function App() {
   const previewRefs = useRef<Map<number, PreviewPaneHandle>>(new Map());
   const [activeEditorHandle, setActiveEditorHandle] =
     useState<EditorPaneHandle | null>(null);
-  // Split editor: pin one editor tab into a second pane beside the main column.
-  const [editorSplitDir, setEditorSplitDir] = useState<"row" | "col" | null>(
-    null,
-  );
-  const [editorSplitPath, setEditorSplitPath] = useState<string | null>(null);
   const [gitHistoryHandle, setGitHistoryHandle] =
     useState<GitHistorySearchHandle | null>(null);
   const { zoomIn, zoomOut, zoomReset } = useZoom();
@@ -431,6 +433,7 @@ export default function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [paletteFileMode, setPaletteFileMode] = useState(false);
   const miniOpen = useChatStore((s) => s.mini.open);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const openMini = useChatStore((s) => s.openMini);
@@ -674,6 +677,7 @@ export default function App() {
   // target file when go-to-definition lands in another file.
   useEffect(() => {
     void lspManager.stopOrphanedServers();
+    void stopAllDebugAdapters();
     const onLspGoto = (e: Event) => {
       const detail = (e as CustomEvent<{ path: string }>).detail;
       if (detail?.path) openFileTab(detail.path);
@@ -930,9 +934,10 @@ export default function App() {
 
   const handleOpenFile = useCallback(
     (path: string, pin?: boolean) => {
-      // Explorer defaults to preview (pin=false); explicit actions like
-      // context-menu "Open" pass pin=true for a persistent tab.
-      openFileTab(path, pin ?? false);
+      // Open files as persistent tabs so they accumulate in the focused editor
+      // group instead of replacing a single shared preview slot (which, with
+      // multiple groups, could also land the file in the wrong group).
+      openFileTab(path, pin ?? true);
     },
     [openFileTab],
   );
@@ -1102,24 +1107,18 @@ export default function App() {
     [activeId, splitActivePane],
   );
 
-  const closeEditorSplit = useCallback(() => {
-    setEditorSplitPath(null);
-    setEditorSplitDir(null);
-  }, []);
-
-  // Route the toolbar split button: editors open a synced second view of the
-  // current file; terminals keep their existing pane split.
+  // Route the toolbar split button: editors split into a new editor group;
+  // terminals keep their existing pane split.
   const handleSplitActive = useCallback(
     (dir: "row" | "col") => {
       const t = tabsRef.current.find((x) => x.id === activeId);
       if (t?.kind === "editor") {
-        setEditorSplitPath(t.path);
-        setEditorSplitDir(dir);
+        splitEditorGroup(dir);
         return;
       }
       splitActivePaneInActiveTab(dir);
     },
-    [activeId, splitActivePaneInActiveTab],
+    [activeId, splitEditorGroup, splitActivePaneInActiveTab],
   );
 
   const handleCloseTabOrPane = useCallback(() => {
@@ -1135,7 +1134,14 @@ export default function App() {
 
   const shortcutHandlers = useMemo<ShortcutHandlers>(
     () => ({
-      "commandPalette.open": () => setCommandPaletteOpen(true),
+      "commandPalette.open": () => {
+        setPaletteFileMode(false);
+        setCommandPaletteOpen(true);
+      },
+      "quickOpen.file": () => {
+        setPaletteFileMode(true);
+        setCommandPaletteOpen(true);
+      },
       "tab.new": openNewTab,
       "tab.newPrivate": openNewPrivateTab,
       "tab.newPreview": () => openPreviewTab(""),
@@ -1535,14 +1541,16 @@ export default function App() {
         aria-hidden={!isEditorTab}
       >
         <EditorStack
+          groups={editorGroups}
           tabs={tabs}
-          activeId={activeId}
+          workspaceRoot={explorerRoot}
           registerHandle={registerEditorHandle}
           onDirtyChange={handleEditorDirty}
-          onCloseTab={disposeTab}
-          splitPath={editorSplitPath}
-          splitDir={editorSplitDir}
-          onCloseSplit={closeEditorSplit}
+          onActivateTab={activateEditorInGroup}
+          onCloseTab={handleClose}
+          onFocusGroup={focusEditorGroup}
+          onSplitGroup={splitEditorGroup}
+          onMoveTab={moveEditorTab}
         />
       </div>
       <div
@@ -1631,8 +1639,11 @@ export default function App() {
                 (activeTerminalTab !== null &&
                   leafIds(activeTerminalTab.paneTree).length <
                     MAX_PANES_PER_TAB) ||
-                (isEditorTab && editorSplitPath === null)
+                isEditorTab
               }
+              hasEditors={editorGroups.layout !== null}
+              editorsActive={isEditorTab}
+              onShowEditors={showEditors}
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
               onOpenSettings={() => void openSettingsWindow()}
@@ -1671,6 +1682,11 @@ export default function App() {
                         onRevealInTerminal={cdInNewTab}
                         onAttachToAgent={handleAttachFileToAgent}
                         onOpenMarkdownPreview={openMarkdownPreview}
+                      />
+                    ) : sidebarView === "debug" ? (
+                      <DebugPanel
+                        activeFilePath={activeFilePath}
+                        cwd={explorerRoot ?? workspaceFallbackPath}
                       />
                     ) : (
                       <SourceControlPanel
@@ -1773,6 +1789,7 @@ export default function App() {
           <CommandPalette
             open={commandPaletteOpen}
             onOpenChange={setCommandPaletteOpen}
+            fileMode={paletteFileMode}
             actions={commandPaletteActions}
             workspaceRoot={explorerRoot}
             onOpenFile={handleOpenFile}
