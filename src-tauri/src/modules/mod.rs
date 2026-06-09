@@ -1,10 +1,12 @@
 pub mod agent;
+pub mod dap;
 pub mod extensions;
 pub mod fs;
 pub mod git;
 pub mod lsp;
 pub mod net;
 pub mod proc;
+pub mod proto;
 pub mod pty;
 pub mod secrets;
 pub mod shell;

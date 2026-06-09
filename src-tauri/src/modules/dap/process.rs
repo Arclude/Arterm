@@ -1,6 +1,8 @@
-//! Spawns a language server as a long-lived stdio child and streams its
-//! framed stdout messages back to the frontend. Models the pty `session.rs`
-//! thread layout (reader + waiter) but over plain pipes, not a PTY.
+//! Spawns a debug adapter as a long-lived stdio child and streams its framed
+//! stdout messages back to the frontend. This mirrors `lsp/process.rs` almost
+//! verbatim — the Debug Adapter Protocol uses the exact same `Content-Length`
+//! base-protocol framing as LSP, so the only real difference is thread naming
+//! and that DAP semantics (seq correlation, events) live in the TS client.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -15,10 +17,11 @@ use crate::modules::proto::framing::{self, FrameParser};
 
 const READ_BUF: usize = 16 * 1024;
 
-pub struct LspServer {
-    // Drop order matches pty::Session: on Windows close the Job HANDLE first so
-    // KILL_ON_JOB_CLOSE reaps the whole server subtree (e.g. tsserver spawned by
-    // typescript-language-server) before we drop our own handles.
+pub struct DebugAdapter {
+    // Drop order matches pty::Session / LspServer: on Windows close the Job
+    // HANDLE first so KILL_ON_JOB_CLOSE reaps the whole adapter subtree (debug
+    // adapters routinely spawn the debuggee and helper processes) before we
+    // drop our own handles.
     #[cfg(windows)]
     _job: Option<crate::modules::pty::PtyJob>,
     pub pid: u32,
@@ -26,22 +29,22 @@ pub struct LspServer {
     stdin: Arc<Mutex<ChildStdin>>,
 }
 
-impl LspServer {
+impl DebugAdapter {
     pub fn send(&self, message: &str) -> Result<(), String> {
         let framed = framing::encode(message);
-        let mut w = self.stdin.lock().map_err(|_| "lsp stdin poisoned".to_string())?;
+        let mut w = self.stdin.lock().map_err(|_| "dap stdin poisoned".to_string())?;
         w.write_all(&framed).map_err(|e| e.to_string())?;
         w.flush().map_err(|e| e.to_string())
     }
 
     pub fn kill(&self) {
         if let Err(e) = self.child.kill() {
-            log::debug!("lsp kill returned: {e}");
+            log::debug!("dap kill returned: {e}");
         }
     }
 }
 
-impl Drop for LspServer {
+impl Drop for DebugAdapter {
     fn drop(&mut self) {
         let _ = self.child.kill();
     }
@@ -52,7 +55,7 @@ pub fn spawn(
     args: &[String],
     cwd: Option<PathBuf>,
     on_message: Channel<String>,
-) -> Result<LspServer, String> {
+) -> Result<DebugAdapter, String> {
     let resolved = resolve_program(program)?;
     let mut cmd = Command::new(&resolved);
     cmd.args(args);
@@ -65,8 +68,8 @@ pub fn spawn(
     crate::modules::proc::hide_console(&mut cmd);
 
     let child = Arc::new(SharedChild::spawn(&mut cmd).map_err(|e| {
-        log::warn!("lsp spawn failed program={program}: {e}");
-        format!("failed to start language server '{program}': {e}")
+        log::warn!("dap spawn failed program={program}: {e}");
+        format!("failed to start debug adapter '{program}': {e}")
     })?);
     let pid = child.id();
 
@@ -84,13 +87,13 @@ pub fn spawn(
     let job = match crate::modules::pty::PtyJob::create_for(pid) {
         Ok(j) => Some(j),
         Err(e) => {
-            log::warn!("lsp job-object setup failed for pid={pid}: {e}");
+            log::warn!("dap job-object setup failed for pid={pid}: {e}");
             None
         }
     };
 
     thread::Builder::new()
-        .name(format!("artex-lsp-reader-{pid}"))
+        .name(format!("artex-dap-reader-{pid}"))
         .spawn(move || {
             let mut buf = [0u8; READ_BUF];
             let mut parser = FrameParser::new();
@@ -107,14 +110,14 @@ pub fn spawn(
                                     }
                                 }
                                 Some(Err(e)) => {
-                                    log::warn!("lsp framing error pid={pid}: {e:?}");
+                                    log::warn!("dap framing error pid={pid}: {e:?}");
                                 }
                                 None => break,
                             }
                         }
                     }
                     Err(e) => {
-                        log::debug!("lsp reader ended pid={pid}: {e}");
+                        log::debug!("dap reader ended pid={pid}: {e}");
                         break;
                     }
                 }
@@ -122,10 +125,10 @@ pub fn spawn(
         })
         .map_err(|e| reap(&child, &e.to_string()))?;
 
-    // Language servers narrate progress and errors on stderr; surface it in the
+    // Debug adapters narrate progress and errors on stderr; surface it in the
     // app log instead of letting the pipe fill and block the child.
     thread::Builder::new()
-        .name(format!("artex-lsp-stderr-{pid}"))
+        .name(format!("artex-dap-stderr-{pid}"))
         .spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
@@ -134,7 +137,7 @@ pub fn spawn(
                     Ok(n) => {
                         let text = String::from_utf8_lossy(&buf[..n]);
                         for line in text.lines().filter(|l| !l.trim().is_empty()) {
-                            log::debug!("lsp[{pid}] {line}");
+                            log::debug!("dap[{pid}] {line}");
                         }
                     }
                 }
@@ -144,15 +147,15 @@ pub fn spawn(
 
     let waiter = Arc::clone(&child);
     thread::Builder::new()
-        .name(format!("artex-lsp-waiter-{pid}"))
+        .name(format!("artex-dap-waiter-{pid}"))
         .spawn(move || match waiter.wait() {
-            Ok(status) => log::info!("lsp exited pid={pid} status={status:?}"),
-            Err(e) => log::warn!("lsp wait failed pid={pid}: {e}"),
+            Ok(status) => log::info!("dap exited pid={pid} status={status:?}"),
+            Err(e) => log::warn!("dap wait failed pid={pid}: {e}"),
         })
         .ok();
 
-    log::info!("lsp started program={program} pid={pid}");
-    Ok(LspServer {
+    log::info!("dap started program={program} pid={pid}");
+    Ok(DebugAdapter {
         #[cfg(windows)]
         _job: job,
         pid,
@@ -167,9 +170,9 @@ fn reap(child: &SharedChild, msg: &str) -> String {
 }
 
 // On Unix `Command` resolves bare names through PATH. On Windows it only
-// appends `.exe`, so npm-installed servers shipped as `.cmd`/`.bat` shims
-// (typescript-language-server, pyright-langserver, ...) won't be found. Walk
-// PATH + PATHEXT ourselves to locate them, avoiding cmd.exe quoting hazards.
+// appends `.exe`, so adapters shipped as `.cmd`/`.bat` shims (e.g. the
+// `js-debug` npm bin) won't be found. Walk PATH + PATHEXT ourselves to locate
+// them, avoiding cmd.exe quoting hazards.
 #[cfg(windows)]
 fn resolve_program(program: &str) -> Result<PathBuf, String> {
     let candidate = PathBuf::from(program);
@@ -204,7 +207,7 @@ fn resolve_program(program: &str) -> Result<PathBuf, String> {
             return Ok(direct);
         }
     }
-    Err(format!("language server '{program}' not found on PATH"))
+    Err(format!("debug adapter '{program}' not found on PATH"))
 }
 
 #[cfg(not(windows))]

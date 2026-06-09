@@ -6,15 +6,17 @@ import {
   setSearchQuery,
 } from "@codemirror/search";
 import { type Extension, Prec } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import {
   type LspClient,
@@ -29,11 +31,16 @@ import {
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
   buildSharedExtensions,
+  debugCompartment,
   languageCompartment,
   lspCompartment,
   minimapCompartment,
   vimCompartment,
 } from "./lib/extensions";
+import { offsetToPosition } from "@/modules/lsp/codemirror/position";
+import { EditorBreadcrumb } from "./EditorBreadcrumb";
+import { type AnySymbol, resolveSymbolPath } from "./lib/breadcrumbSymbols";
+import { debugExtension } from "./lib/debugGutter";
 import { minimapExtension } from "./lib/minimap";
 import { EDITOR_THEME_EXT } from "./lib/themes";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
@@ -63,6 +70,7 @@ export type EditorPaneHandle = {
 
 type Props = {
   path: string;
+  workspaceRoot?: string | null;
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
   onClose?: () => void;
@@ -75,7 +83,10 @@ function formatBytes(n: number): string {
 }
 
 export const EditorPane = forwardRef<EditorPaneHandle, Props>(
-  function EditorPane({ path, onDirtyChange, onSaved, onClose }, ref) {
+  function EditorPane(
+    { path, workspaceRoot, onDirtyChange, onSaved, onClose },
+    ref,
+  ) {
     const { doc, onChange, save, reload } = useDocument({
       path,
       onDirtyChange,
@@ -83,6 +94,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
     const cmRef = useRef<ReactCodeMirrorRef>(null);
+    // @uiw/react-codemirror creates the EditorView in a passive effect, so
+    // cmRef.current.view is null on the first commit. Flip this once the view
+    // exists to re-run effects that must dispatch into a live view.
+    const [editorReady, setEditorReady] = useState(false);
     const editorThemeId = usePreferencesStore((s) => s.editorTheme);
     const vimMode = usePreferencesStore((s) => s.vimMode);
     const minimap = usePreferencesStore((s) => s.minimap);
@@ -142,6 +157,49 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const pathRef = useRef(path);
     pathRef.current = path;
 
+    // --- breadcrumb symbol path (cursor's enclosing symbol chain via LSP) ---
+    const [symbolPath, setSymbolPath] = useState<string[]>([]);
+    const lspClientRef = useRef<LspClient | null>(null);
+    const symbolsRef = useRef<AnySymbol[] | null>(null);
+    const symbolsStaleRef = useRef(true);
+    const symbolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const resolveSymbols = useCallback(async (offset: number) => {
+      const client = lspClientRef.current;
+      const view = cmRef.current?.view;
+      if (!client || !view || !client.capabilities?.documentSymbolProvider) {
+        setSymbolPath([]);
+        return;
+      }
+      if (symbolsStaleRef.current || symbolsRef.current == null) {
+        try {
+          const res = await client.request<AnySymbol[] | null>(
+            "textDocument/documentSymbol",
+            { textDocument: { uri: pathToUri(pathRef.current) } },
+          );
+          symbolsRef.current = res ?? [];
+          symbolsStaleRef.current = false;
+        } catch {
+          symbolsRef.current = [];
+        }
+      }
+      const pos = offsetToPosition(view.state.doc, offset);
+      setSymbolPath(resolveSymbolPath(symbolsRef.current ?? [], pos));
+    }, []);
+
+    // Debounce cursor/edit events before resolving the symbol path.
+    const cursorHandlerRef = useRef<
+      (offset: number, docChanged: boolean) => void
+    >(() => {});
+    cursorHandlerRef.current = (offset, docChanged) => {
+      if (docChanged) symbolsStaleRef.current = true;
+      if (symbolTimerRef.current) clearTimeout(symbolTimerRef.current);
+      symbolTimerRef.current = setTimeout(
+        () => void resolveSymbols(offset),
+        250,
+      );
+    };
+
     const extensions = useMemo(
       () => [
         // basicSetup is added before user extensions by @uiw/react-codemirror,
@@ -161,6 +219,12 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         ...buildSharedExtensions(),
         languageCompartment.of([]),
         lspCompartment.of([]),
+        debugCompartment.of([]),
+        EditorView.updateListener.of((u) => {
+          if (u.selectionSet || u.docChanged) {
+            cursorHandlerRef.current(u.state.selection.main.head, u.docChanged);
+          }
+        }),
         minimapCompartment.of(
           usePreferencesStore.getState().minimap ? minimapExtension() : [],
         ),
@@ -228,6 +292,23 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         ),
       });
     }, [minimap]);
+
+    // Breakpoint gutter + execution-line highlight. Enabled once the document
+    // is a real text buffer; breakpoints persist in the debug store across
+    // sessions, so the gutter works even with nothing running.
+    useEffect(() => {
+      if (doc.status !== "ready") return;
+      const view = cmRef.current?.view;
+      if (!view) return;
+      view.dispatch({
+        effects: debugCompartment.reconfigure(debugExtension(path)),
+      });
+      return () => {
+        cmRef.current?.view?.dispatch({
+          effects: debugCompartment.reconfigure([]),
+        });
+      };
+    }, [path, doc.status, editorReady]);
 
     useEffect(() => {
       let cancelled = false;
@@ -305,6 +386,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         const client = await lspAcquire(path, info);
         if (cancelled || !client) return;
         active = client;
+        lspClientRef.current = client;
+        // New server for this file — refetch symbols on the next cursor settle.
+        symbolsRef.current = null;
+        symbolsStaleRef.current = true;
+        cursorHandlerRef.current(
+          cmRef.current?.view?.state.selection.main.head ?? 0,
+          false,
+        );
         const view = cmRef.current?.view;
         if (!view) return;
         client.didOpen(uri, info.languageId, view.state.doc.toString());
@@ -318,6 +407,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       return () => {
         cancelled = true;
         active?.didClose(uri);
+        lspClientRef.current = null;
+        symbolsRef.current = null;
+        symbolsStaleRef.current = true;
+        setSymbolPath([]);
         cmRef.current?.view?.dispatch({
           effects: lspCompartment.reconfigure([]),
         });
@@ -427,8 +520,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
 
     return (
       <div className="flex h-full min-h-0 flex-col">
+        <EditorBreadcrumb
+          path={path}
+          workspaceRoot={workspaceRoot ?? null}
+          symbolPath={symbolPath}
+        />
         <CodeMirror
           ref={cmRef}
+          onCreateEditor={() => setEditorReady(true)}
           value={doc.content}
           onChange={onChange}
           theme={themeExt}

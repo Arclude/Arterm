@@ -12,6 +12,7 @@ export const wrapCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 export const lspCompartment = new Compartment();
 export const minimapCompartment = new Compartment();
+export const debugCompartment = new Compartment();
 
 // Only what basicSetup doesn't already cover, to avoid duplicate extensions.
 // basicSetup gives us line numbers, fold gutter, history, indentOnInput,
@@ -163,6 +164,40 @@ export function buildSharedExtensions(): Extension[] {
         fontSize: "12px",
         lineHeight: "1.5",
       },
+      // ── LSP hover tooltip ────────────────────────────────────────────
+      ".cm-tooltip:has(.cm-lsp-hover)": {
+        border: "1px solid var(--border)",
+        borderRadius: "10px",
+        backgroundColor: "var(--popover)",
+        color: "var(--popover-foreground)",
+        boxShadow: "0 10px 30px -8px rgba(0,0,0,0.45)",
+        overflow: "hidden",
+      },
+      ".cm-lsp-hover": {
+        maxWidth: "520px",
+        maxHeight: "320px",
+        overflow: "auto",
+        padding: "8px 10px",
+        fontSize: "12px",
+        lineHeight: "1.5",
+      },
+      ".cm-lsp-hover-code": {
+        margin: "0 0 4px",
+        fontFamily: detectMonoFontFamily(),
+        fontSize: "12px",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        color: "var(--foreground)",
+      },
+      ".cm-lsp-hover-doc": {
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        color: "var(--muted-foreground)",
+      },
+      ".cm-lsp-hover-doc:not(:last-child)": {
+        marginBottom: "6px",
+      },
+
       // Completion kind icons — colored glyphs per symbol kind.
       ".cm-completionIcon": {
         width: "1.2em",

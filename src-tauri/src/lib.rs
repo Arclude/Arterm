@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, extensions, fs, git, lsp, net, pty, secrets, shell, workspace};
+use modules::{agent, dap, extensions, fs, git, lsp, net, pty, secrets, shell, workspace};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
@@ -157,6 +157,7 @@ pub fn run() {
         })
         .manage(pty::PtyState::default())
         .manage(lsp::LspState::default())
+        .manage(dap::DapState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
         .manage(fs::watch::FsWatchState::default())
@@ -184,6 +185,10 @@ pub fn run() {
             lsp::lsp_install_download,
             lsp::lsp_install_list,
             lsp::lsp_install_uninstall,
+            dap::dap_start,
+            dap::dap_send,
+            dap::dap_stop,
+            dap::dap_stop_all,
             fs::tree::list_subdirs,
             fs::tree::fs_read_dir,
             fs::file::fs_read_file,

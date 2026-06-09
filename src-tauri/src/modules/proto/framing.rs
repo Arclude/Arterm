@@ -1,9 +1,9 @@
-//! Language Server Protocol base-protocol framing.
+//! Base-protocol framing shared by LSP and DAP.
 //!
-//! Messages are `Content-Length: <n>\r\n\r\n<n bytes of UTF-8 JSON>`. This
-//! layer is the transport boundary: it owns the byte-level framing so the
-//! frontend only ever sees whole JSON strings. Keep it free of JSON-RPC
-//! semantics.
+//! Both protocols frame messages as `Content-Length: <n>\r\n\r\n<n bytes of
+//! UTF-8 JSON>`. This layer is the transport boundary: it owns the byte-level
+//! framing so the frontend only ever sees whole JSON strings. Keep it free of
+//! JSON-RPC / DAP semantics.
 
 const SEPARATOR: &[u8] = b"\r\n\r\n";
 const CONTENT_LENGTH: &str = "content-length";
@@ -19,7 +19,7 @@ pub enum FrameError {
     HeaderTooLarge,
 }
 
-/// Wraps a single JSON message in the LSP base-protocol header.
+/// Wraps a single JSON message in the base-protocol header.
 pub fn encode(message: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(message.len() + 32);
     out.extend_from_slice(format!("Content-Length: {}\r\n\r\n", message.len()).as_bytes());

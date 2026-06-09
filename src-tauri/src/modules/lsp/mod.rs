@@ -5,7 +5,6 @@
 //! the server's stdio. All JSON-RPC semantics (request correlation, the
 //! initialize handshake, document sync) live in the TypeScript client.
 
-mod framing;
 mod install;
 mod process;
 
