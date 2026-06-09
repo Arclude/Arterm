@@ -27,3 +27,5 @@ dist-ssr
 
 # Claude Code assistant memory (local, not part of the project)
 memory/
+scratch/
+
