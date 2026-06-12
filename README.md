@@ -188,14 +188,12 @@ Issues and PRs are welcome! Feel free to open issues, suggest features, or submi
 
 Arterm is licensed under the Apache-2.0 License. For more information on our dependencies, see [Apache License 2.0](LICENSE).
 
-## Star history
+## Star History
 
-<div align="center">
-  <a href="https://www.star-history.com/#Arclude/Arterm&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Arclude/Arterm&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Arclude/Arterm&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Arclude/Arterm&type=Date" />
-    </picture>
-  </a>
-</div>
+<a href="https://www.star-history.com/?type=date&repos=Arclude%2FArterm">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Arclude/Arterm&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Arclude/Arterm&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Arclude/Arterm&type=date&legend=top-left" />
+ </picture>
+</a>
