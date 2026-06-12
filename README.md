@@ -41,6 +41,21 @@ Arterm is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and R
   </tr>
 </table>
 
+## What's new since the fork
+
+Arterm forked from [terax-ai](https://github.com/crynta/terax-ai) in June 2026 (around v0.7.3). Everything below was built on top of the upstream project since then:
+
+- **Language intelligence (LSP)** — diagnostics, completions, hover tooltips, symbol breadcrumbs, and a one-click language server install manager
+- **Python debugger (DAP)** — full Debug Adapter Protocol integration: breakpoints, stepping, variable inspection
+- **Extension system + marketplace** — declarative UI and executable extensions, installable from an in-app marketplace backed by a self-hosted Axum + Postgres registry
+- **Multi-agent AI panel** — multiple concurrent background AI sessions with per-session approval routing
+- **Ctrl+K command generation** — natural-language to shell command, inline in the terminal
+- **AI error assistant** — failed commands get a one-click explanation and suggested fix
+- **Editor upgrades** — minimap, split editor groups with tab drag-and-drop, live-synced split documents, breadcrumb bar, richer completion popup, large-file performance mode
+- **Quick-open** — fuzzy workspace file search from the command palette
+- **Source control & status bar** — branch switcher, git pull, customizable status bar with rich git status, image preview
+- **Quality of life** — plain Ctrl+C/Ctrl+V in the terminal, faster file explorer on busy filesystems, end-to-end auto-update with its own signing key
+
 ## Features
 
 ### Terminal
@@ -50,21 +65,46 @@ Arterm is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and R
 - Split panels (horizontal and vertical)
 - Inline search, link detection, true-color
 - Per-tab workspace environments on Windows (Local, or any installed WSL distro)
+- **Ctrl+K** natural-language command generation — describe what you want, get the shell command inline
+- AI error assistant — when a command fails, get a one-click explanation and suggested fix
+- Plain Ctrl+C / Ctrl+V copy & paste
 
 ### Code editor
 
 - CodeMirror 6 (supports all popular languages - TS/JS, Rust, Python, Go, C/C++, Java, HTML/CSS, JSON, Markdown, etc.)
 - Inline AI autocomplete with local model support
 - AI edit diffs, accept or reject hunk by hunk
+- Split editor groups with tab drag-and-drop; split views share a live-synced document
+- Minimap with syntax colors, richer completion popup, visible scrollbar
+- Breadcrumb bar with symbol path navigation
+- Quick-open workspace file search from the command palette
+- Large-file performance mode — heavy features gate off automatically on big files
 - Vim mode
 - Ten built-in editor themes: Atom One, Aura, Copilot, GitHub Dark / Light, Gruvbox Dark, Nord, Tokyo Night, Xcode Dark / Light
 
+### Language intelligence (LSP)
+
+- Language Server Protocol support: diagnostics, completions, and hover tooltips on symbols
+- One-click language server install manager — pick a language, Arterm installs and wires up the server
+
+### Debugger (DAP)
+
+- Python debugging via the Debug Adapter Protocol: breakpoints, stepping, variable inspection
+- More languages planned through the same DAP layer
+
+### Extensions
+
+- Built-in extension system with an in-app marketplace
+- Declarative UI extensions (Beta) and executable extensions
+- Self-hosted registry backend (Axum + Postgres)
+
 ### Source control
 
-- Stage / unstage hunks, commit (Cmd+Enter / Ctrl+Enter), push with upstream awareness
-- Branch display including detached HEAD state
+- Stage / unstage hunks, commit (Cmd+Enter / Ctrl+Enter), push and pull with upstream awareness
+- Branch display including detached HEAD state, branch switcher in the status bar
 - Git history pane with a real commit graph (lane rendering for merges and branches)
 - Commit search and filter, click through to the remote commit page
+- Customizable status bar with rich git status
 
 ### File explorer
 
@@ -92,6 +132,7 @@ Arterm is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and R
 - **Composer:** snippets via `#handle`, files via `@path`, slash commands, voice input, attach-to-agent from explorer or selection
 - **Custom agents** with their own system prompt and tool subset
 - **Plan mode** for multi-step work, generates and confirms before doing
+- **Multi-agent panel:** run multiple AI sessions concurrently in the background and switch between them; approvals route to the right session
 
 ## Install
 
