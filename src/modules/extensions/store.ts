@@ -3,7 +3,7 @@ import { create } from "zustand";
 import type { Theme } from "@/modules/theme/types";
 import type { LoadedExtension } from "./types";
 
-const STORE_PATH = "artex-extensions.json";
+const STORE_PATH = "arterm-extensions.json";
 const KEY_DISABLED = "disabled";
 const KEY_REGISTRY_URL = "registryUrl";
 

@@ -68,8 +68,8 @@ class DebugController {
 
     try {
       const caps = await client.request<Capabilities>("initialize", {
-        clientID: "artex",
-        clientName: "Artex",
+        clientID: "arterm",
+        clientName: "Arterm",
         adapterID: "python",
         locale: "en",
         linesStartAt1: true,
@@ -197,11 +197,11 @@ class DebugController {
     store().setStopped(threadId, frames, location);
 
     // Open the paused file so its execution-line highlight (and gutter) show.
-    // The shared "artex:lsp-goto" event expects a 0-based line, so convert from
+    // The shared "arterm:lsp-goto" event expects a 0-based line, so convert from
     // DAP's 1-based line here (the listener adds 1 back for CodeMirror).
     if (location) {
       window.dispatchEvent(
-        new CustomEvent("artex:lsp-goto", {
+        new CustomEvent("arterm:lsp-goto", {
           detail: {
             path: location.path,
             line: location.line - 1,

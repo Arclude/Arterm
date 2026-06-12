@@ -96,7 +96,7 @@ pub fn spawn(
     };
 
     thread::Builder::new()
-        .name(format!("artex-dap-reader-{pid}"))
+        .name(format!("arterm-dap-reader-{pid}"))
         .spawn(move || {
             let mut buf = [0u8; READ_BUF];
             let mut parser = FrameParser::new();
@@ -131,7 +131,7 @@ pub fn spawn(
     // Debug adapters narrate progress and errors on stderr; surface it in the
     // app log instead of letting the pipe fill and block the child.
     thread::Builder::new()
-        .name(format!("artex-dap-stderr-{pid}"))
+        .name(format!("arterm-dap-stderr-{pid}"))
         .spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
@@ -150,7 +150,7 @@ pub fn spawn(
 
     let waiter = Arc::clone(&child);
     thread::Builder::new()
-        .name(format!("artex-dap-waiter-{pid}"))
+        .name(format!("arterm-dap-waiter-{pid}"))
         .spawn(move || match waiter.wait() {
             Ok(status) => log::info!("dap exited pid={pid} status={status:?}"),
             Err(e) => log::warn!("dap wait failed pid={pid}: {e}"),

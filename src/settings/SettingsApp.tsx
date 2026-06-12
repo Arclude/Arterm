@@ -129,7 +129,7 @@ export function SettingsApp() {
       }
     };
     const unlistenPromise = getCurrentWebviewWindow().listen<string>(
-      "artex:settings-tab",
+      "arterm:settings-tab",
       (e) => apply(e.payload),
     );
     return () => {

@@ -5,15 +5,15 @@ import type { ProviderKeys, CustomEndpointKeys } from "./keyring";
 import { native } from "./native";
 import type { ToolContext } from "../tools/tools";
 
-const ARTEX_MD_MAX_BYTES = 32 * 1024;
+const ARTERM_MD_MAX_BYTES = 32 * 1024;
 type MemoryCacheEntry = { content: string | null; mtime: number };
 const projectMemoryCache = new Map<string, MemoryCacheEntry>();
 
-async function readArtexMd(
+async function readArtermMd(
   workspaceRoot: string | null,
 ): Promise<string | null> {
   if (!workspaceRoot) return null;
-  const path = `${workspaceRoot.replace(/\/$/, "")}/ARTEX.md`;
+  const path = `${workspaceRoot.replace(/\/$/, "")}/ARTERM.md`;
   const cached = projectMemoryCache.get(workspaceRoot);
   if (cached && Date.now() - cached.mtime < 30_000) return cached.content;
   try {
@@ -26,8 +26,8 @@ async function readArtexMd(
       return null;
     }
     const content =
-      r.content.length > ARTEX_MD_MAX_BYTES
-        ? r.content.slice(0, ARTEX_MD_MAX_BYTES)
+      r.content.length > ARTERM_MD_MAX_BYTES
+        ? r.content.slice(0, ARTERM_MD_MAX_BYTES)
         : r.content;
     projectMemoryCache.set(workspaceRoot, { content, mtime: Date.now() });
     return content;
@@ -79,7 +79,7 @@ type SendOptions = {
 export function createContextAwareTransport(deps: Deps) {
   const run = async (options: SendOptions) => {
     const live = deps.getLive();
-    const projectMemory = await readArtexMd(live.workspaceRoot);
+    const projectMemory = await readArtermMd(live.workspaceRoot);
     const envBlock = formatEnvBlock(live);
     const messagesForRun = envBlock
       ? injectEnvIntoLastUser(options.messages, envBlock)

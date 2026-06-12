@@ -144,7 +144,7 @@ pub async fn publish(
     })))
 }
 
-/// `GET /v1/registry` — the index the Artex app polls. Shape matches the app's
+/// `GET /v1/registry` — the index the Arterm app polls. Shape matches the app's
 /// `RegistryEntry`, so the existing Marketplace UI consumes it directly.
 pub async fn registry(State(state): State<AppState>) -> Result<Json<RegistryIndex>, AppError> {
     let rows: Vec<ExtensionRow> = sqlx::query_as(

@@ -1,4 +1,4 @@
-// Canonical frontend path form is forward-slash (see ARTEX.md). LSP servers
+// Canonical frontend path form is forward-slash (see ARTERM.md). LSP servers
 // speak file:// URIs. Keep the Windows drive colon literal (file:///C:/...)
 // since the language servers we target accept it and round-trip it verbatim.
 

@@ -1,7 +1,7 @@
-# Artex Marketplace
+# Arterm Marketplace
 
-A small **Axum + Postgres** service that hosts Artex extensions: publishers push
-versions to it, and the Artex app installs from it. Its `GET /v1/registry`
+A small **Axum + Postgres** service that hosts Arterm extensions: publishers push
+versions to it, and the Arterm app installs from it. Its `GET /v1/registry`
 response matches the shape the app's Marketplace UI already expects, so wiring
 the app to your own marketplace is a one-line URL change.
 
@@ -22,8 +22,8 @@ the app to your own marketplace is a one-line URL change.
 
 ```bash
 # 1. Create a database
-createdb artex_marketplace
-# (or: psql -c "CREATE DATABASE artex_marketplace;")
+createdb arterm_marketplace
+# (or: psql -c "CREATE DATABASE arterm_marketplace;")
 
 # 2. Configure
 cp .env.example .env          # edit DATABASE_URL etc.
@@ -31,7 +31,7 @@ export $(grep -v '^#' .env | xargs)   # or use your own env loader
 
 # 3. Run — migrations apply automatically on boot
 cargo run
-# → artex-marketplace listening on 0.0.0.0:8787
+# → arterm-marketplace listening on 0.0.0.0:8787
 ```
 
 The schema in `migrations/0001_init.sql` is applied on startup.
@@ -61,13 +61,13 @@ BASE=http://localhost:8787
 curl -s -X POST $BASE/v1/publishers \
   -H 'content-type: application/json' \
   -d '{"name":"acme"}'
-# → {"name":"acme","token":"artex_…"}
+# → {"name":"acme","token":"arterm_…"}
 
-TOKEN=artex_…   # paste the token from above
+TOKEN=arterm_…   # paste the token from above
 
-# 2. Publish an extension. The manifest is the full artex-extension.json.
+# 2. Publish an extension. The manifest is the full arterm-extension.json.
 #    For an executable extension, inline the entry code as "mainSource"
-#    (file-based packaging / .artex-ext is a planned follow-up).
+#    (file-based packaging / .arterm-ext is a planned follow-up).
 curl -s -X POST $BASE/v1/extensions \
   -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
@@ -79,14 +79,14 @@ curl -s -X POST $BASE/v1/extensions \
           "description": "Adds a Hello command.",
           "permissions": [],
           "activationEvents": ["onCommand:hello.world"],
-          "mainSource": "exports.activate=(c)=>{c.subscriptions.push(artex.commands.registerCommand(\"hello.world\",()=>artex.window.showInformationMessage(\"hi\")))};",
+          "mainSource": "exports.activate=(c)=>{c.subscriptions.push(arterm.commands.registerCommand(\"hello.world\",()=>arterm.window.showInformationMessage(\"hi\")))};",
           "contributes": { "commands": [ { "command": "hello.world", "title": "Hello World" } ] }
         }
       }'
 # → {"id":"acme.hello","version":"1.0.0","manifestUrl":"…/v1/extensions/acme.hello/manifest"}
 ```
 
-## Pointing the Artex app at your marketplace
+## Pointing the Arterm app at your marketplace
 
 In the app: **Settings → Marketplace → registry URL** →
 `http://localhost:8787/v1/registry` (or your `PUBLIC_BASE_URL`), then **Save**.
@@ -98,7 +98,7 @@ The app lists your extensions and installs them via each entry's `manifestUrl`.
 
 ## Roadmap (not yet implemented)
 
-- `.artex-ext` zip packages + object storage for multi-file extensions
+- `.arterm-ext` zip packages + object storage for multi-file extensions
   (today, executable extensions ship inline via `mainSource`).
 - Ratings/reviews, download analytics, a web publisher dashboard.
 - Package signing (reuse the app's minisign trust root).

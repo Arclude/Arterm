@@ -17,7 +17,7 @@ export type InstalledServer = {
   binPath: string;
 };
 
-/** Servers currently installed in the Artex-managed directory. */
+/** Servers currently installed in the Arterm-managed directory. */
 export function listInstalled(): Promise<InstalledServer[]> {
   return invoke<InstalledServer[]>("lsp_install_list");
 }

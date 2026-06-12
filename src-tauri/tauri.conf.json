@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Artex",
+  "productName": "Arterm",
   "version": "0.9.0",
-  "identifier": "app.crynta.artex",
+  "identifier": "app.crynta.arterm",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "Artex",
+        "title": "Arterm",
         "width": 800,
         "height": 600,
         "minWidth": 420,
@@ -70,13 +70,13 @@
     },
     "category": "DeveloperTool",
     "shortDescription": "AI-native terminal emulator",
-    "longDescription": "Artex — an open-source AI-native terminal emulator with multi-tab, file explorer, code editor, web preview, voice input, and AI agents."
+    "longDescription": "Arterm — an open-source AI-native terminal emulator with multi-tab, file explorer, code editor, web preview, voice input, and AI agents."
   },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRBRURBRTUxNEE4REY1NjEKUldSaDlZMUtVYTd0U3FMczl0VUZiNkJ2RHhMUHBESFpBWnYzNTJCWkk0S3EvRHdoZ205RWY4S2UK",
       "endpoints": [
-        "https://github.com/Arclude/Artex/releases/latest/download/latest.json"
+        "https://github.com/Arclude/Arterm/releases/latest/download/latest.json"
       ]
     }
   }

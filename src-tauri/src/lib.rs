@@ -46,7 +46,7 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         if let Some(t) = tab.as_deref().filter(|s| !s.is_empty()) {
             // emit() serializes via JSON — no string-escape footgun, unlike
             // eval() with format!(). Frontend listens via Tauri event API.
-            let _ = window.emit("artex:settings-tab", t);
+            let _ = window.emit("arterm:settings-tab", t);
         }
         return Ok(());
     }
@@ -119,7 +119,7 @@ pub fn run() {
     #[cfg(all(debug_assertions, windows))]
     if std::env::var_os("WEBVIEW2_USER_DATA_FOLDER").is_none() {
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            let dir = std::path::Path::new(&local).join("app.crynta.artex.dev\\EBWebView");
+            let dir = std::path::Path::new(&local).join("app.crynta.arterm.dev\\EBWebView");
             std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", dir);
         }
     }

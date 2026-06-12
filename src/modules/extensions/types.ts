@@ -3,7 +3,7 @@ import type { Theme } from "@/modules/theme/types";
 
 /**
  * An extension package. Lives on disk as
- * `{appLocalData}/extensions/<folder>/artex-extension.json`.
+ * `{appLocalData}/extensions/<folder>/arterm-extension.json`.
  *
  * Phase 1 (declarative): only `contributes.themes` / `contributes.snippets`.
  * No code runs, so installing one carries no execution risk.
@@ -20,7 +20,7 @@ export type ExtensionManifest = {
   version: string;
   author?: string;
   description?: string;
-  engines?: { artex?: string };
+  engines?: { arterm?: string };
   /** Declared, human-readable capability hints (informational in Phase 1). */
   permissions?: string[];
   /**
@@ -34,7 +34,7 @@ export type ExtensionManifest = {
    * tiny extensions shipped as a single JSON manifest (no package), and used by
    * the bundled sample. `main` takes precedence when both are present.
    *
-   * The source runs with `artex`, `module`, `exports`, and `console` in scope
+   * The source runs with `arterm`, `module`, `exports`, and `console` in scope
    * and should set `exports.activate(context)` / `exports.deactivate()`.
    */
   mainSource?: string;
@@ -53,7 +53,7 @@ export type ExtensionManifest = {
 };
 
 /** A command an extension contributes to the palette (Phase 2). The handler is
- *  bound at activation time via `artex.commands.registerCommand`. */
+ *  bound at activation time via `arterm.commands.registerCommand`. */
 export type ContributedCommand = {
   /** Stable command id, e.g. "hello.world". Invoked to run the handler. */
   command: string;

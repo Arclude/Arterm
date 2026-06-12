@@ -1,6 +1,6 @@
-# Writing Artex Extensions
+# Writing Arterm Extensions
 
-Artex extensions come in two flavors:
+Arterm extensions come in two flavors:
 
 - **Declarative** (Phase 1) — a single JSON file that contributes **themes** and
   **snippets**. Runs **no code**; installing one is completely safe.
@@ -17,15 +17,15 @@ Artex extensions come in two flavors:
 
 ## Package format
 
-A package is one file named **`artex-extension.json`**. Authors may share it as
-`.artex-ext` or `.json`. On disk an installed extension lives at:
+A package is one file named **`arterm-extension.json`**. Authors may share it as
+`.arterm-ext` or `.json`. On disk an installed extension lives at:
 
 ```
-{appLocalData}/extensions/<folder>/artex-extension.json
+{appLocalData}/extensions/<folder>/arterm-extension.json
 ```
 
 (`<folder>` is derived from the `id`. On Windows the root is
-`%LOCALAPPDATA%\com.arclude.artex\extensions`.)
+`%LOCALAPPDATA%\com.arclude.arterm\extensions`.)
 
 ## Manifest reference
 
@@ -36,7 +36,7 @@ A package is one file named **`artex-extension.json`**. Authors may share it as
   "version": "1.0.0",                // required. dotted numbers; enables update detection
   "author": "yourname",              // optional
   "description": "What it adds.",    // optional
-  "engines": { "artex": "^0.7.0" },  // optional, informational
+  "engines": { "arterm": "^0.7.0" },  // optional, informational
   "permissions": [],                 // optional, informational (declarative packages need none)
   "contributes": {
     "themes":   [ /* Theme[] */ ],
@@ -94,7 +94,7 @@ Type `#handle` in the AI composer to expand the snippet.
 
 An executable extension adds a JS entry file plus a few manifest fields. The code
 runs in a **Web Worker sandbox** — no DOM, no `window`, no direct filesystem.
-Everything it can do comes from the injected `artex` API, and anything that
+Everything it can do comes from the injected `arterm` API, and anything that
 touches the user's files or environment is gated by a declared **permission**.
 
 ### Extra manifest fields
@@ -123,14 +123,14 @@ it is actually used.
 
 ### The entry file
 
-`main.js` receives `artex`, `module`, `exports`, and `console`. Set
+`main.js` receives `arterm`, `module`, `exports`, and `console`. Set
 `exports.activate(context)`; push disposables to `context.subscriptions`:
 
 ```js
 exports.activate = (context) => {
   context.subscriptions.push(
-    artex.commands.registerCommand("hello.world", () => {
-      artex.window.showInformationMessage("👋 Hello!");
+    arterm.commands.registerCommand("hello.world", () => {
+      arterm.window.showInformationMessage("👋 Hello!");
     }),
   );
 };
@@ -140,17 +140,17 @@ exports.deactivate = () => {};
 A complete, copy-pasteable template lives in
 [`examples/extensions/hello-command/`](../examples/extensions/hello-command/).
 
-### The `artex` API (so far)
+### The `arterm` API (so far)
 
 | Method | Permission | Notes |
 | --- | --- | --- |
-| `artex.commands.registerCommand(id, fn)` | — | bind a command handler; returns a disposable |
-| `artex.commands.executeCommand(id, ...args)` | — | run another registered command |
-| `artex.window.showInformationMessage(msg)` | — | toast |
-| `artex.window.showWarningMessage(msg)` | — | toast |
-| `artex.window.showErrorMessage(msg)` | — | error toast |
-| `artex.workspace.fs.readTextFile(path)` | `fs:read` | returns file text (throws on binary/too-large) |
-| `artex.workspace.fs.writeTextFile(path, text)` | `fs:write` | writes atomically in the workspace |
+| `arterm.commands.registerCommand(id, fn)` | — | bind a command handler; returns a disposable |
+| `arterm.commands.executeCommand(id, ...args)` | — | run another registered command |
+| `arterm.window.showInformationMessage(msg)` | — | toast |
+| `arterm.window.showWarningMessage(msg)` | — | toast |
+| `arterm.window.showErrorMessage(msg)` | — | error toast |
+| `arterm.workspace.fs.readTextFile(path)` | `fs:read` | returns file text (throws on binary/too-large) |
+| `arterm.workspace.fs.writeTextFile(path, text)` | `fs:write` | writes atomically in the workspace |
 
 Calling a gated method without declaring its permission is **rejected** by the
 host with a clear error — the worker can never reach a capability you did not ask
@@ -162,7 +162,7 @@ for. The API surface grows over time; this table is the current contract.
 
 ## Installing & testing locally
 
-1. **Settings → Extensions → From file** — pick your `artex-extension.json`.
+1. **Settings → Extensions → From file** — pick your `arterm-extension.json`.
 2. Or drop the folder into the extensions directory (Settings → Extensions →
    **Open folder**) and click **Reload**.
 3. Enable/disable and uninstall from the same Extensions tab. A contributed
@@ -173,10 +173,10 @@ rejected before it is written.
 
 ## Publishing to the GitHub marketplace
 
-Artex's marketplace is a GitHub-hosted **registry index** — a single `index.json`.
+Arterm's marketplace is a GitHub-hosted **registry index** — a single `index.json`.
 
-1. Host your `artex-extension.json` somewhere on GitHub (your repo). Get its
-   **raw** URL (`https://raw.githubusercontent.com/<owner>/<repo>/<ref>/.../artex-extension.json`).
+1. Host your `arterm-extension.json` somewhere on GitHub (your repo). Get its
+   **raw** URL (`https://raw.githubusercontent.com/<owner>/<repo>/<ref>/.../arterm-extension.json`).
 2. Open a PR adding one entry to the registry repo's `index.json`:
 
 ```jsonc
@@ -186,7 +186,7 @@ Artex's marketplace is a GitHub-hosted **registry index** — a single `index.js
   "description": "What it adds.",
   "author": "yourname",
   "version": "1.0.0",               // SHOULD equal manifest.version (drives update detection)
-  "manifestUrl": "https://raw.githubusercontent.com/<owner>/<repo>/<ref>/.../artex-extension.json",
+  "manifestUrl": "https://raw.githubusercontent.com/<owner>/<repo>/<ref>/.../arterm-extension.json",
   "homepage": "https://github.com/<owner>/<repo>",
   "tags": ["theme", "snippet"]
 }
@@ -204,8 +204,8 @@ complete sample packages.
 - **Declarative packages run no code** — a theme/snippet package cannot execute.
 - **Executable packages run only in a Web Worker sandbox** — no DOM, no `window`,
   no Tauri/filesystem globals. The worker reaches the app solely through the
-  `artex` API over a message bridge.
-- **Capabilities are permission-gated** — sensitive `artex` methods (e.g.
+  `arterm` API over a message bridge.
+- **Capabilities are permission-gated** — sensitive `arterm` methods (e.g.
   `workspace.fs.*`) are denied unless the manifest declares the matching
   permission. Enforcement happens on the main thread (the host), not in the
   worker, so extension code cannot bypass it.

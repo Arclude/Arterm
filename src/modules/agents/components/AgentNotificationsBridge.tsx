@@ -107,7 +107,7 @@ export function AgentNotificationsBridge({
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
-    listen<AgentSignal>("artex:agent-signal", (e) =>
+    listen<AgentSignal>("arterm:agent-signal", (e) =>
       handleSignal(e.payload, ctxRef.current),
     )
       .then((u) => {

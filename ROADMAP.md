@@ -1,16 +1,16 @@
 # Roadmap
 
-Artex direction, what's shipped, what's coming, and what's deliberately out of scope.
+Arterm direction, what's shipped, what's coming, and what's deliberately out of scope.
 
-This file is updated as direction evolves. For day-to-day work, see [GitHub Issues](https://github.com/crynta/artex-ai/issues) and the Projects board.
+This file is updated as direction evolves. For day-to-day work, see [GitHub Issues](https://github.com/crynta/arterm-ai/issues) and the Projects board.
 
-## What Artex is
+## What Arterm is
 
-Artex is a fast, lightweight, AI-native terminal (ADE - agentic development environment). It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor, a file explorer, source control, and a first-class AI agent system that works with your own API keys or fully local models. Under 10 MB on disk. No telemetry. Keys stored in the OS keychain.
+Arterm is a fast, lightweight, AI-native terminal (ADE - agentic development environment). It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor, a file explorer, source control, and a first-class AI agent system that works with your own API keys or fully local models. Under 10 MB on disk. No telemetry. Keys stored in the OS keychain.
 
 The product is opinionated: terminal-first, AI as a primitive (not a sidebar), lightweight always, cross-platform without compromise.
 
-## What Artex is not
+## What Arterm is not
 
 - Not a full IDE replacement. Heavy IDE features that overlap with VS Code / Cursor / Zed are out of scope.
 - Not a browser. Web preview exists for local dev servers and lightweight doc viewing only.
@@ -100,7 +100,7 @@ The themes below frame every scope decision.
 - [ ] Themes and customizations (terminal themes, UI accents, keybindings, layout)
 - [ ] AI autocomplete improvements in editor (project-aware context, lower latency)
 - [ ] Drag and drop in terminal (files as quoted paths, AI panel as context)
-- [ ] AI agent meta-orchestration (Artex agent spawning and managing external coding agents like Claude Code / OpenCode)
+- [ ] AI agent meta-orchestration (Arterm agent spawning and managing external coding agents like Claude Code / OpenCode)
 - [ ] More slash commands and skills
 - [ ] Approval flow improvements (YOLO / auto-approve, project-scoped policies, per-tool trust)
 - [ ] Persistent terminal sessions and layout restore
@@ -130,15 +130,15 @@ See `good-first-issue` and `help-wanted` labels on GitHub Issues for concrete ta
 
 ## Out of scope
 
-Categories that will not be built into Artex. Individual feature requests in these categories will be closed.
+Categories that will not be built into Arterm. Individual feature requests in these categories will be closed.
 
 - **Heavy IDE features.** Full language-server integration, integrated debuggers, refactoring engines, project-wide search at IDE scale. Use a real editor for those.
-- **Notebook and document workspaces.** Anything that turns Artex into a document host rather than a terminal.
+- **Notebook and document workspaces.** Anything that turns Arterm into a document host rather than a terminal.
 - **Package manager and toolchain UIs.** Use `npm`, `pip`, `cargo` and friends in the terminal directly.
 - **Full web browser features.** Preview pane stays scoped to local dev servers and lightweight doc viewing. No navigation history, no bookmarks, no dev tools.
-- **Telemetry, analytics, accounts.** Artex stays BYOK and offline-respectful.
+- **Telemetry, analytics, accounts.** Arterm stays BYOK and offline-respectful.
 - **Extension marketplaces at IDE scale.** Narrowly-scoped AI tool / skill bundles may happen eventually. Arbitrary UI or behavior extensions will not.
-- **Third-party subscription session bridges.** Forwarding cloud subscription auth (provider-managed login sessions) through Artex is not technically feasible for third-party clients.
+- **Third-party subscription session bridges.** Forwarding cloud subscription auth (provider-managed login sessions) through Arterm is not technically feasible for third-party clients.
 
 ## Decision authority
 

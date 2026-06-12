@@ -6,10 +6,10 @@ import type { ExtensionManifest } from "./types";
 /**
  * Default GitHub-hosted registry. Override per-user via the Marketplace UI
  * (persisted in the extensions store). Point it at any raw `index.json`.
- * Create the registry repo (e.g. Arclude/artex-extensions) to populate it.
+ * Create the registry repo (e.g. Arclude/arterm-extensions) to populate it.
  */
 export const DEFAULT_REGISTRY_URL =
-  "https://raw.githubusercontent.com/Arclude/artex-extensions/main/index.json";
+  "https://raw.githubusercontent.com/Arclude/arterm-extensions/main/index.json";
 
 const REGISTRY_SCHEMA_MAX = 1;
 
@@ -59,7 +59,7 @@ export async function fetchRegistry(url?: string): Promise<RegistryEntry[]> {
     parsed.schema > REGISTRY_SCHEMA_MAX
   ) {
     console.warn(
-      `[artex] registry schema ${parsed.schema} newer than supported`,
+      `[arterm] registry schema ${parsed.schema} newer than supported`,
     );
   }
   const byId = new Map<string, RegistryEntry>();
@@ -131,7 +131,7 @@ function normalizeInstallUrl(input: string): string {
   }
   const repo = s.match(/^([\w.-]+)\/([\w.-]+)$/);
   if (repo) {
-    return `https://raw.githubusercontent.com/${repo[1]}/${repo[2]}/main/artex-extension.json`;
+    return `https://raw.githubusercontent.com/${repo[1]}/${repo[2]}/main/arterm-extension.json`;
   }
   throw new Error("enter an https raw manifest URL or owner/repo");
 }

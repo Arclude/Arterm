@@ -1,4 +1,4 @@
--- Artex marketplace schema.
+-- Arterm marketplace schema.
 --
 -- A publisher owns a namespace: every extension id must be "<publisher>.<name>".
 -- Each extension has many versions; the manifest (including any inline

@@ -1,27 +1,27 @@
 <div align="center">
-  <img src="public/logo.png" width="144" height="144" alt="Artex" />
-  <h1>Artex</h1>
+  <img src="public/logo.png" width="144" height="144" alt="Arterm" />
+  <h1>Arterm</h1>
 
   <p><strong>Lightweight Terminal-first AI-native dev workspace.</strong></p>
 
   <p>
-    <img src="https://img.shields.io/github/v/release/crynta/artex-ai?label=version&color=blue" alt="version" />
+    <img src="https://img.shields.io/github/v/release/crynta/arterm-ai?label=version&color=blue" alt="version" />
     <img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="license" />
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="platform" />
   </p>
 
   <p>
-    <a href="https://artex.app">Website</a>
+    <a href="https://arterm.app">Website</a>
     ·
-    <a href="https://artex.app/docs">Docs</a>
+    <a href="https://arterm.app/docs">Docs</a>
     ·
-    <a href="https://github.com/crynta/Artex-website">Website's source code</a>
+    <a href="https://github.com/crynta/Arterm-website">Website's source code</a>
   </p>
 </div>
 
 ---
 
-Artex is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and React 19. A native PTY backend with a WebGL renderer, an agentic AI side-panel that runs against your own keys or fully local models, plus a code editor, file explorer, source control with a git graph, and a web preview pane built in. About 7-8 MB on disk. No telemetry. No account.
+Arterm is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and React 19. A native PTY backend with a WebGL renderer, an agentic AI side-panel that runs against your own keys or fully local models, plus a code editor, file explorer, source control with a git graph, and a web preview pane built in. About 7-8 MB on disk. No telemetry. No account.
 
 ## Screenshots
 
@@ -86,30 +86,30 @@ Artex is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and Re
 
 - **BYOK providers:** OpenAI, Anthropic, Google (Gemini), Groq, xAI (Grok), Cerebras, OpenRouter, DeepSeek, Mistral, plus any OpenAI-compatible endpoint
 - **Local / offline:** LM Studio, MLX, Ollama
-- **Agentic workflow:** plans, sub-agents, project memory via `ARTEX.md`, file read / write / edit / multi-edit / grep / glob, bash with approval gating, background processes
+- **Agentic workflow:** plans, sub-agents, project memory via `ARTERM.md`, file read / write / edit / multi-edit / grep / glob, bash with approval gating, background processes
 - **Composer:** snippets via `#handle`, files via `@path`, slash commands, voice input, attach-to-agent from explorer or selection
 - **Custom agents** with their own system prompt and tool subset
 - **Plan mode** for multi-step work, generates and confirms before doing
 
 ## Install
 
-Latest installers are on the [Releases](https://github.com/crynta/artex-ai/releases/latest) page. Artex auto-updates from there.
+Latest installers are on the [Releases](https://github.com/crynta/arterm-ai/releases/latest) page. Arterm auto-updates from there.
 
 ### Windows notes
 
-- On first launch Windows shows "Windows protected your PC" because Artex isn't code-signed yet. Click **More info** then **Run anyway**.
+- On first launch Windows shows "Windows protected your PC" because Arterm isn't code-signed yet. Click **More info** then **Run anyway**.
 - Default shell detection: `pwsh.exe` (PowerShell 7+) -> `powershell.exe` (Windows PowerShell 5.1) -> `cmd.exe`.
 - WSL is a first-class workspace environment, not a wrapped subprocess.
 
 ### Linux notes
 
-- **Arch / AUR:** `yay -S artex-bin` (or `paru`, etc.). Tracks the latest release.
-- **AppImage:** needs FUSE. Without it: `./Artex_*.AppImage --appimage-extract-and-run`. On Wayland with rendering glitches, try `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Otherwise the `.deb` / `.rpm` packages link against the system GTK stack and tend to be smoother.
+- **Arch / AUR:** `yay -S arterm-bin` (or `paru`, etc.). Tracks the latest release.
+- **AppImage:** needs FUSE. Without it: `./Arterm_*.AppImage --appimage-extract-and-run`. On Wayland with rendering glitches, try `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Otherwise the `.deb` / `.rpm` packages link against the system GTK stack and tend to be smoother.
 
 ## Configure AI
 
 1. Open **Settings -> AI**.
-2. Pick a provider and paste your API key. For local inference, point Artex at your LM Studio / MLX / Ollama endpoint.
+2. Pick a provider and paste your API key. For local inference, point Arterm at your LM Studio / MLX / Ollama endpoint.
 3. Keys are written to the OS keychain via `keyring`. They never touch disk or localStorage.
 
 ## Build from source
@@ -143,16 +143,16 @@ Issues and PRs are welcome! Feel free to open issues, suggest features, or submi
 
 ## License
 
-Artex is licensed under the Apache-2.0 License. For more information on our dependencies, see [Apache License 2.0](LICENSE).
+Arterm is licensed under the Apache-2.0 License. For more information on our dependencies, see [Apache License 2.0](LICENSE).
 
 ## Star history
 
 <div align="center">
-  <a href="https://www.star-history.com/#crynta/artex-ai&Date">
+  <a href="https://www.star-history.com/#crynta/arterm-ai&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=crynta/artex-ai&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=crynta/artex-ai&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=crynta/artex-ai&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=crynta/arterm-ai&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=crynta/arterm-ai&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=crynta/arterm-ai&type=Date" />
     </picture>
   </a>
 </div>

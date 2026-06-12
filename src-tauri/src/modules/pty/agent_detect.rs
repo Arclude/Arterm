@@ -8,7 +8,7 @@ const OSC_MAX: usize = 2048;
 const DEFAULT_AGENTS: &[&str] = &["claude", "codex"];
 
 // OSC 777 marker our Claude Code hooks emit via `terminalSequence`.
-const ARTEX_MARKER: &[u8] = b"notify;Artex;";
+const ARTERM_MARKER: &[u8] = b"notify;Arterm;";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum State {
@@ -178,7 +178,7 @@ impl AgentDetector {
     }
 
     fn handle_osc777<F: FnMut(Transition)>(&mut self, pt: &[u8], emit: &mut F) {
-        if let Some(event) = pt.strip_prefix(ARTEX_MARKER) {
+        if let Some(event) = pt.strip_prefix(ARTERM_MARKER) {
             // Self-arms so notifications work even when no shell preexec fired
             // (bash, Windows, tmux, wrappers).
             match event {
@@ -338,29 +338,29 @@ mod tests {
     }
 
     #[test]
-    fn artex_marker_drives_status() {
+    fn arterm_marker_drives_status() {
         let mut d = AgentDetector::new();
         run(&mut d, &osc("133;C;claude"));
         assert_eq!(
-            run(&mut d, &osc("777;notify;Artex;attention")),
+            run(&mut d, &osc("777;notify;Arterm;attention")),
             vec![Transition::Attention]
         );
         assert_eq!(
-            run(&mut d, &osc("777;notify;Artex;working")),
+            run(&mut d, &osc("777;notify;Arterm;working")),
             vec![Transition::Working]
         );
-        assert!(run(&mut d, &osc("777;notify;Artex;working")).is_empty());
+        assert!(run(&mut d, &osc("777;notify;Arterm;working")).is_empty());
         assert_eq!(
-            run(&mut d, &osc("777;notify;Artex;finished")),
+            run(&mut d, &osc("777;notify;Arterm;finished")),
             vec![Transition::Finished]
         );
     }
 
     #[test]
-    fn artex_marker_auto_arms_without_preexec() {
+    fn arterm_marker_auto_arms_without_preexec() {
         let mut d = AgentDetector::new();
         assert_eq!(
-            run(&mut d, &osc("777;notify;Artex;attention")),
+            run(&mut d, &osc("777;notify;Arterm;attention")),
             vec![started("claude"), Transition::Attention]
         );
     }
@@ -430,7 +430,7 @@ mod tests {
         seq.extend_from_slice(&[ESC, ST_FINAL]);
         assert!(run(&mut d, &seq).is_empty());
         assert_eq!(
-            run(&mut d, &osc("777;notify;Artex;attention")),
+            run(&mut d, &osc("777;notify;Arterm;attention")),
             vec![Transition::Attention]
         );
     }

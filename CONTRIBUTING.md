@@ -1,12 +1,12 @@
-# Contributing to Artex
+# Contributing to Arterm
 
-Artex is a solo-maintained project with a strong product direction. Contributions are welcome, but **alignment matters more than volume**.
+Arterm is a solo-maintained project with a strong product direction. Contributions are welcome, but **alignment matters more than volume**.
 
 This document helps you decide *whether* and *how* to contribute in a way that's likely to get merged, so neither of us wastes time.
 
 ## How this project is run
 
-- Artex has one active maintainer ([@crynta](https://github.com/crynta)).
+- Arterm has one active maintainer ([@crynta](https://github.com/crynta)).
 - Review bandwidth is limited.
 - Not every contribution can be accepted, even if it's technically correct. Alignment with project direction matters as much as code quality.
 - For scope and direction, see [ROADMAP.md](ROADMAP.md). Read it before opening anything non-trivial.
@@ -72,7 +72,7 @@ A 10-minute conversation saves a 500-line PR that doesn't fit the roadmap.
 
 ## Quality bar
 
-Artex positions itself as **lightweight, fast, production-grade**. Every PR is reviewed against:
+Arterm positions itself as **lightweight, fast, production-grade**. Every PR is reviewed against:
 
 - `pnpm exec tsc --noEmit` clean
 - `cargo clippy` clean, `cargo fmt` applied
@@ -86,7 +86,7 @@ If you're not sure how to measure perf or what counts as a hot path, ask in Disc
 
 ## Changes to core subsystems require a test
 
-The most common way a PR breaks Artex is a **local fix with global blast radius**: the diff solves one reported case, reads fine, passes type-check and clippy, and silently breaks the same subsystem in every other case. Review alone does not catch these. A test does.
+The most common way a PR breaks Arterm is a **local fix with global blast radius**: the diff solves one reported case, reads fine, passes type-check and clippy, and silently breaks the same subsystem in every other case. Review alone does not catch these. A test does.
 
 So if your change touches behavior in any of these load-bearing paths, the PR must add or extend a test that locks the invariant you're relying on:
 
@@ -101,11 +101,11 @@ The bar for the test is real coverage of the contract, not a placeholder. Test t
 
 UI rendering, themes, syntax-highlight tables, and anything the type-checker already guarantees do not need tests.
 
-## What Artex is not
+## What Arterm is not
 
 To set expectations:
 
-- Artex is not trying to be a full IDE replacement (VS Code, Cursor, Zed).
+- Arterm is not trying to be a full IDE replacement (VS Code, Cursor, Zed).
 - Not building: full LSP support, Jupyter notebooks, integrated debugger UI, package manager UI, full web browser.
 - This is not a curated "first open-source contribution" project. Beginners are welcome but expect normal review.
 - Mechanical refactors, broad style changes, drive-by rewrites are not helpful.

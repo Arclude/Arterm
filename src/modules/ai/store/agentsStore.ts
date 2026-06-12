@@ -9,7 +9,7 @@ import {
   type Agent,
 } from "../lib/agents";
 
-const CHANGED_EVENT = "artex://ai-agents-changed";
+const CHANGED_EVENT = "arterm://ai-agents-changed";
 
 type AgentsState = {
   hydrated: boolean;

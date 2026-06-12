@@ -20,6 +20,6 @@ export async function osNotify(title: string, body: string): Promise<void> {
   try {
     if (await ensurePermission()) sendNotification({ title, body });
   } catch (e) {
-    console.warn("[artex] os notification failed:", e);
+    console.warn("[arterm] os notification failed:", e);
   }
 }

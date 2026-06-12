@@ -46,8 +46,8 @@ type ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState | null>(null);
 
-const FAST_PATH_KEY = "artex-ui-theme-shadow";
-const FAST_PATH_THEME_ID = "artex-ui-theme-id-shadow";
+const FAST_PATH_KEY = "arterm-ui-theme-shadow";
+const FAST_PATH_THEME_ID = "arterm-ui-theme-id-shadow";
 
 function readFastMode(fallback: ThemePref): ThemePref {
   if (typeof window === "undefined") return fallback;

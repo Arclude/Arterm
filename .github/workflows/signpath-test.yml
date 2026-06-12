@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   test-sign-windows:
-    if: github.repository == 'crynta/artex-ai'
+    if: github.repository == 'crynta/arterm-ai'
     runs-on: windows-latest
     permissions:
       contents: read
@@ -51,8 +51,8 @@ jobs:
           $msi = Get-ChildItem -Path "$bundleDir/msi"  -Filter "*.msi" -ErrorAction Stop | Select-Object -First 1
           if (-not $exe) { throw "No .exe installer produced by Tauri" }
           if (-not $msi) { throw "No .msi installer produced by Tauri" }
-          Copy-Item $exe.FullName -Destination "$stagingDir/artex-setup.exe"
-          Copy-Item $msi.FullName -Destination "$stagingDir/artex.msi"
+          Copy-Item $exe.FullName -Destination "$stagingDir/arterm-setup.exe"
+          Copy-Item $msi.FullName -Destination "$stagingDir/arterm.msi"
           Write-Host "Staged files:"
           Get-ChildItem $stagingDir
 
@@ -69,7 +69,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: 'df665bf4-9b76-41ae-9596-1ba3a23010aa'
-          project-slug: 'artex-ai'
+          project-slug: 'arterm-ai'
           signing-policy-slug: 'test-signing'
           artifact-configuration-slug: 'initial'
           github-artifact-id: ${{ steps.upload.outputs.artifact-id }}

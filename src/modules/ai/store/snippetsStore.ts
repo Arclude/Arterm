@@ -7,7 +7,7 @@ import {
   type Snippet,
 } from "../lib/snippets";
 
-const CHANGED_EVENT = "artex://ai-snippets-changed";
+const CHANGED_EVENT = "arterm://ai-snippets-changed";
 
 type State = {
   hydrated: boolean;

@@ -1,1 +1,1 @@
-ARTEX.md
+ARTERM.md

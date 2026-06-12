@@ -291,7 +291,7 @@ export function AiInputBar() {
                     c.submit();
                   }
                 }}
-                placeholder="Ask Artex anything   -   # for snippets and commands, @ for files"
+                placeholder="Ask Arterm anything   -   # for snippets and commands, @ for files"
                 rows={1}
                 className={cn(
                   "max-h-40 flex-1 resize-none bg-transparent text-[13px] leading-relaxed outline-none",
@@ -488,7 +488,7 @@ function autoresize(el: HTMLTextAreaElement | null) {
 
 export type AiInputBarProps = { tabId: number };
 
-const CONNECT_DISMISSED_KEY = "artex.ai.connectBannerDismissed";
+const CONNECT_DISMISSED_KEY = "arterm.ai.connectBannerDismissed";
 
 export function AiInputBarConnect({ onAdd }: { onAdd: () => void }) {
   const [dismissed, setDismissed] = useState(

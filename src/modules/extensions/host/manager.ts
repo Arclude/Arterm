@@ -100,7 +100,7 @@ class ExtensionHost {
       worker.onerror = (e) => {
         const detail =
           (e as ErrorEvent).message || "extension worker failed to start";
-        console.error("[artex][ext-host] worker error:", detail);
+        console.error("[arterm][ext-host] worker error:", detail);
         if (!started) reject(new Error(detail));
       };
       this.worker = worker;
@@ -169,7 +169,7 @@ class ExtensionHost {
         this.activationWaiters.delete(msg.extensionId);
         if (msg.error) {
           console.error(
-            `[artex][ext-host] ${msg.extensionId} activate failed:`,
+            `[arterm][ext-host] ${msg.extensionId} activate failed:`,
             msg.error,
           );
           waiter?.reject(new Error(msg.error));

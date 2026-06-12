@@ -158,8 +158,8 @@ export async function buildLanguageModel(
         baseURL: "https://openrouter.ai/api/v1",
         apiKey: key,
         headers: {
-          "HTTP-Referer": "https://artex.ai",
-          "X-Title": "Artex",
+          "HTTP-Referer": "https://arterm.ai",
+          "X-Title": "Arterm",
         },
       })(resolvedModelId);
       break;
@@ -321,7 +321,7 @@ function buildStableSystem(
     : "";
   const memoryBlock =
     projectMemory && projectMemory.trim().length > 0
-      ? `\n\n## PROJECT — ARTEX.md\n${projectMemory.trim()}`
+      ? `\n\n## PROJECT — ARTERM.md\n${projectMemory.trim()}`
       : "";
   return `${base}${memoryBlock}${personaBlock}${customBlock}`;
 }

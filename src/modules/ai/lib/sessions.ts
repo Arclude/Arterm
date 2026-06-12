@@ -14,7 +14,7 @@ export type SessionMeta = {
   modelId?: string;
 };
 
-const STORE_PATH = "artex-ai-sessions.json";
+const STORE_PATH = "arterm-ai-sessions.json";
 const KEY_SESSIONS = "sessions";
 const KEY_ACTIVE = "activeId";
 const messagesKey = (id: string) => `messages:${id}`;

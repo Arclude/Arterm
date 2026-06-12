@@ -197,7 +197,7 @@ const ToolImpl = ({
       </CollapsibleTrigger>
 
       {hasDetails && (
-        <CollapsibleContent className={cn("artex-collapsible-content")}>
+        <CollapsibleContent className={cn("arterm-collapsible-content")}>
           <div className="ml-3 mt-1 space-y-2 border-l border-border/60 pl-3 pb-1">
             {showInputBody ? (
               <ToolInput toolName={toolName} input={input} />

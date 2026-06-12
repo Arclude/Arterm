@@ -5,7 +5,7 @@ import type { AgentStatus } from "@/modules/agents/lib/types";
 import { useEffect, useRef } from "react";
 import { useChatStore } from "../store/chatStore";
 
-const AGENT = "Artex";
+const AGENT = "Arterm";
 
 type RunStatus =
   | "idle"
@@ -69,13 +69,13 @@ export function LocalAgentNotificationsBridge() {
     if (status === "awaiting-approval") {
       fire(
         "attention",
-        "Artex needs your approval",
+        "Arterm needs your approval",
         "Approve a tool to continue",
       );
     } else if (status === "error") {
-      fire("error", "Artex run failed", error ?? undefined);
+      fire("error", "Arterm run failed", error ?? undefined);
     } else if (status === "idle" && isBusy(was)) {
-      fire("finished", "Artex finished", "Your task is ready");
+      fire("finished", "Arterm finished", "Your task is ready");
     }
   }, [status, error]);
 

@@ -1,8 +1,8 @@
 [package]
-name = "artex-marketplace"
+name = "arterm-marketplace"
 version = "0.1.0"
 edition = "2021"
-description = "Backend marketplace API for Artex extensions (publish, search, install)."
+description = "Backend marketplace API for Arterm extensions (publish, search, install)."
 publish = false
 
 [dependencies]

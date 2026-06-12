@@ -75,7 +75,7 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
-      document.getElementById("artex-command-palette-input")?.focus();
+      document.getElementById("arterm-command-palette-input")?.focus();
     }, 0);
     return () => window.clearTimeout(handle);
   }, [open]);
@@ -191,7 +191,7 @@ export function CommandPalette({
         onKeyDown={onCommandKeyDown}
       >
         <CommandInput
-          id="artex-command-palette-input"
+          id="arterm-command-palette-input"
           value={query}
           onValueChange={setQuery}
           placeholder={

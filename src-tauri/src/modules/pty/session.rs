@@ -14,8 +14,8 @@ use super::da_filter::DaFilter;
 use super::shell_init;
 use crate::modules::workspace::WorkspaceEnv;
 
-const AGENT_EVENT: &str = "artex:agent-signal";
-const COMMAND_EVENT: &str = "artex:command-error";
+const AGENT_EVENT: &str = "arterm:agent-signal";
+const COMMAND_EVENT: &str = "arterm:command-error";
 
 // Flusher coalesces a short window after first-byte arrival so we send chunks,
 // not single bytes. MAX_IDLE is only a safety net for missed signals.
@@ -30,7 +30,7 @@ const MAX_PENDING: usize = 4 * 1024 * 1024;
 // Hard reset (ESC c) + dim notice. Written verbatim into the stream when
 // we're forced to discard backlog.
 const OVERFLOW_NOTICE: &[u8] =
-    b"\x1bc\x1b[2m[artex: dropped output due to backpressure]\x1b[0m\r\n";
+    b"\x1bc\x1b[2m[arterm: dropped output due to backpressure]\x1b[0m\r\n";
 
 pub struct Session {
     // Field drop order is intentional. Rust drops fields top-to-bottom:
@@ -172,7 +172,7 @@ pub fn spawn(
     let writer_for_da = writer.clone();
     let app_reader = app.clone();
     let reader_thread = thread::Builder::new()
-        .name("artex-pty-reader".into())
+        .name("arterm-pty-reader".into())
         .spawn(move || {
             let mut buf = [0u8; READ_BUF];
             let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
@@ -238,7 +238,7 @@ pub fn spawn(
     let pending_f = pending.clone();
     let done_f = done.clone();
     thread::Builder::new()
-        .name("artex-pty-flusher".into())
+        .name("arterm-pty-flusher".into())
         .spawn(move || {
             let (lock, cv) = &*pending_f;
             loop {
@@ -270,7 +270,7 @@ pub fn spawn(
     let pending_e = pending;
     let done_e = done;
     thread::Builder::new()
-        .name("artex-pty-waiter".into())
+        .name("arterm-pty-waiter".into())
         .spawn(move || {
             let code = match child.wait() {
                 Ok(status) => status.exit_code() as i32,

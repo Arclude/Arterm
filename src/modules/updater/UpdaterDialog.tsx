@@ -17,11 +17,11 @@ type DistroKey = "arch" | "debian" | "fedora";
 function distroCommand(key: DistroKey, version: string): string {
   switch (key) {
     case "arch":
-      return "yay -S artex-bin";
+      return "yay -S arterm-bin";
     case "debian":
-      return `sudo apt install ./Artex_${version}_amd64.deb`;
+      return `sudo apt install ./Arterm_${version}_amd64.deb`;
     case "fedora":
-      return `sudo dnf install ./Artex-${version}-1.x86_64.rpm`;
+      return `sudo dnf install ./Arterm-${version}-1.x86_64.rpm`;
   }
 }
 
@@ -92,12 +92,12 @@ export function UpdaterDialog() {
               : downloading
                 ? "Downloading update…"
                 : manual
-                  ? `Artex v${manual.version} is available`
-                  : `Artex v${update?.version} is available`}
+                  ? `Arterm v${manual.version} is available`
+                  : `Arterm v${update?.version} is available`}
           </DialogTitle>
           <DialogDescription>
             {ready
-              ? "Restart Artex to finish installing."
+              ? "Restart Arterm to finish installing."
               : downloading
                 ? progress !== null
                   ? `${progress.toFixed(0)}% — ${formatBytes(status.downloaded)}`

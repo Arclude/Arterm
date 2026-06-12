@@ -353,7 +353,7 @@ export function GeneralSection() {
         <Label>Agents</Label>
         <SettingRow
           title="Coding agent notifications"
-          description="Alert when Claude Code or Codex running in a terminal needs your input or finishes. Desktop notification when Artex is unfocused, in-app otherwise."
+          description="Alert when Claude Code or Codex running in a terminal needs your input or finishes. Desktop notification when Arterm is unfocused, in-app otherwise."
         >
           <Switch
             checked={agentNotifications}
@@ -367,7 +367,7 @@ export function GeneralSection() {
         <div className="flex flex-col gap-2">
           <SettingRow
             title="Launch at login"
-            description="Open Artex automatically when you sign in."
+            description="Open Arterm automatically when you sign in."
           >
             <Switch
               checked={autostart}

@@ -303,7 +303,7 @@ pub fn wsl_path_to_unc(distro: &str, path: &str) -> PathBuf {
     // and is normally trustworthy, but a locally-registered malicious distro
     // can name itself with traversal characters; this filter blocks that.
     if !is_safe_distro_name(distro) {
-        return PathBuf::from(r"\\wsl.localhost\__artex_invalid_distro__");
+        return PathBuf::from(r"\\wsl.localhost\__arterm_invalid_distro__");
     }
     let normalized = path.replace('\\', "/");
     let trimmed = normalized.trim_start_matches('/');
@@ -556,7 +556,7 @@ mod tests {
         // never escape the WSL share root.
         let p = wsl_path_to_unc("..\\..\\..\\Windows", "/etc/passwd");
         let s = p.to_string_lossy();
-        assert!(s.contains("__artex_invalid_distro__"), "got: {s}");
+        assert!(s.contains("__arterm_invalid_distro__"), "got: {s}");
         assert!(!s.contains("\\..\\"), "got: {s}");
     }
 
@@ -564,7 +564,7 @@ mod tests {
     fn wsl_path_to_unc_accepts_valid_distro() {
         let p = wsl_path_to_unc("Ubuntu", "/etc/hosts");
         let s = p.to_string_lossy();
-        assert!(!s.contains("__artex_invalid_distro__"), "got: {s}");
+        assert!(!s.contains("__arterm_invalid_distro__"), "got: {s}");
     }
 
     #[test]
@@ -632,7 +632,7 @@ mod auth_tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        p.push(format!("artex-auth-{label}-{nanos}-{}", std::process::id()));
+        p.push(format!("arterm-auth-{label}-{nanos}-{}", std::process::id()));
         fs::create_dir_all(&p).expect("create tempdir");
         fs::canonicalize(&p).expect("canonicalize tempdir")
     }
@@ -696,7 +696,7 @@ mod auth_tests {
     fn authorize_spawn_cwd_rejects_missing_path() {
         let mut missing = env::temp_dir();
         missing.push(format!(
-            "artex-missing-{}-{}",
+            "arterm-missing-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -726,7 +726,7 @@ mod auth_tests {
     #[test]
     fn authorize_user_spawn_cwd_rejects_missing_path() {
         let mut missing = env::temp_dir();
-        missing.push(format!("artex-user-missing-{}", std::process::id()));
+        missing.push(format!("arterm-user-missing-{}", std::process::id()));
         let reg = WorkspaceRegistry::default();
         let s = missing.to_string_lossy().into_owned();
         let err = authorize_user_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
@@ -769,7 +769,7 @@ mod auth_tests {
     #[test]
     fn resolve_launch_cwd_ignores_nonexistent_cli_dir() {
         let env = tempdir("envfb");
-        let resolved = resolve_launch_cwd(Some("/no/such/artex/dir"), Some(env.clone()));
+        let resolved = resolve_launch_cwd(Some("/no/such/arterm/dir"), Some(env.clone()));
         assert_eq!(resolved, Some(env));
     }
 }

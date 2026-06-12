@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Artex uses your microphone for AI voice input.</string>
+	<string>Arterm uses your microphone for AI voice input.</string>
 </dict>
 </plist>

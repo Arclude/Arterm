@@ -97,7 +97,7 @@ export async function resolveSource(
       });
     } catch (e) {
       console.error(
-        `[artex] failed reading ${manifest.id}/${manifest.main}:`,
+        `[arterm] failed reading ${manifest.id}/${manifest.main}:`,
         e,
       );
       return null;
@@ -132,7 +132,7 @@ export async function loadExtensions(): Promise<void> {
   try {
     raw = await invoke<RawExtension[]>("extensions_list");
   } catch (e) {
-    console.error("[artex] extensions_list failed:", e);
+    console.error("[arterm] extensions_list failed:", e);
     useExtensionsStore.getState().set([], []);
     extensionHost.syncExtensions(new Map());
     useExtensionCommandsStore.getState().set([]);
@@ -217,7 +217,7 @@ export async function loadExtensions(): Promise<void> {
     void extensionHost
       .ensureActivated(id)
       .catch((e) =>
-        console.error(`[artex] startup activation ${id} failed:`, e),
+        console.error(`[arterm] startup activation ${id} failed:`, e),
       );
   }
 }
@@ -263,8 +263,8 @@ export async function installSampleExtension(): Promise<void> {
 /** The sample extension's entry code, stored on disk as `main.js`. */
 const SAMPLE_MAIN_JS = [
   "exports.activate = (context) => {",
-  '  const cmd = artex.commands.registerCommand("sample.hello", () => {',
-  '    artex.window.showInformationMessage("Hello from the Sample Extension! \\uD83C\\uDF89");',
+  '  const cmd = arterm.commands.registerCommand("sample.hello", () => {',
+  '    arterm.window.showInformationMessage("Hello from the Sample Extension! \\uD83C\\uDF89");',
   "  });",
   "  context.subscriptions.push(cmd);",
   '  console.log("sample-pack activated");',
@@ -275,13 +275,13 @@ const SAMPLE_MAIN_JS = [
 /** A self-contained demo: one theme, one snippet, and one executable command
  *  that runs in the worker sandbox and calls back into the host API. */
 const SAMPLE_EXTENSION: ExtensionManifest = {
-  id: "artex.sample-pack",
+  id: "arterm.sample-pack",
   name: "Sample Pack",
   version: "1.1.0",
-  author: "Artex",
+  author: "Arterm",
   description:
     "Demo extension — a 'Midnight Ocean' theme, a /snippet, and a Hello command.",
-  engines: { artex: "^0.8.0" },
+  engines: { arterm: "^0.8.0" },
   permissions: [],
   activationEvents: ["onCommand:sample.hello"],
   main: "main.js",
@@ -297,7 +297,7 @@ const SAMPLE_EXTENSION: ExtensionManifest = {
       {
         id: "midnight-ocean",
         name: "Midnight Ocean",
-        author: "Artex",
+        author: "Arterm",
         description: "A deep blue dark theme from the sample extension.",
         variants: {
           dark: {

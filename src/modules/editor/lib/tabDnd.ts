@@ -2,7 +2,7 @@
 // drop zones can ignore unrelated drags; `draggedTabId` lets drop targets show
 // live feedback during dragover (where dataTransfer payloads aren't readable).
 
-export const TAB_MIME = "application/x-artex-editor-tab";
+export const TAB_MIME = "application/x-arterm-editor-tab";
 
 let dragged: number | null = null;
 

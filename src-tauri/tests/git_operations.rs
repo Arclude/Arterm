@@ -1,10 +1,10 @@
 mod common;
 
-use artex_lib::modules::fs::to_canon;
-use artex_lib::modules::git::errors::GitError;
-use artex_lib::modules::git::operations;
-use artex_lib::modules::git::types::DiscardEntry;
-use artex_lib::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use arterm_lib::modules::fs::to_canon;
+use arterm_lib::modules::git::errors::GitError;
+use arterm_lib::modules::git::operations;
+use arterm_lib::modules::git::types::DiscardEntry;
+use arterm_lib::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 use common::{git_available, GitRepoFixture};
 use tempfile::TempDir;
 

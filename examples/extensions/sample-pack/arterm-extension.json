@@ -1,17 +1,17 @@
 {
-  "id": "artex.sample-pack",
+  "id": "arterm.sample-pack",
   "name": "Sample Pack",
   "version": "1.0.0",
-  "author": "Artex",
+  "author": "Arterm",
   "description": "Demo extension — adds a 'Midnight Ocean' theme and an /explain snippet.",
-  "engines": { "artex": "^0.7.0" },
+  "engines": { "arterm": "^0.7.0" },
   "permissions": [],
   "contributes": {
     "themes": [
       {
         "id": "midnight-ocean",
         "name": "Midnight Ocean",
-        "author": "Artex",
+        "author": "Arterm",
         "description": "A deep blue dark theme from the sample extension.",
         "variants": {
           "dark": {

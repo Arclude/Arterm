@@ -76,4 +76,4 @@ export type Theme = {
   };
 };
 
-export const DEFAULT_THEME_ID = "artex-default";
+export const DEFAULT_THEME_ID = "arterm-default";

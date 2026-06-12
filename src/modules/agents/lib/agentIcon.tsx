@@ -22,7 +22,7 @@ export function AgentIcon({
   size?: number;
   className?: string;
 }) {
-  if (agent.toLowerCase().includes("artex")) {
+  if (agent.toLowerCase().includes("arterm")) {
     return (
       <img
         src="/logo.png"

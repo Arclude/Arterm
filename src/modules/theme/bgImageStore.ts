@@ -1,4 +1,4 @@
-const DB_NAME = "artex-bg-images";
+const DB_NAME = "arterm-bg-images";
 const STORE = "images";
 const VERSION = 1;
 

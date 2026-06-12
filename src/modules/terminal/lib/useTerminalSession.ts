@@ -157,7 +157,7 @@ configureRendererPool({
         pty
           .resize(cols, rows + 1)
           .then(() => pty.resize(cols, rows))
-          .catch((e) => console.warn("[artex] kickPty failed:", e));
+          .catch((e) => console.warn("[arterm] kickPty failed:", e));
       },
     };
   },
@@ -350,7 +350,7 @@ function attachSession(
       })
       .catch((e) => {
         s.ptyOpening = false;
-        console.error("[artex] openPty failed:", e);
+        console.error("[arterm] openPty failed:", e);
       });
   }
 }
@@ -390,7 +390,7 @@ export async function respawnSession(
     pty = await openPtyForSession(leafId, s, cwd ?? s.initialCwd);
   } catch (e) {
     s.ptyOpening = false;
-    console.error("[artex] respawn openPty failed:", e);
+    console.error("[arterm] respawn openPty failed:", e);
     return;
   }
   s.ptyOpening = false;
@@ -415,7 +415,7 @@ export async function leafHasForegroundProcess(
     return result;
   } catch (e) {
     console.error(
-      "[artex] pty_has_foreground_process failed for leaf",
+      "[arterm] pty_has_foreground_process failed for leaf",
       leafId,
       e,
     );

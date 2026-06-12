@@ -11,7 +11,7 @@ pub fn generate_token() -> String {
     use rand::RngCore;
     let mut bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut bytes);
-    format!("artex_{}", hex::encode(bytes))
+    format!("arterm_{}", hex::encode(bytes))
 }
 
 /// SHA-256 of a token, hex-encoded. We store/compare hashes, never the token.

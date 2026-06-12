@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use artex_lib::modules::fs::to_canon;
-use artex_lib::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use arterm_lib::modules::fs::to_canon;
+use arterm_lib::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 use tempfile::TempDir;
 
 pub struct GitRepoFixture {
@@ -23,8 +23,8 @@ impl GitRepoFixture {
 
         run_git_in(&canonical, &["init", "-q"]);
         run_git_in(&canonical, &["symbolic-ref", "HEAD", "refs/heads/main"]);
-        run_git_in(&canonical, &["config", "user.email", "test@artex.local"]);
-        run_git_in(&canonical, &["config", "user.name", "Artex Test"]);
+        run_git_in(&canonical, &["config", "user.email", "test@arterm.local"]);
+        run_git_in(&canonical, &["config", "user.name", "Arterm Test"]);
         run_git_in(&canonical, &["config", "commit.gpgsign", "false"]);
         run_git_in(&canonical, &["config", "core.autocrlf", "false"]);
 

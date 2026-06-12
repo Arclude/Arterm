@@ -39,14 +39,14 @@ pub struct RegisterPublisherResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct PublishRequest {
-    /// The full `artex-extension.json` as a JSON object. `id`, `name`, and
+    /// The full `arterm-extension.json` as a JSON object. `id`, `name`, and
     /// `version` are required; `id` must start with "<publisher>.".
     pub manifest: serde_json::Value,
 }
 
 // ---- registry / response shapes ----------------------------------------------
 
-/// One entry in the registry index. Shape matches the Artex app's
+/// One entry in the registry index. Shape matches the Arterm app's
 /// `RegistryEntry` so the existing Marketplace UI consumes it unchanged.
 #[derive(Debug, Serialize)]
 pub struct RegistryEntry {

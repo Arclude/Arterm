@@ -1,7 +1,7 @@
 //! Extension packages.
 //!
 //! Extensions live as folders under `{app_local_data}/extensions/<folder>/`,
-//! each containing an `artex-extension.json` manifest plus optional sibling
+//! each containing an `arterm-extension.json` manifest plus optional sibling
 //! files (e.g. an executable extension's `main.js`). This module only reads,
 //! writes, and removes those folders — it runs NO extension code. The manifest
 //! is returned to the frontend as raw JSON; all schema validation happens in
@@ -20,7 +20,7 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
-const MANIFEST_FILE: &str = "artex-extension.json";
+const MANIFEST_FILE: &str = "arterm-extension.json";
 
 /// Max bytes for a fetched registry index or remote manifest. Declarative
 /// packages are tiny; this caps a hostile/huge response.
@@ -143,7 +143,7 @@ pub fn extensions_list(app: AppHandle) -> Result<Vec<RawExtension>, String> {
 
 /// Write (or overwrite) an extension's manifest plus optional sibling files,
 /// creating its folder. Used to install a package programmatically (e.g. the
-/// bundled sample, or an unpacked `.artex-ext`) without a native file dialog.
+/// bundled sample, or an unpacked `.arterm-ext`) without a native file dialog.
 /// `id` becomes the folder name (sanitized). `files` maps a flat file name
 /// (e.g. `main.js`) to its UTF-8 contents.
 #[tauri::command]

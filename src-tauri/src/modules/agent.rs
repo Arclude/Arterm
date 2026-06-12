@@ -7,13 +7,13 @@ const HOOK_EVENTS: [(&str, &str); 3] = [
 ];
 
 // Includes the pre-v2.1.139 /dev/tty variant so re-running migrates it.
-const OWNED_MARKERS: [&str; 2] = ["notify;Artex;", "artex;notify"];
+const OWNED_MARKERS: [&str; 2] = ["notify;Arterm;", "arterm;notify"];
 
-// Gated on ARTEX_TERMINAL; no-op outside Artex. Returns the sequence via
+// Gated on ARTERM_TERMINAL; no-op outside Arterm. Returns the sequence via
 // `terminalSequence` because hooks lost /dev/tty access in v2.1.139.
 fn hook_cmd(event: &str) -> String {
     format!(
-        r#"[ -n "$ARTEX_TERMINAL" ] && printf '{{"terminalSequence":"\\u001b]777;notify;Artex;{event}\\u0007"}}' || true"#
+        r#"[ -n "$ARTERM_TERMINAL" ] && printf '{{"terminalSequence":"\\u001b]777;notify;Arterm;{event}\\u0007"}}' || true"#
     )
 }
 
@@ -100,7 +100,7 @@ pub fn agent_enable_claude_hooks() -> Result<(), String> {
 
     // Write to a sibling temp file then rename so a crash mid-write can't leave
     // a truncated settings.json.
-    let tmp = path.with_extension("json.artex-tmp");
+    let tmp = path.with_extension("json.arterm-tmp");
     std::fs::write(&tmp, out).map_err(|e| format!("write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, &path).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
@@ -119,7 +119,7 @@ pub fn agent_claude_hooks_status() -> bool {
     };
     HOOK_EVENTS
         .iter()
-        .all(|(_, m)| content.contains(&format!("notify;Artex;{m}")))
+        .all(|(_, m)| content.contains(&format!("notify;Arterm;{m}")))
 }
 
 #[cfg(test)]
@@ -143,9 +143,9 @@ mod tests {
         assert_eq!(hook_count(&out, "UserPromptSubmit"), 1);
         assert_eq!(hook_count(&out, "Notification"), 1);
         assert_eq!(hook_count(&out, "Stop"), 1);
-        assert!(command(&out, "Notification", 0).contains("notify;Artex;attention"));
-        assert!(command(&out, "Stop", 0).contains("notify;Artex;finished"));
-        assert!(command(&out, "UserPromptSubmit", 0).contains("notify;Artex;working"));
+        assert!(command(&out, "Notification", 0).contains("notify;Arterm;attention"));
+        assert!(command(&out, "Stop", 0).contains("notify;Arterm;finished"));
+        assert!(command(&out, "UserPromptSubmit", 0).contains("notify;Arterm;working"));
         assert!(command(&out, "Stop", 0).contains("terminalSequence"));
         assert!(!command(&out, "Stop", 0).contains("/dev/tty"));
     }
@@ -165,7 +165,7 @@ mod tests {
                 "Notification": [
                     { "hooks": [ {
                         "type": "command",
-                        "command": "[ -n \"$ARTEX_TERMINAL\" ] && printf '\\033]777;artex;notify\\033\\\\' > /dev/tty || true"
+                        "command": "[ -n \"$ARTERM_TERMINAL\" ] && printf '\\033]777;arterm;notify\\033\\\\' > /dev/tty || true"
                     } ] }
                 ]
             }
@@ -210,7 +210,7 @@ mod tests {
         });
         let out = merge_hooks(input);
         assert_eq!(hook_count(&out, "Notification"), 1);
-        assert!(command(&out, "Notification", 0).contains("notify;Artex;attention"));
+        assert!(command(&out, "Notification", 0).contains("notify;Arterm;attention"));
     }
 
     #[test]

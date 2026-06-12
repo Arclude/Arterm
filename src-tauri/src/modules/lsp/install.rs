@@ -1,6 +1,6 @@
 //! Mason-style language-server installer.
 //!
-//! Downloads a prebuilt language-server binary into an Artex-managed directory
+//! Downloads a prebuilt language-server binary into an Arterm-managed directory
 //! under `{app_local_data}/language-servers/<serverId>/` and returns its
 //! absolute path. The frontend writes that path into the `lspServers` override
 //! so the existing `lsp_start` / `resolve_program` flow spawns it unchanged —
@@ -21,7 +21,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::modules::net;
 
-const MANIFEST_FILE: &str = "artex-server.json";
+const MANIFEST_FILE: &str = "arterm-server.json";
 
 /// Hard cap on a downloaded artifact (compressed). rust-analyzer is ~30-60MB;
 /// 300MB leaves headroom for larger servers while stopping a runaway response

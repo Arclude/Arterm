@@ -330,7 +330,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       const ext = path.split(".").pop()?.toLowerCase() ?? null;
       languageRef.current = ext;
       const resolve = async (): Promise<Extension> => {
-        if (path.toLowerCase().endsWith(".artex-theme")) {
+        if (path.toLowerCase().endsWith(".arterm-theme")) {
           const [{ json }, { colorSwatches }] = await Promise.all([
             import("@codemirror/lang-json"),
             import("./lib/colorSwatches"),
@@ -387,7 +387,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
           return;
         }
         window.dispatchEvent(
-          new CustomEvent("artex:lsp-goto", {
+          new CustomEvent("arterm:lsp-goto", {
             detail: {
               path: uriToPath(target.uri),
               line: target.line,

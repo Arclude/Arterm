@@ -93,7 +93,7 @@ pub fn spawn(
     };
 
     thread::Builder::new()
-        .name(format!("artex-lsp-reader-{pid}"))
+        .name(format!("arterm-lsp-reader-{pid}"))
         .spawn(move || {
             let mut buf = [0u8; READ_BUF];
             let mut parser = FrameParser::new();
@@ -128,7 +128,7 @@ pub fn spawn(
     // Language servers narrate progress and errors on stderr; surface it in the
     // app log instead of letting the pipe fill and block the child.
     thread::Builder::new()
-        .name(format!("artex-lsp-stderr-{pid}"))
+        .name(format!("arterm-lsp-stderr-{pid}"))
         .spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
@@ -147,7 +147,7 @@ pub fn spawn(
 
     let waiter = Arc::clone(&child);
     thread::Builder::new()
-        .name(format!("artex-lsp-waiter-{pid}"))
+        .name(format!("arterm-lsp-waiter-{pid}"))
         .spawn(move || match waiter.wait() {
             Ok(status) => log::info!("lsp exited pid={pid} status={status:?}"),
             Err(e) => log::warn!("lsp wait failed pid={pid}: {e}"),

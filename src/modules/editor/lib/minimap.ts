@@ -6,7 +6,7 @@ import type { EditorView } from "@codemirror/view";
 // the document overview and the viewport overlay into it.
 function create(_view: EditorView): { dom: HTMLElement } {
   const dom = document.createElement("div");
-  dom.className = "artex-minimap-host";
+  dom.className = "arterm-minimap-host";
   return { dom };
 }
 

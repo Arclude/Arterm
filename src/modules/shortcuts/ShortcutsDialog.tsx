@@ -34,7 +34,7 @@ export function ShortcutsDialog({ open, onOpenChange }: Props) {
           <div className="flex flex-col gap-1.5">
             <DialogTitle>Keyboard shortcuts</DialogTitle>
             <DialogDescription>
-              Quick reference for Artex controls.
+              Quick reference for Arterm controls.
             </DialogDescription>
           </div>
           <Button

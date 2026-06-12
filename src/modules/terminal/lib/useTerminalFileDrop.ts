@@ -54,7 +54,7 @@ export function useTerminalFileDrop(): void {
         if (disposed) fn();
         else unlisten = fn;
       })
-      .catch((err) => console.error("[artex] drag-drop listen failed:", err));
+      .catch((err) => console.error("[arterm] drag-drop listen failed:", err));
 
     return () => {
       disposed = true;

@@ -82,7 +82,7 @@ function BackgroundImage({ fastImageId }: { fastImageId: string | null }) {
   return createPortal(
     <div
       aria-hidden
-      className="artex-bg-surface"
+      className="arterm-bg-surface"
       style={{
         position: "fixed",
         inset: 0,

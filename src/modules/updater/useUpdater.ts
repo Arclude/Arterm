@@ -4,10 +4,10 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useState } from "react";
 import { IS_LINUX } from "@/lib/platform";
 
-const LAST_CHECK_KEY = "artex:updater:last-check";
+const LAST_CHECK_KEY = "arterm:updater:last-check";
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const GITHUB_LATEST_RELEASE =
-  "https://api.github.com/repos/Arclude/Artex/releases/latest";
+  "https://api.github.com/repos/Arclude/Arterm/releases/latest";
 
 export interface ManualUpdateInfo {
   version: string;

@@ -1,5 +1,5 @@
-//! Artex marketplace — a small Axum + Postgres service that publishers push
-//! extensions to and the Artex app installs from.
+//! Arterm marketplace — a small Axum + Postgres service that publishers push
+//! extensions to and the Arterm app installs from.
 //!
 //! The `GET /v1/registry` response intentionally matches the app's existing
 //! `RegistryEntry` shape, so pointing the app's Marketplace registry URL at
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,artex_marketplace=debug".into()),
+                .unwrap_or_else(|_| "info,arterm_marketplace=debug".into()),
         )
         .init();
 
@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    tracing::info!("artex-marketplace listening on {bind_addr}");
+    tracing::info!("arterm-marketplace listening on {bind_addr}");
     axum::serve(listener, app).await?;
     Ok(())
 }

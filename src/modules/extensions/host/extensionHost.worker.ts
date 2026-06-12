@@ -5,7 +5,7 @@
  * it needs from the app is requested over postMessage and granted (or denied)
  * by the host on the main thread.
  *
- * An extension's entry source is run with `artex`, `module`, `exports`, and a
+ * An extension's entry source is run with `arterm`, `module`, `exports`, and a
  * sandboxed `console` in scope. It is expected to assign `exports.activate` and
  * optionally `exports.deactivate`, mirroring the VS Code activation contract.
  */
@@ -30,7 +30,7 @@ const pendingApi = new Map<
   { resolve: (v: unknown) => void; reject: (e: unknown) => void }
 >();
 
-/** Build the `artex` API object handed to one extension's code. */
+/** Build the `arterm` API object handed to one extension's code. */
 function makeApi(extensionId: string) {
   const call = (method: string, args: unknown[]): Promise<unknown> => {
     const callId = apiSeq++;
@@ -113,24 +113,24 @@ async function activate(extensionId: string, source: string) {
     return;
   }
   try {
-    const artex = makeApi(extensionId);
+    const arterm = makeApi(extensionId);
     const consoleProxy = makeConsole(extensionId);
     const module: { exports: Record<string, unknown> } = { exports: {} };
     // Run the extension's entry source. `new Function` keeps it out of this
     // module's lexical scope; the worker boundary is the real sandbox.
     const run = new Function(
-      "artex",
+      "arterm",
       "module",
       "exports",
       "console",
       source,
     ) as (
-      artex: unknown,
+      arterm: unknown,
       module: unknown,
       exports: unknown,
       console: unknown,
     ) => void;
-    run(artex, module, module.exports, consoleProxy);
+    run(arterm, module, module.exports, consoleProxy);
 
     const activateFn = module.exports.activate;
     if (typeof activateFn === "function") {

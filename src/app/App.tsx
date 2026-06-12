@@ -171,8 +171,8 @@ function dirname(path: string | null): string | null {
 const SIDEBAR_DEFAULT_WIDTH = 260;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
-const SIDEBAR_WIDTH_STORAGE_KEY = "artex.sidebar.width";
-const SIDEBAR_VIEW_STORAGE_KEY = "artex.sidebar.view";
+const SIDEBAR_WIDTH_STORAGE_KEY = "arterm.sidebar.width";
+const SIDEBAR_VIEW_STORAGE_KEY = "arterm.sidebar.view";
 
 function clampSidebarWidth(width: number): number {
   return Math.min(
@@ -647,12 +647,12 @@ export default function App() {
                 return;
               const parsed = parseThemeFile(res.content);
               if (!parsed.ok) {
-                console.warn("[artex] theme not applied:", parsed.error);
+                console.warn("[arterm] theme not applied:", parsed.error);
                 return;
               }
               await saveCustomTheme(parsed.theme);
             } catch (e) {
-              console.warn("[artex] theme ingest failed:", e);
+              console.warn("[arterm] theme ingest failed:", e);
             }
           })();
         },
@@ -699,8 +699,8 @@ export default function App() {
       const detail = (e as CustomEvent<{ path: string }>).detail;
       if (detail?.path) openFileTab(detail.path);
     };
-    window.addEventListener("artex:lsp-goto", onLspGoto);
-    return () => window.removeEventListener("artex:lsp-goto", onLspGoto);
+    window.addEventListener("arterm:lsp-goto", onLspGoto);
+    return () => window.removeEventListener("arterm:lsp-goto", onLspGoto);
   }, [openFileTab]);
 
   const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
@@ -838,7 +838,7 @@ export default function App() {
       // Dispatch a window event the composer listens for. Same pattern as
       // selections — keeps file-explorer decoupled from the AI module.
       window.dispatchEvent(
-        new CustomEvent<string>("artex:ai-attach-file", { detail: path }),
+        new CustomEvent<string>("arterm:ai-attach-file", { detail: path }),
       );
       openPanel();
       focusInput(null);
@@ -1544,7 +1544,7 @@ export default function App() {
           if (result !== "ready") {
             if (result === "timeout") {
               console.warn(
-                "[artex] Claude TUI did not appear in time; aborting prompt send",
+                "[arterm] Claude TUI did not appear in time; aborting prompt send",
               );
             }
             useManagedAgentsStore.getState().remove(leafId);

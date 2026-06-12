@@ -107,8 +107,8 @@ export function AiComposerProvider({ children }: ProviderProps) {
         void attachFileByPath(path);
       }
     };
-    window.addEventListener("artex:ai-attach-file", onAttach);
-    return () => window.removeEventListener("artex:ai-attach-file", onAttach);
+    window.addEventListener("arterm:ai-attach-file", onAttach);
+    return () => window.removeEventListener("arterm:ai-attach-file", onAttach);
     // attachFileByPath is stable for our purposes (closes over setFiles only)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -219,7 +219,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
       return;
 
     // Slash-command interception. `/plan` toggles plan mode; `/init` rewrites
-    // the prompt to the ARTEX.md scan template before sending.
+    // the prompt to the ARTERM.md scan template before sending.
     let effectiveText = trimmed;
     let commandMarker: string | null = null;
     let commandSource = trimmed;
@@ -240,7 +240,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
       if (outcome.kind === "send-prompt") {
         effectiveText = outcome.prompt;
         if (outcome.commandName) {
-          commandMarker = `<artex-command name="${outcome.commandName}" />`;
+          commandMarker = `<arterm-command name="${outcome.commandName}" />`;
         }
       }
     }

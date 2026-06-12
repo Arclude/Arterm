@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "author": "Your Name",
   "description": "Example executable extension — adds palette commands and reads a workspace file.",
-  "engines": { "artex": "^0.8.0" },
+  "engines": { "arterm": "^0.8.0" },
   "permissions": ["fs:read"],
   "main": "main.js",
   "activationEvents": ["onCommand:hello.world", "onCommand:hello.readPackage"],

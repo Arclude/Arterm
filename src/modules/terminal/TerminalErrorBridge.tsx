@@ -197,7 +197,7 @@ export function TerminalErrorBridge({
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
-    listen<CommandErrorSignal>("artex:command-error", (e) =>
+    listen<CommandErrorSignal>("arterm:command-error", (e) =>
       handleSignal(e.payload, () => ctxRef.current),
     )
       .then((u) => {

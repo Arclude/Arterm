@@ -1,4 +1,4 @@
-# artex-shell-integration (bashrc)
+# arterm-shell-integration (bashrc)
 #
 # Differences vs zsh integration:
 # - We emulate login-shell init manually (/etc/profile, profile files) because
@@ -7,8 +7,8 @@
 #   skip it — a fragile DEBUG-trap alternative would clobber the user's own
 #   traps and interact badly with debuggers.
 
-if [ -z "$__ARTEX_HOOKS_LOADED" ]; then
-  __ARTEX_HOOKS_LOADED=1
+if [ -z "$__ARTERM_HOOKS_LOADED" ]; then
+  __ARTERM_HOOKS_LOADED=1
 
   [ -f /etc/profile ] && source /etc/profile
   [ -f /etc/bashrc ] && source /etc/bashrc
@@ -24,7 +24,7 @@ if [ -z "$__ARTEX_HOOKS_LOADED" ]; then
   # on reload, guard with a flag.
   [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
 
-  _artex_urlencode() {
+  _arterm_urlencode() {
     local LC_ALL=C s="$1" i c
     for (( i=0; i<${#s}; i++ )); do
       c="${s:i:1}"
@@ -35,20 +35,20 @@ if [ -z "$__ARTEX_HOOKS_LOADED" ]; then
     done
   }
 
-  _artex_precmd() {
-    local _artex_ret=$?
-    printf '\e]133;D;%s\e\\' "$_artex_ret"
-    printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(uname -n 2>/dev/null)}" "$(_artex_urlencode "$PWD")"
-    if [ -z "$__ARTEX_PS1_INJECTED" ]; then
+  _arterm_precmd() {
+    local _arterm_ret=$?
+    printf '\e]133;D;%s\e\\' "$_arterm_ret"
+    printf '\e]7;file://%s%s\e\\' "${HOSTNAME:-$(uname -n 2>/dev/null)}" "$(_arterm_urlencode "$PWD")"
+    if [ -z "$__ARTERM_PS1_INJECTED" ]; then
       PS1='\[\e]133;B\e\\\]'"$PS1"
-      __ARTEX_PS1_INJECTED=1
+      __ARTERM_PS1_INJECTED=1
     fi
     printf '\e]133;A\e\\'
   }
 
   case ":${PROMPT_COMMAND:-}:" in
-    *":_artex_precmd:"*) ;;
-    *) PROMPT_COMMAND="_artex_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+    *":_arterm_precmd:"*) ;;
+    *) PROMPT_COMMAND="_arterm_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
   esac
 
   # Pre-exec marker via PS0 (bash 4.4+). PS0 is expanded just before a command
@@ -59,6 +59,6 @@ if [ -z "$__ARTEX_HOOKS_LOADED" ]; then
     PS0='\[\e]133;C\e\\\]'"${PS0:-}"
   fi
 
-  _artex_precmd
+  _arterm_precmd
 fi
 :

@@ -165,7 +165,7 @@
   --app-zoom: 1;
 }
 
-html[data-chrome="borderless"] .artex-bg-surface {
+html[data-chrome="borderless"] .arterm-bg-surface {
   border-radius: 12px;
 }
 .zoom-content {
@@ -342,7 +342,7 @@ html *::-webkit-scrollbar {
   display: none;
 }
 
-@keyframes artex-collapsible-down {
+@keyframes arterm-collapsible-down {
   from {
     height: 0;
     opacity: 0;
@@ -353,7 +353,7 @@ html *::-webkit-scrollbar {
   }
 }
 
-@keyframes artex-collapsible-up {
+@keyframes arterm-collapsible-up {
   from {
     height: var(--radix-collapsible-content-height);
     opacity: 1;
@@ -364,12 +364,12 @@ html *::-webkit-scrollbar {
   }
 }
 
-.artex-collapsible-content {
+.arterm-collapsible-content {
   overflow: hidden;
 }
-.artex-collapsible-content[data-state="open"] {
-  animation: artex-collapsible-down 180ms cubic-bezier(0.4, 0, 0.2, 1);
+.arterm-collapsible-content[data-state="open"] {
+  animation: arterm-collapsible-down 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.artex-collapsible-content[data-state="closed"] {
-  animation: artex-collapsible-up 160ms cubic-bezier(0.4, 0, 0.2, 1);
+.arterm-collapsible-content[data-state="closed"] {
+  animation: arterm-collapsible-up 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }

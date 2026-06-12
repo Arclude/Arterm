@@ -144,7 +144,7 @@ export function MarketplaceSection() {
           <input
             ref={fileRef}
             type="file"
-            accept=".artex-ext,.json,application/json"
+            accept=".arterm-ext,.json,application/json"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];

@@ -297,7 +297,7 @@ export function extensionCommandsToActions(
         .executeCommand(c.extensionId, c.command)
         .catch((err) => {
           const detail = err instanceof Error ? err.message : String(err);
-          console.error(`[artex] command ${c.command} failed:`, err);
+          console.error(`[arterm] command ${c.command} failed:`, err);
           toast.error(`"${c.title}" failed: ${detail}`);
         });
     },

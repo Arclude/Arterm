@@ -1,8 +1,8 @@
-# artex-shell-integration (PowerShell)
+# arterm-shell-integration (PowerShell)
 # Emits OSC 7 (cwd) + OSC 133 A/B/D so the host tracks cwd and prompt boundaries.
 
-if ($global:__ARTEX_HOOKS_LOADED) { return }
-$global:__ARTEX_HOOKS_LOADED = $true
+if ($global:__ARTERM_HOOKS_LOADED) { return }
+$global:__ARTERM_HOOKS_LOADED = $true
 
 try {
     [Console]::InputEncoding  = [System.Text.UTF8Encoding]::new($false)
@@ -11,10 +11,10 @@ try {
 } catch {}
 
 if (Test-Path Function:prompt) {
-    Copy-Item Function:prompt Function:__artex_user_prompt -Force -ErrorAction SilentlyContinue
+    Copy-Item Function:prompt Function:__arterm_user_prompt -Force -ErrorAction SilentlyContinue
 }
 
-function global:__artex_urlencode {
+function global:__arterm_urlencode {
     param([string]$s)
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($s)
     $sb = [System.Text.StringBuilder]::new($bytes.Length)
@@ -46,13 +46,13 @@ function global:prompt {
     if ($loc.Provider.Name -eq 'FileSystem') {
         $cwd = $loc.ProviderPath -replace '\\','/'
         if ($cwd -match '^[A-Za-z]:') { $cwd = "/$cwd" }
-        $cwdEnc = __artex_urlencode $cwd
+        $cwdEnc = __arterm_urlencode $cwd
         $hostName = [System.Environment]::MachineName
         $osc7 = "$esc]7;file://$hostName$cwdEnc$esc\"
     }
 
-    $original = if (Test-Path Function:__artex_user_prompt) {
-        try { & __artex_user_prompt } catch { "PS $((Get-Location).Path)> " }
+    $original = if (Test-Path Function:__arterm_user_prompt) {
+        try { & __arterm_user_prompt } catch { "PS $((Get-Location).Path)> " }
     } else {
         "PS $((Get-Location).Path)> "
     }

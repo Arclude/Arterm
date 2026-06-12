@@ -1,8 +1,8 @@
 mod common;
 
-use artex_lib::modules::fs::grep::{fs_glob, fs_grep};
-use artex_lib::modules::fs::search::{fs_list_files, fs_search};
-use artex_lib::modules::fs::tree::{fs_read_dir, list_subdirs, EntryKind};
+use arterm_lib::modules::fs::grep::{fs_glob, fs_grep};
+use arterm_lib::modules::fs::search::{fs_list_files, fs_search};
+use arterm_lib::modules::fs::tree::{fs_read_dir, list_subdirs, EntryKind};
 use common::FsFixture;
 
 #[test]

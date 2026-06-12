@@ -9,7 +9,7 @@ import {
   type Viewport,
 } from "./miniWindowGeometry";
 
-const STORE_KEY = "artex-ui-mini-window-geom";
+const STORE_KEY = "arterm-ui-mini-window-geom";
 
 const viewport = (): Viewport => ({
   vw: window.innerWidth,

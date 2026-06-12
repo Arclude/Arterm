@@ -177,7 +177,7 @@ export class LspClient {
     const name = this.rootPath.split(/[\\/]/).pop() || "workspace";
     const result = await this.request<InitializeResult>("initialize", {
       processId: null,
-      clientInfo: { name: "Artex" },
+      clientInfo: { name: "Arterm" },
       rootUri: this.rootUri,
       rootPath: this.rootPath,
       workspaceFolders: [{ uri: this.rootUri, name }],

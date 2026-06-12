@@ -403,7 +403,7 @@ function BreakpointsSection() {
             type="button"
             onClick={() =>
               window.dispatchEvent(
-                new CustomEvent("artex:lsp-goto", {
+                new CustomEvent("arterm:lsp-goto", {
                   detail: { path: e.path, line: e.line - 1, character: 0 },
                 }),
               )

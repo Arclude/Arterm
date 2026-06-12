@@ -14,8 +14,8 @@ type State = Preferences & {
 
 let initialized = false;
 
-const FAST_BG_KIND_KEY = "artex-ui-bg-kind-shadow";
-const FAST_BG_IMAGE_ID_KEY = "artex-ui-bg-image-shadow";
+const FAST_BG_KIND_KEY = "arterm-ui-bg-kind-shadow";
+const FAST_BG_IMAGE_ID_KEY = "arterm-ui-bg-image-shadow";
 
 function mirrorBgFastPath(
   kind: Preferences["backgroundKind"],

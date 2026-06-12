@@ -1,12 +1,12 @@
-# Artex — Açık Protokol Dil Araçları Yol Haritası
+# Arterm — Açık Protokol Dil Araçları Yol Haritası
 
 VS Code eklentilerinin verdiği yetenekleri (dil desteği, linter/formatter, syntax/tema, debug)
-**eklenti çalıştırmadan**, eklentilerin dayandığı açık protokollerle (LSP / DAP / TextMate) Artex'e
+**eklenti çalıştırmadan**, eklentilerin dayandığı açık protokollerle (LSP / DAP / TextMate) Arterm'e
 kazandırma planı. 5 ajanlı paralel tasarım çalışmasının çıktısı.
 
 ## Özet
 
-Artex'in zaten üretim kalitesinde tam bir **LSP yığını** var (Rust stdio transport + `Content-Length`
+Arterm'in zaten üretim kalitesinde tam bir **LSP yığını** var (Rust stdio transport + `Content-Length`
 framing, `resolve_program` PATH/PATHEXT yürüyüşü, Job-object alt-süreç öldürme, TS JSON-RPC
 client/manager/diagnostics, ayarlar UI'ı). Dört yetenekten üçü bu mevcut temelin **uzantısı**, dördüncüsü
 (TextMate) ondan **bağımsız**. Bu, sıralamayı belirleyen stratejik içgörü.

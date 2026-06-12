@@ -21,7 +21,7 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 
 export type ThemePref = "system" | "light" | "dark";
 
-export const DEFAULT_THEME_ID = "artex-default";
+export const DEFAULT_THEME_ID = "arterm-default";
 
 export type BackgroundKind = "none" | "image";
 
@@ -161,7 +161,7 @@ export type Preferences = {
   statusBar: StatusBarVisibility;
 };
 
-const STORE_PATH = "artex-settings.json";
+const STORE_PATH = "arterm-settings.json";
 const KEY_THEME = "theme";
 const KEY_THEME_ID = "themeId";
 const KEY_BG_KIND = "backgroundKind";
@@ -276,7 +276,7 @@ const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
 // page lives in a separate webview, so writes there never reach the main
 // window's subscribers. Mirror every setter through a Tauri event so any
 // window can listen.
-const PREFS_CHANGED_EVENT = "artex://prefs-changed";
+const PREFS_CHANGED_EVENT = "arterm://prefs-changed";
 
 async function writePref<T>(key: string, value: T): Promise<void> {
   await store.set(key, value);
@@ -724,7 +724,7 @@ export async function onPreferencesChange(
 
 // API key changes are stored in OS keychain (not the prefs store),
 // so we broadcast via a Tauri event for cross-window listeners.
-const KEYS_CHANGED_EVENT = "artex://ai-keys-changed";
+const KEYS_CHANGED_EVENT = "arterm://ai-keys-changed";
 
 export async function emitKeysChanged(): Promise<void> {
   await emit(KEYS_CHANGED_EVENT);
