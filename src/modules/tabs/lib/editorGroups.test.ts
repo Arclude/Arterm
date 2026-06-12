@@ -7,6 +7,7 @@ import {
   moveTab,
   placeEditor,
   removeEditor,
+  sanitizeEditorGroups,
   splitActiveGroup,
 } from "./editorGroups";
 
@@ -106,5 +107,46 @@ describe("activateTabInGroup", () => {
     s = activateTabInGroup(s, 100, 10);
     expect(s.activeGroupId).toBe(100);
     expect(s.groups[100].activeTabId).toBe(10);
+  });
+});
+
+describe("sanitizeEditorGroups", () => {
+  it("passes a consistent state through unchanged", () => {
+    const s = seed();
+    expect(sanitizeEditorGroups(s, new Set([10, 11, 12]))).toEqual(s);
+  });
+
+  it("drops unknown tab ids and repairs the group's active tab", () => {
+    const s = seed(); // 100:[10,11,12] active 12
+    const out = sanitizeEditorGroups(s, new Set([10, 11]));
+    expect(out.groups[100]).toEqual({ tabIds: [10, 11], activeTabId: 10 });
+  });
+
+  it("collapses emptied groups out of the layout and refocuses", () => {
+    let s = seed();
+    s = splitActiveGroup(s, "row", 200, 201, 99); // 100:[10,11,12], 201:[99] active
+    const out = sanitizeEditorGroups(s, new Set([10, 11, 12]));
+    expect(leafIds(out.layout!)).toEqual([100]);
+    expect(out.groups[201]).toBeUndefined();
+    expect(out.activeGroupId).toBe(100);
+  });
+
+  it("returns EMPTY_GROUPS when nothing survives", () => {
+    const s = seed();
+    expect(sanitizeEditorGroups(s, new Set())).toEqual(EMPTY_GROUPS);
+    expect(sanitizeEditorGroups(EMPTY_GROUPS, new Set([10]))).toEqual(
+      EMPTY_GROUPS,
+    );
+  });
+
+  it("drops groups whose leaf is missing from the layout", () => {
+    const s = seed();
+    const broken = {
+      ...s,
+      groups: { ...s.groups, 999: { tabIds: [10], activeTabId: 10 } },
+    };
+    const out = sanitizeEditorGroups(broken, new Set([10, 11, 12]));
+    expect(out.groups[999]).toBeUndefined();
+    expect(leafIds(out.layout!)).toEqual([100]);
   });
 });

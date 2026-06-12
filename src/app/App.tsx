@@ -23,6 +23,8 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLaunchDir } from "@/lib/launchDir";
+import { getSavedSession } from "@/modules/session/persistence";
+import { useSessionPersistence } from "@/modules/session/useSessionPersistence";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { cn } from "@/lib/utils";
@@ -241,12 +243,17 @@ export default function App() {
     activateEditorInGroup,
     moveEditorTab,
     showEditors,
-  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
+  } = useTabs(
+    getLaunchDir() ? { cwd: getLaunchDir() } : undefined,
+    getSavedSession(),
+  );
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+
+  useSessionPersistence({ tabs, activeId, editorGroups });
 
   const activeTerminalTab = useMemo(() => {
     const t = tabs.find((x) => x.id === activeId);

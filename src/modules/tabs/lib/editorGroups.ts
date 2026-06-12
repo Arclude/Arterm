@@ -59,6 +59,41 @@ function withGroup(
   };
 }
 
+/** Reconcile a (possibly stale, e.g. restored-from-disk) groups state against
+ * the set of editor tabs that actually exist. Drops unknown tab ids, collapses
+ * emptied groups out of the layout, and repairs active pointers. */
+export function sanitizeEditorGroups(
+  state: EditorGroupsState,
+  validTabIds: ReadonlySet<number>,
+): EditorGroupsState {
+  if (state.layout == null) return EMPTY_GROUPS;
+  const layoutIds = new Set(leafIds(state.layout));
+  const groups: Record<number, EditorGroup> = {};
+  for (const [key, g] of Object.entries(state.groups)) {
+    const gid = Number(key);
+    if (!layoutIds.has(gid)) continue;
+    const tabIds = g.tabIds.filter((id) => validTabIds.has(id));
+    if (tabIds.length === 0) continue;
+    const activeTabId =
+      g.activeTabId != null && tabIds.includes(g.activeTabId)
+        ? g.activeTabId
+        : tabIds[0];
+    groups[gid] = { tabIds, activeTabId };
+  }
+  let layout: PaneNode | null = state.layout;
+  for (const id of layoutIds) {
+    if (!groups[id] && layout) layout = removeLeaf(layout, id);
+  }
+  if (layout == null) return EMPTY_GROUPS;
+  const remaining = leafIds(layout);
+  const activeGroupId =
+    state.activeGroupId != null && groups[state.activeGroupId]
+      ? state.activeGroupId
+      : (remaining[0] ?? null);
+  if (activeGroupId == null) return EMPTY_GROUPS;
+  return { layout, groups, activeGroupId };
+}
+
 /** Place a newly opened editor into the active group, creating the first group
  * if none exist yet. `freshGroupId` is consumed only when bootstrapping. */
 export function placeEditor(

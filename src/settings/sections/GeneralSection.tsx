@@ -27,6 +27,7 @@ import {
   setEditorAutoSave,
   setEditorAutoSaveDelay,
   setMinimap,
+  setRestoreSession,
   setRestoreWindowState,
   setShowHidden,
   setStatusBarItem,
@@ -73,6 +74,7 @@ export function GeneralSection() {
 
   const autostart = usePreferencesStore((s) => s.autostart);
   const restoreWindowState = usePreferencesStore((s) => s.restoreWindowState);
+  const restoreSession = usePreferencesStore((s) => s.restoreSession);
   const vimMode = usePreferencesStore((s) => s.vimMode);
   const minimap = usePreferencesStore((s) => s.minimap);
   const editorAutoSave = usePreferencesStore((s) => s.editorAutoSave);
@@ -381,6 +383,15 @@ export function GeneralSection() {
             <Switch
               checked={restoreWindowState}
               onCheckedChange={(v) => void setRestoreWindowState(v)}
+            />
+          </SettingRow>
+          <SettingRow
+            title="Restore session"
+            description="Reopen your editor tabs, terminals and split layout from the last session. Terminals restart as fresh shells in their saved folders."
+          >
+            <Switch
+              checked={restoreSession}
+              onCheckedChange={(v) => void setRestoreSession(v)}
             />
           </SettingRow>
         </div>

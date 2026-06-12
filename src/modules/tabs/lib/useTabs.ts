@@ -13,6 +13,10 @@ import {
 } from "@/modules/terminal/lib/panes";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
 import {
+  buildInitialState,
+  type SessionSnapshotV1,
+} from "@/modules/session/session";
+import {
   activateEditor as activateEditorOp,
   activateTabInGroup as activateTabInGroupOp,
   activeEditorTabId,
@@ -152,27 +156,22 @@ function titleFromUrl(url: string): string {
   }
 }
 
-export function useTabs(initial?: Partial<TerminalTab>) {
-  const [tabs, setTabs] = useState<Tab[]>(() => {
-    const tabId = 1;
-    const leafId = 2;
-    return [
-      {
-        id: tabId,
-        kind: "terminal",
-        title: initial?.title ?? "shell",
-        cwd: initial?.cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd: initial?.cwd },
-        activeLeafId: leafId,
-      },
-    ];
-  });
-  const [activeId, setActiveId] = useState(1);
+export function useTabs(
+  initial?: Partial<TerminalTab>,
+  restored?: SessionSnapshotV1 | null,
+) {
+  // Computed once — `restored` is drained by the caller and only matters for
+  // the very first render; later renders pass null and the initializers
+  // never re-run anyway.
+  const [init] = useState(() => buildInitialState(initial, restored));
+  const [tabs, setTabs] = useState<Tab[]>(init.tabs);
+  const [activeId, setActiveId] = useState(init.activeId);
   // VS Code-style editor groups: which editor tabs live in which grid pane.
   // Editor tabs still live in `tabs` for their data; this tracks placement.
-  const [editorGroups, setEditorGroups] =
-    useState<EditorGroupsState>(EMPTY_GROUPS);
-  const nextIdRef = useRef(3);
+  const [editorGroups, setEditorGroups] = useState<EditorGroupsState>(
+    init.editorGroups,
+  );
+  const nextIdRef = useRef(init.nextId);
   const tabsRef = useRef(tabs);
   const groupsRef = useRef(editorGroups);
 
