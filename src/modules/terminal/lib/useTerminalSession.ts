@@ -32,6 +32,14 @@ type Callbacks = {
   onCwd?: (cwd: string) => void;
 };
 
+/**
+ * How long an invisible leaf keeps its renderer slot before hibernating.
+ * Brief visits to other tabs (git history, editor, settings…) never drop
+ * output this way; the pool can still evict the slot earlier if a visible
+ * terminal needs it.
+ */
+const UNBIND_GRACE_MS = 45_000;
+
 type Session = {
   pty: PtySession | null;
   ptyOpening: boolean;
@@ -58,6 +66,9 @@ type Session = {
   searchQuery: string | null;
   dormantRing: DormantRing;
   hasSlot: boolean;
+  // Pending deferred unbind scheduled when the leaf went invisible. Cancelled
+  // if the leaf becomes visible again before UNBIND_GRACE_MS elapses.
+  unbindTimer: ReturnType<typeof setTimeout> | null;
   // True if the slot was in alt-screen mode (TUI like vim, htop, dofek)
   // at the most recent release. Read once on the next bind to trigger a
   // SIGWINCH-driven repaint instead of replaying dormant bytes.
@@ -197,6 +208,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     searchQuery: null,
     dormantRing: new DormantRing(),
     hasSlot: false,
+    unbindTimer: null,
     altScreenAtRelease: false,
   };
   sessions.set(leafId, session);
@@ -312,6 +324,10 @@ function bindLeafToSlot(leafId: number, s: Session): void {
 }
 
 function unbindLeafFromSlot(leafId: number, s: Session): void {
+  if (s.unbindTimer !== null) {
+    clearTimeout(s.unbindTimer);
+    s.unbindTimer = null;
+  }
   if (!s.hasSlot) return;
   const out = releaseSlot(leafId);
   if (out) {
@@ -563,11 +579,20 @@ export function useTerminalSession({
     s.visibleNow = visible;
     s.focusedNow = focused;
     if (visible) {
+      if (s.unbindTimer !== null) {
+        clearTimeout(s.unbindTimer);
+        s.unbindTimer = null;
+      }
       if (s.container && !s.hasSlot) bindLeafToSlot(leafId, s);
       setSlotFocused(leafId, focused);
       if (focused) focusSlot(leafId);
-    } else if (s.hasSlot) {
-      unbindLeafFromSlot(leafId, s);
+    } else if (s.hasSlot && s.unbindTimer === null) {
+      // Defer hibernation so brief visits to other tabs keep the terminal
+      // live; the pool can still evict this slot earlier if it runs out.
+      s.unbindTimer = setTimeout(() => {
+        s.unbindTimer = null;
+        if (!s.visibleNow && s.hasSlot) unbindLeafFromSlot(leafId, s);
+      }, UNBIND_GRACE_MS);
     }
   }, [leafId, visible, focused]);
 

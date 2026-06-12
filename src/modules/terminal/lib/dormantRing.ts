@@ -1,5 +1,5 @@
-const DEFAULT_BYTE_CAP = 256 * 1024;
-const DEFAULT_CHUNK_CAP = 256;
+const DEFAULT_BYTE_CAP = 4 * 1024 * 1024;
+const DEFAULT_CHUNK_CAP = 4096;
 
 const OVERFLOW_NOTICE = new TextEncoder().encode(
   "\x1bc\x1b[2m[arterm: dropped output during hibernation]\x1b[0m\r\n",
