@@ -14,7 +14,7 @@ This applies to everything inside the project: issues, PRs, discussions, commits
 
 ## Enforcement
 
-If you see a violation — or experience one — email **crynta.dev@gmail.com** with subject `[Arterm conduct]`. Include links and context.
+If you see a violation — or experience one — email **info@arclude.com** with subject `[Arterm conduct]`. Include links and context.
 
 Maintainers may, at their discretion:
 

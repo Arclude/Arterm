@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   test-sign-windows:
-    if: github.repository == 'crynta/arterm-ai'
+    if: github.repository == 'Arclude/Arterm'
     runs-on: windows-latest
     permissions:
       contents: read

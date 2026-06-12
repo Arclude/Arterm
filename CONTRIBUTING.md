@@ -6,7 +6,7 @@ This document helps you decide *whether* and *how* to contribute in a way that's
 
 ## How this project is run
 
-- Arterm has one active maintainer ([@crynta](https://github.com/crynta)).
+- Arterm has one active maintainer ([@toygar-m](https://github.com/toygar-m)).
 - Review bandwidth is limited.
 - Not every contribution can be accepted, even if it's technically correct. Alignment with project direction matters as much as code quality.
 - For scope and direction, see [ROADMAP.md](ROADMAP.md). Read it before opening anything non-trivial.
@@ -24,7 +24,7 @@ Prereqs: Rust (stable), Node 20+, pnpm, plus your platform's [Tauri prerequisite
 
 ## Where to discuss
 
-Discord: [Crynta OS](https://discord.gg/tyveTUyEp7)
+Discussions: [GitHub Discussions](https://github.com/Arclude/Arterm/discussions)
 
 Use Discord for design discussion, scope questions, "should I work on X?", quick feedback. Use GitHub Issues for tracking concrete bugs and features.
 

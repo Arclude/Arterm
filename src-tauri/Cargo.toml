@@ -2,7 +2,7 @@
 name = "arterm"
 version = "0.9.0"
 description = "Arterm — an open-source AI-native terminal emulator"
-authors = ["crynta"]
+authors = ["Arclude"]
 license = "Apache-2.0"
 edition = "2021"
 

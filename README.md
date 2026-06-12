@@ -5,7 +5,7 @@
   <p><strong>Lightweight Terminal-first AI-native dev workspace.</strong></p>
 
   <p>
-    <img src="https://img.shields.io/github/v/release/crynta/arterm-ai?label=version&color=blue" alt="version" />
+    <img src="https://img.shields.io/github/v/release/Arclude/Arterm?label=version&color=blue" alt="version" />
     <img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="license" />
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="platform" />
   </p>
@@ -15,11 +15,13 @@
     ·
     <a href="https://arterm.dev/docs">Docs</a>
     ·
-    <a href="https://github.com/crynta/Arterm-website">Website's source code</a>
+    <a href="https://github.com/Arclude/Arterm-website">Website's source code</a>
   </p>
 </div>
 
 ---
+
+> **Attribution:** Arterm is a fork of [terax-ai](https://github.com/crynta/terax-ai) by [@crynta](https://github.com/crynta), licensed under [Apache 2.0](LICENSE). All credit for the original architecture and implementation goes to the upstream project.
 
 Arterm is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and React 19. A native PTY backend with a WebGL renderer, an agentic AI side-panel that runs against your own keys or fully local models, plus a code editor, file explorer, source control with a git graph, and a web preview pane built in. About 7-8 MB on disk. No telemetry. No account.
 
@@ -93,7 +95,7 @@ Arterm is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and R
 
 ## Install
 
-Latest installers are on the [Releases](https://github.com/crynta/arterm-ai/releases/latest) page. Arterm auto-updates from there.
+Latest installers are on the [Releases](https://github.com/Arclude/Arterm/releases/latest) page. Arterm auto-updates from there.
 
 ### Windows notes
 
@@ -148,11 +150,11 @@ Arterm is licensed under the Apache-2.0 License. For more information on our dep
 ## Star history
 
 <div align="center">
-  <a href="https://www.star-history.com/#crynta/arterm-ai&Date">
+  <a href="https://www.star-history.com/#Arclude/Arterm&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=crynta/arterm-ai&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=crynta/arterm-ai&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=crynta/arterm-ai&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Arclude/Arterm&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Arclude/Arterm&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Arclude/Arterm&type=Date" />
     </picture>
   </a>
 </div>

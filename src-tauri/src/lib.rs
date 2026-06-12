@@ -119,7 +119,7 @@ pub fn run() {
     #[cfg(all(debug_assertions, windows))]
     if std::env::var_os("WEBVIEW2_USER_DATA_FOLDER").is_none() {
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            let dir = std::path::Path::new(&local).join("app.crynta.arterm.dev\\EBWebView");
+            let dir = std::path::Path::new(&local).join("app.arclude.arterm.dev\\EBWebView");
             std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", dir);
         }
     }
