@@ -341,6 +341,7 @@ mod tests {
             killer: Mutex::new(killer),
             writer,
             master: Mutex::new(pair.master),
+            shell_label: "sh",
         });
 
         assert!(
@@ -389,6 +390,7 @@ mod tests {
             killer: Mutex::new(killer),
             writer,
             master: Mutex::new(pair.master),
+            shell_label: "sh",
         });
 
         drop_session(session);
