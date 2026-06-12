@@ -1,1 +1,0 @@
-ARTERM.md

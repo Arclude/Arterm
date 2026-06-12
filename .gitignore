@@ -29,3 +29,8 @@ dist-ssr
 memory/
 scratch/
 
+# Project memory / agent instruction files (local only)
+AGENTS.md
+CLAUDE.md
+ARTERM.md
+
