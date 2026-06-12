@@ -165,6 +165,15 @@ pub fn pty_close(state: tauri::State<PtyState>, id: u32) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn pty_shell_label(state: tauri::State<PtyState>, id: u32) -> Result<String, String> {
+    let sessions = state.sessions.read().unwrap();
+    let session = sessions
+        .get(&id)
+        .ok_or_else(|| format!("unknown pty id={id}"))?;
+    Ok(session.shell_label.to_string())
+}
+
+#[tauri::command]
 pub fn pty_has_foreground_process(state: tauri::State<PtyState>, id: u32) -> Result<bool, String> {
     let sessions = state.sessions.read().unwrap();
     let session = sessions.get(&id).ok_or_else(|| {

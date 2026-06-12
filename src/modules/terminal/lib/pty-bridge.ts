@@ -13,6 +13,15 @@ export type PtySession = {
   close: () => Promise<void>;
 };
 
+/** Shell kind label ("pwsh", "bash", …) for an open pty, or null if gone. */
+export async function ptyShellLabel(id: number): Promise<string | null> {
+  try {
+    return await invoke<string>("pty_shell_label", { id });
+  } catch {
+    return null;
+  }
+}
+
 export async function openPty(
   cols: number,
   rows: number,

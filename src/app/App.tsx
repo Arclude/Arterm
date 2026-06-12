@@ -119,6 +119,7 @@ import {
   writeToSession,
 } from "@/modules/terminal";
 import { TerminalErrorBridge } from "@/modules/terminal/TerminalErrorBridge";
+import { useAiCommandStore } from "@/modules/terminal/TerminalAiCommand";
 import { ThemeProvider } from "@/modules/theme";
 import {
   listCustomThemes,
@@ -1164,6 +1165,18 @@ export default function App() {
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
+      "terminal.aiCommand": () => {
+        if (!activeTerminalTab) return;
+        const store = useAiCommandStore.getState();
+        const leafId = activeTerminalTab.activeLeafId;
+        if (store.leafId === leafId) {
+          // Toggle: a second Ctrl+K closes the overlay and returns focus.
+          store.close();
+          terminalRefs.current.get(leafId)?.focus();
+          return;
+        }
+        store.open(leafId, activeTerminalTab.private === true);
+      },
       "search.focus": () => searchInlineRef.current?.focus(),
       "ai.toggle": togglePanelAndFocus,
       "ai.askSelection": askFromSelection,
@@ -1180,6 +1193,7 @@ export default function App() {
     }),
     [
       activeId,
+      activeTerminalTab,
       cycleTab,
       handleCloseTabOrPane,
       openNewTab,
@@ -1220,6 +1234,28 @@ export default function App() {
         const target =
           (e.target as HTMLElement | null) ?? document.activeElement;
         return !(target as HTMLElement | null)?.closest?.(".xterm");
+      }
+      if (id === "terminal.aiCommand") {
+        // Active in a focused terminal and inside the overlay itself (where a
+        // second Ctrl+K toggles it closed); elsewhere Ctrl+K keeps its global
+        // meaning (shortcuts dialog on Windows/Linux).
+        const target = ((e.target as HTMLElement | null) ??
+          document.activeElement) as HTMLElement | null;
+        return !(
+          target?.closest?.(".xterm") ||
+          target?.closest?.("[data-terminal-ai-command]")
+        );
+      }
+      if (id === "shortcuts.open") {
+        // Inside a terminal or the AI-command overlay, Mod+K belongs to
+        // terminal.aiCommand (Windows/Linux share the Ctrl+K binding). The
+        // dialog stays reachable from everywhere else.
+        const target = ((e.target as HTMLElement | null) ??
+          document.activeElement) as HTMLElement | null;
+        return !!(
+          target?.closest?.(".xterm") ||
+          target?.closest?.("[data-terminal-ai-command]")
+        );
       }
       if (id === "sidebar.toggle") {
         // Ctrl+B is also Claude Code's "run in background" key. While a terminal

@@ -21,6 +21,7 @@ export type ShortcutId =
   | "pane.focusPrev"
   | "pane.source"
   | "terminal.clear"
+  | "terminal.aiCommand"
   | "search.focus"
   | "explorer.search"
   | "explorer.focus"
@@ -155,6 +156,16 @@ export const SHORTCUTS: Shortcut[] = [
     // macOS — on other platforms Ctrl+K is readline's kill-line, so we leave it
     // unbound and let users assign their own in settings.
     defaultBindings: IS_MAC ? [{ meta: true, key: "k" }] : [],
+  },
+  {
+    id: "terminal.aiCommand",
+    label: "AI: generate command",
+    group: "Terminal",
+    // Ctrl+K on every platform. On Windows this shadows "Show keyboard
+    // shortcuts" (Mod+K) only while a terminal is focused — App.tsx disables
+    // shortcuts.open inside terminals so this one is reachable. On macOS ⌃K
+    // is distinct from both ⌘K bindings, so nothing else is affected.
+    defaultBindings: [{ ctrl: true, key: "k" }],
   },
   {
     id: "tab.next",

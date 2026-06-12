@@ -2,6 +2,7 @@ import { useTheme } from "@/modules/theme";
 import type { SearchAddon } from "@xterm/addon-search";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { useTerminalSession } from "./lib/useTerminalSession";
+import { TerminalAiCommand } from "./TerminalAiCommand";
 
 export type TerminalPaneHandle = {
   write: (data: string) => void;
@@ -69,13 +70,15 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
     return (
       <div
-        ref={containerRef}
-        className="zoom-exempt h-full w-full"
+        className="relative h-full w-full"
         style={{
           visibility: visible ? "visible" : "hidden",
           pointerEvents: visible ? "auto" : "none",
         }}
-      />
+      >
+        <div ref={containerRef} className="zoom-exempt h-full w-full" />
+        <TerminalAiCommand leafId={leafId} onDone={() => session.focus()} />
+      </div>
     );
   },
 );

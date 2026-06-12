@@ -27,9 +27,13 @@ export function useGlobalShortcuts(
         const bindings = userShortcuts[s.id] || s.defaultBindings;
         const isMatch = bindings.some((b) => matchBinding(e, b, s.id));
         if (!isMatch) continue;
-        if (options?.isDisabled?.(s.id, e)) return;
+        // A disabled or unhandled match must not consume the binding: another
+        // shortcut may share it (e.g. Ctrl+K is shortcuts.open everywhere but
+        // terminal.aiCommand inside a focused terminal). If nothing else
+        // matches, the key still falls through untouched.
+        if (options?.isDisabled?.(s.id, e)) continue;
         const h = handlers[s.id];
-        if (!h) return;
+        if (!h) continue;
         e.preventDefault();
         e.stopImmediatePropagation();
         h(e);

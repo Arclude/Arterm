@@ -189,6 +189,7 @@ pub fn run() {
             pty::pty_close,
             pty::pty_close_all,
             pty::pty_has_foreground_process,
+            pty::pty_shell_label,
             lsp::lsp_start,
             lsp::lsp_send,
             lsp::lsp_stop,

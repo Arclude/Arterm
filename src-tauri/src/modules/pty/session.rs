@@ -48,6 +48,9 @@ pub struct Session {
     _job: Option<super::job::PtyJob>,
     /// PID of the shell process. 0 means unknown; callers must skip checks when 0.
     pub shell_pid: u32,
+    /// Shell kind label ("pwsh", "bash", …) — queried by the frontend so AI
+    /// features can generate shell-correct syntax.
+    pub shell_label: &'static str,
     pub killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub master: Mutex<Box<dyn MasterPty + Send>>,
@@ -154,6 +157,7 @@ pub fn spawn(
         #[cfg(windows)]
         _job: job,
         shell_pid,
+        shell_label,
         killer: Mutex::new(killer),
         writer: writer.clone(),
         master: Mutex::new(pair.master),

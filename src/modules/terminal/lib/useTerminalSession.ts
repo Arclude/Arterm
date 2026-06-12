@@ -9,7 +9,7 @@ import {
   registerCwdHandler,
   registerPromptTracker,
 } from "./osc-handlers";
-import { openPty, type PtySession } from "./pty-bridge";
+import { openPty, ptyShellLabel, type PtySession } from "./pty-bridge";
 import {
   acquireSlot,
   applyBackgroundActive,
@@ -37,6 +37,8 @@ type Session = {
   ptyOpening: boolean;
   initialCwd: string | undefined;
   lastCwd: string | null;
+  /** Shell kind label ("pwsh", "bash", …) reported by the backend at spawn. */
+  shellLabel: string | null;
   pendingExit: number | null;
   shellExited: boolean;
   callbacks: Callbacks;
@@ -179,6 +181,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     ptyOpening: false,
     initialCwd,
     lastCwd: null,
+    shellLabel: null,
     pendingExit: null,
     shellExited: false,
     callbacks: {},
@@ -228,7 +231,7 @@ async function openPtyForSession(
 ): Promise<PtySession> {
   const startCols = s.cols > 0 ? s.cols : 80;
   const startRows = s.rows > 0 ? s.rows : 24;
-  return openPty(
+  const pty = await openPty(
     startCols,
     startRows,
     {
@@ -244,6 +247,23 @@ async function openPtyForSession(
     },
     cwd,
   );
+  void ptyShellLabel(pty.id).then((label) => {
+    if (label) s.shellLabel = label;
+  });
+  return pty;
+}
+
+/**
+ * Context for AI features targeting a terminal (Ctrl+K command generation):
+ * the session's current cwd (OSC 7) and shell kind. Null when the leaf has
+ * no session.
+ */
+export function getSessionInfo(
+  leafId: number,
+): { cwd: string | null; shell: string | null } | null {
+  const s = sessions.get(leafId);
+  if (!s) return null;
+  return { cwd: s.lastCwd ?? s.initialCwd ?? null, shell: s.shellLabel };
 }
 
 function bindLeafToSlot(leafId: number, s: Session): void {
