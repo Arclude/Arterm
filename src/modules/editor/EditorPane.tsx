@@ -82,6 +82,12 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// Beyond this size (in characters) the editor drops expensive,
+// non-essential features — minimap (renders the whole document),
+// selection-match highlighting (full-document scan) and AI inline completion
+// — so typing and scrolling stay smooth on very large files.
+const LARGE_FILE_CHARS = 500_000;
+
 export const EditorPane = forwardRef<EditorPaneHandle, Props>(
   function EditorPane(
     { path, workspaceRoot, onDirtyChange, onSaved, onClose },
@@ -91,6 +97,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       path,
       onDirtyChange,
     });
+
+    // Heavy features are gated on this for big documents (see LARGE_FILE_CHARS).
+    // Read inside extension callbacks via the ref so the (stable) extensions
+    // array never changes identity.
+    const isLarge =
+      doc.status === "ready" && doc.content.length > LARGE_FILE_CHARS;
+    const isLargeRef = useRef(isLarge);
+    isLargeRef.current = isLarge;
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
     const cmRef = useRef<ReactCodeMirrorRef>(null);
@@ -225,9 +239,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
             cursorHandlerRef.current(u.state.selection.main.head, u.docChanged);
           }
         }),
-        minimapCompartment.of(
-          usePreferencesStore.getState().minimap ? minimapExtension() : [],
-        ),
+        // Built lazily by the minimap/language effects below (gated on file
+        // size) rather than here, so a large document never pays the
+        // full-document minimap build at EditorView creation.
+        minimapCompartment.of([]),
         inlineCompletion({
           getPrefs: () => {
             const s = usePreferencesStore.getState();
@@ -245,7 +260,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
                         ? s.openrouterModelId
                         : s.autocompleteModelId;
             return {
-              enabled: s.autocompleteEnabled,
+              enabled: s.autocompleteEnabled && !isLargeRef.current,
               provider: p,
               modelId,
               apiKey: apiKeyRef.current,
@@ -288,7 +303,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       if (!view) return;
       view.dispatch({
         effects: minimapCompartment.reconfigure(
-          minimap ? minimapExtension() : [],
+          minimap && !isLargeRef.current ? minimapExtension() : [],
         ),
       });
     }, [minimap]);
@@ -333,7 +348,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         // editor mounts, so rebuild the minimap in the same transaction to pick
         // up the colors immediately instead of only after the first scroll/edit.
         const effects = [languageCompartment.reconfigure(extension)];
-        if (usePreferencesStore.getState().minimap) {
+        if (usePreferencesStore.getState().minimap && !isLargeRef.current) {
           effects.push(minimapCompartment.reconfigure(minimapExtension()));
         }
         view.dispatch({ effects });
@@ -542,7 +557,9 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
             closeBrackets: true,
             autocompletion: true,
             highlightActiveLine: true,
-            highlightSelectionMatches: true,
+            // Off on large files: this scans the whole document on every
+            // selection change.
+            highlightSelectionMatches: !isLarge,
             searchKeymap: true,
           }}
         />

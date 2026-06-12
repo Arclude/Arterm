@@ -4,7 +4,6 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { cn } from "@/lib/utils";
 import type { EditorGroupsState, EditorTab, Tab } from "@/modules/tabs";
 import type { PaneNode, SplitDir } from "@/modules/terminal/lib/panes";
 import { EditorGroupStrip } from "./EditorGroupStrip";
@@ -145,19 +144,20 @@ export function EditorStack({
             if (id) onMoveTab(id, gid, g.tabIds.length);
           }}
         >
-          {g.tabIds.map((id) => {
-            const t = editorsById.get(id);
-            if (!t) return null;
-            const visible = id === g.activeTabId;
+          {(() => {
+            // Only the active tab in each group is mounted. Previously every
+            // open tab was rendered and merely hidden with `invisible`, which
+            // kept a live CodeMirror view + LSP client + minimap + AI inline
+            // completion running per tab — the main cause of lag on large
+            // files. The shared document registry (useDocument) keeps each
+            // file's buffer in memory, so switching back reloads instantly
+            // without a disk read; per-tab cursor/scroll/undo state and pending
+            // autosave timers are not preserved across a switch.
+            const id = g.activeTabId;
+            const t = id == null ? undefined : editorsById.get(id);
+            if (id == null || !t) return null;
             return (
-              <div
-                key={id}
-                className={cn(
-                  "absolute inset-0",
-                  !visible && "invisible pointer-events-none",
-                )}
-                aria-hidden={!visible}
-              >
+              <div key={id} className="absolute inset-0">
                 <div className="h-full overflow-hidden bg-background">
                   <EditorPane
                     ref={getRefCallback(id)}
@@ -169,7 +169,7 @@ export function EditorStack({
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
       </div>
     );
