@@ -11,9 +11,9 @@
   </p>
 
   <p>
-    <a href="https://arterm.app">Website</a>
+    <a href="https://arterm.dev">Website</a>
     ·
-    <a href="https://arterm.app/docs">Docs</a>
+    <a href="https://arterm.dev/docs">Docs</a>
     ·
     <a href="https://github.com/crynta/Arterm-website">Website's source code</a>
   </p>

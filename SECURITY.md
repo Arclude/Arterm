@@ -4,7 +4,7 @@ Arterm runs shells, reads/writes files, and talks to AI providers — so securit
 
 ## Reporting
 
-Email **security@arterm.app**. Include:
+Email **security@arterm.dev**. Include:
 
 - What the issue is and what it lets an attacker do
 - Steps to reproduce (a small PoC is great)
@@ -22,7 +22,7 @@ Until `1.0.0`, only the latest minor gets security fixes. Right now that's `0.5.
 
 - The Rust backend in `src-tauri/` (PTY, FS, IPC, plugins)
 - The frontend in `src/` — anywhere untrusted input lands (terminal output, file content, AI tool results, credentials)
-- Release artifacts on GitHub and `arterm.app`
+- Release artifacts on GitHub and `arterm.dev`
 - The auto-updater
 
 ## What's not

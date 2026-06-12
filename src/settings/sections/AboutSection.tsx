@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
 const REPO_URL = "https://github.com/Arclude/Arterm";
-const WEBSITE = "https://arterm.app";
+const WEBSITE = "https://arterm.dev";
 
 const PLATFORM_LABEL: Record<string, string> = {
   macos: "macOS",
@@ -114,7 +114,7 @@ export function AboutSection() {
             className="inline-flex items-center gap-1.5 rounded-md text-[12px] underline-offset-2 hover:text-foreground hover:underline"
           >
             <HugeiconsIcon icon={Globe02Icon} size={12} strokeWidth={1.75} />
-            arterm.app
+            arterm.dev
           </button>
         </dd>
       </dl>
