@@ -4,7 +4,7 @@ Arterm runs shells, reads/writes files, and talks to AI providers — so securit
 
 ## Reporting
 
-Email **security@arterm.dev**. Include:
+Email **info@arclude.com**. Include:
 
 - What the issue is and what it lets an attacker do
 - Steps to reproduce (a small PoC is great)
