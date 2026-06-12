@@ -112,6 +112,18 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Dev builds share the installed app's identifier, so WebView2 resolves to
+    // the same user data folder and fails with HRESULT 0x8007139F when the
+    // installed app is already running. Redirect dev to its own folder before
+    // any webview is created (the env var takes precedence for this process).
+    #[cfg(all(debug_assertions, windows))]
+    if std::env::var_os("WEBVIEW2_USER_DATA_FOLDER").is_none() {
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            let dir = std::path::Path::new(&local).join("app.crynta.artex.dev\\EBWebView");
+            std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", dir);
+        }
+    }
+
     let cli_dir = parse_launch_dir();
     workspace::init_launch_cwd(cli_dir.as_deref());
 
