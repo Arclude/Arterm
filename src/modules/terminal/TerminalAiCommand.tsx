@@ -4,7 +4,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { generateShellCommand } from "@/modules/ai/lib/terminalNlCommand";
 import { Cancel01Icon, TerminalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import {
   getSessionInfo,
@@ -60,7 +60,13 @@ export function TerminalAiCommand({
   const [query, setQuery] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Horizontal centering is on the viewport (so the sidebar doesn't push the
+  // overlay off-center), but the vertical anchor stays on the host pane so a
+  // bottom split's overlay doesn't jump to the top of the screen. Measure the
+  // pane's viewport top and pin the fixed overlay there.
+  const [topPx, setTopPx] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -73,6 +79,17 @@ export function TerminalAiCommand({
       abortRef.current?.abort();
       abortRef.current = null;
     };
+  }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const measure = () => {
+      const pane = rootRef.current?.parentElement;
+      if (pane) setTopPx(pane.getBoundingClientRect().top + 8);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -138,8 +155,10 @@ export function TerminalAiCommand({
 
   return (
     <div
+      ref={rootRef}
       data-terminal-ai-command
-      className="absolute left-1/2 top-2 z-20 w-[min(560px,92%)] -translate-x-1/2"
+      className="fixed left-1/2 z-20 w-[min(560px,92%)] -translate-x-1/2"
+      style={{ top: topPx }}
     >
       <div className="rounded-2xl border border-border bg-popover/95 p-2 shadow-lg backdrop-blur">
         <div className="flex items-center gap-2">
