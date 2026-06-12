@@ -3,6 +3,7 @@ import {
   BugIcon,
   FolderGitTwoIcon,
   FolderTreeIcon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { SidebarViewId } from "./types";
@@ -20,9 +21,16 @@ type Props = {
   activeView: SidebarViewId;
   onSelectView: (view: SidebarViewId) => void;
   changedCount: number;
+  /** Agent sessions currently running or waiting on an approval. */
+  busyAgentCount: number;
 };
 
-export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
+export function SidebarRail({
+  activeView,
+  onSelectView,
+  changedCount,
+  busyAgentCount,
+}: Props) {
   const items: RailItem[] = [
     { id: "explorer", label: "Files", icon: FolderTreeIcon },
     {
@@ -32,6 +40,12 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
       badge: changedCount,
     },
     { id: "debug", label: "Debug", icon: BugIcon },
+    {
+      id: "agents",
+      label: "Agents",
+      icon: SparklesIcon,
+      badge: busyAgentCount,
+    },
   ];
 
   return (

@@ -31,12 +31,14 @@ import { firePendingReviewForSession } from "@/modules/agents/lib/review";
 import { useManagedAgentsStore } from "@/modules/agents/store/managedAgentsStore";
 import {
   AgentRunBridge,
+  AgentsPanel,
   AiInputBar,
   AiInputBarConnect,
   AiMiniWindow,
   getAllCustomEndpointKeys,
   getAllKeys,
   hasAnyKey,
+  isAgentMetaBusy,
   LocalAgentNotificationsBridge,
   SelectionAskAi,
   useChatStore,
@@ -194,7 +196,12 @@ function readSidebarWidth(): number {
 function readSidebarView(): SidebarViewId {
   try {
     const stored = window.localStorage.getItem(SIDEBAR_VIEW_STORAGE_KEY);
-    if (stored === "explorer" || stored === "source-control") return stored;
+    if (
+      stored === "explorer" ||
+      stored === "source-control" ||
+      stored === "agents"
+    )
+      return stored;
   } catch {
     // ignore
   }
@@ -453,6 +460,9 @@ export default function App() {
   const setSelectedModelId = useChatStore((s) => s.setSelectedModelId);
   const setLive = useChatStore((s) => s.setLive);
   const respondToApproval = useChatStore((s) => s.respondToApproval);
+  const busyAgentCount = useChatStore(
+    (s) => Object.values(s.metaBySession).filter(isAgentMetaBusy).length,
+  );
 
   useEffect(() => {
     if (activeSessionId) firePendingReviewForSession(activeSessionId);
@@ -1637,8 +1647,8 @@ export default function App() {
         <AiDiffStack
           tabs={tabs}
           activeId={activeId}
-          onAccept={(id) => respondToApproval(id, true)}
-          onReject={(id) => respondToApproval(id, false)}
+          onAccept={(id, sessionId) => respondToApproval(id, true, sessionId)}
+          onReject={(id, sessionId) => respondToApproval(id, false, sessionId)}
         />
       </div>
       <div
@@ -1739,6 +1749,8 @@ export default function App() {
                         activeFilePath={activeFilePath}
                         cwd={explorerRoot ?? workspaceFallbackPath}
                       />
+                    ) : sidebarView === "agents" ? (
+                      <AgentsPanel onOpenSession={openMini} />
                     ) : (
                       <SourceControlPanel
                         open
@@ -1753,6 +1765,7 @@ export default function App() {
                     activeView={sidebarView}
                     onSelectView={persistSidebarView}
                     changedCount={sourceControl.changedCount}
+                    busyAgentCount={busyAgentCount}
                   />
                 </div>
               </ResizablePanel>

@@ -1,9 +1,14 @@
 import { lazy, Suspense } from "react";
 import type { AgentRunBridgeProps } from "./AgentRunBridge";
+import type { AgentsPanelProps } from "./AgentsPanel";
 import type { SelectionAskAiProps } from "./SelectionAskAi";
 
 const AgentRunBridgeInner = lazy(() =>
   import("./AgentRunBridge").then((m) => ({ default: m.AgentRunBridge })),
+);
+
+const AgentsPanelInner = lazy(() =>
+  import("./AgentsPanel").then((m) => ({ default: m.AgentsPanel })),
 );
 
 const AiMiniWindowInner = lazy(() =>
@@ -28,6 +33,14 @@ export function AgentRunBridge(props: AgentRunBridgeProps) {
   return (
     <Suspense fallback={null}>
       <AgentRunBridgeInner {...props} />
+    </Suspense>
+  );
+}
+
+export function AgentsPanel(props: AgentsPanelProps) {
+  return (
+    <Suspense fallback={null}>
+      <AgentsPanelInner {...props} />
     </Suspense>
   );
 }

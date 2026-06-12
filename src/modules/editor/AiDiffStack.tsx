@@ -4,8 +4,8 @@ import { AiDiffPane } from "./AiDiffPane";
 type Props = {
   tabs: Tab[];
   activeId: number;
-  onAccept: (approvalId: string) => void;
-  onReject: (approvalId: string) => void;
+  onAccept: (approvalId: string, sessionId: string) => void;
+  onReject: (approvalId: string, sessionId: string) => void;
 };
 
 export function AiDiffStack({ tabs, activeId, onAccept, onReject }: Props) {
@@ -22,8 +22,8 @@ export function AiDiffStack({ tabs, activeId, onAccept, onReject }: Props) {
         proposedContent={active.proposedContent}
         status={active.status}
         isNewFile={active.isNewFile}
-        onAccept={() => onAccept(active.approvalId)}
-        onReject={() => onReject(active.approvalId)}
+        onAccept={() => onAccept(active.approvalId, active.sessionId)}
+        onReject={() => onReject(active.approvalId, active.sessionId)}
       />
     </div>
   );

@@ -83,6 +83,8 @@ export type AiDiffTab = {
   proposedContent: string;
   /** Tool-call approval id used to resolve the AI SDK approval. */
   approvalId: string;
+  /** Chat session that owns the approval. */
+  sessionId: string;
   status: AiDiffStatus;
   isNewFile: boolean;
 };
@@ -374,6 +376,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       originalContent: string;
       proposedContent: string;
       approvalId: string;
+      sessionId: string;
       isNewFile: boolean;
     }) => {
       let targetId: number | null = null;
@@ -398,6 +401,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             originalContent: input.originalContent,
             proposedContent: input.proposedContent,
             approvalId: input.approvalId,
+            sessionId: input.sessionId,
             status: "pending",
             isNewFile: input.isNewFile,
           },

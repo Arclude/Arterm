@@ -30,6 +30,8 @@ export type DiffOpenInput = {
   proposedContent: string;
   approvalId: string;
   isNewFile: boolean;
+  /** Session that owns the approval, so accept/reject routes correctly. */
+  sessionId: string;
 };
 
 export type AgentRunBridgeProps = {
@@ -37,13 +39,37 @@ export type AgentRunBridgeProps = {
   closeAiDiffTab: (approvalId: string) => void;
 };
 
+/**
+ * Mounts one headless bridge per live Chat instance — not just the active
+ * session — so background agents keep streaming, persisting and surfacing
+ * approvals while the user looks elsewhere.
+ */
 export function AgentRunBridge(props: AgentRunBridgeProps) {
-  const sessionId = useChatStore((s) => s.activeSessionId);
-  if (!sessionId) return null;
-  return <Bridge sessionId={sessionId} {...props} />;
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const chatIds = useChatStore((s) => s.chatIds);
+  const ids = useMemo(() => {
+    const set = new Set(chatIds);
+    if (activeSessionId) set.add(activeSessionId);
+    return Array.from(set);
+  }, [chatIds, activeSessionId]);
+  return (
+    <>
+      {ids.map((id) => (
+        <Bridge
+          key={id}
+          sessionId={id}
+          isActive={id === activeSessionId}
+          {...props}
+        />
+      ))}
+    </>
+  );
 }
 
-type BridgeProps = { sessionId: string } & AgentRunBridgeProps;
+type BridgeProps = {
+  sessionId: string;
+  isActive: boolean;
+} & AgentRunBridgeProps;
 
 type WriteFileInput = { path?: unknown; content?: unknown };
 
@@ -54,12 +80,22 @@ type ToolPartLike = ToolUIPart & {
 
 type AnyPart = UIMessagePart<Record<string, never>, Record<string, never>>;
 
-function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
+function Bridge({
+  sessionId,
+  isActive,
+  openAiDiffTab,
+  closeAiDiffTab,
+}: BridgeProps) {
   const chat = useMemo(() => getOrCreateChat(sessionId), [sessionId]);
   const { status, messages, addToolApprovalResponse } = useChat<UIMessage>({
     chat,
   });
-  const patch = useChatStore((s) => s.patchAgentMeta);
+  const patchSessionMeta = useChatStore((s) => s.patchSessionMeta);
+  const patch = useMemo(
+    () => (p: Parameters<typeof patchSessionMeta>[1]) =>
+      patchSessionMeta(sessionId, p),
+    [patchSessionMeta, sessionId],
+  );
   const openMini = useChatStore((s) => s.openMini);
   const persistMessages = useChatStore((s) => s.persistMessages);
   const setApprovalResponder = useChatStore((s) => s.setApprovalResponder);
@@ -67,11 +103,11 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
   // Expose the approval responder so the diff tab can resolve approvals.
   // We keep it in a ref-stable closure so identity is stable per render.
   useEffect(() => {
-    setApprovalResponder((id, approved) =>
+    setApprovalResponder(sessionId, (id, approved) =>
       addToolApprovalResponse({ id, approved }),
     );
-    return () => setApprovalResponder(null);
-  }, [setApprovalResponder, addToolApprovalResponse]);
+    return () => setApprovalResponder(sessionId, null);
+  }, [setApprovalResponder, sessionId, addToolApprovalResponse]);
 
   useEffect(() => {
     persistMessages(sessionId, messages);
@@ -115,8 +151,10 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
   }, [status, approvalsPending, patch]);
 
   useEffect(() => {
-    if (approvalsPending > 0) openMini();
-  }, [approvalsPending, openMini]);
+    // Only the active session may yank the mini-window open; background
+    // agents surface their approvals via the agents panel and diff tabs.
+    if (approvalsPending > 0 && isActive) openMini();
+  }, [approvalsPending, isActive, openMini]);
 
   // ---- AI diff tab management ----------------------------------------------
   // We track which approvalIds have already opened a tab so re-renders don't
@@ -232,6 +270,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
           proposedContent: proposed,
           approvalId: p.approvalId,
           isNewFile: original.isNewFile,
+          sessionId,
         });
       }
     })();

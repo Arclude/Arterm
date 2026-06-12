@@ -108,13 +108,19 @@ type StoreState = {
   setLive: (live: Live) => void;
 
   /**
-   * Set by AgentRunBridge each render. Lets surfaces outside the chat hook
-   * tree (e.g. the AI diff tab in the editor area) resolve a pending tool
-   * approval through the active session's `addToolApprovalResponse`.
+   * Registered per session by its AgentRunBridge. Lets surfaces outside the
+   * chat hook tree (e.g. the AI diff tab in the editor area) resolve a
+   * pending tool approval through that session's `addToolApprovalResponse`.
    */
-  approvalResponder: ApprovalResponder | null;
-  setApprovalResponder: (fn: ApprovalResponder | null) => void;
-  respondToApproval: (approvalId: string, approved: boolean) => void;
+  setApprovalResponder: (
+    sessionId: string,
+    fn: ApprovalResponder | null,
+  ) => void;
+  respondToApproval: (
+    approvalId: string,
+    approved: boolean,
+    sessionId?: string,
+  ) => void;
 
   apiKeys: ProviderKeys;
   setApiKeys: (keys: ProviderKeys) => void;
@@ -145,9 +151,16 @@ type StoreState = {
   attachSelection: (text: string, source: "terminal" | "editor") => void;
   consumeSelections: () => PendingSelection[];
 
+  /** Run state of the active session; mirrors `metaBySession[activeSessionId]`. */
   agentMeta: AgentMeta;
+  /** Per-session run state, so background agents keep live status. */
+  metaBySession: Record<string, AgentMeta>;
+  patchSessionMeta: (sessionId: string, patch: Partial<AgentMeta>) => void;
   patchAgentMeta: (patch: Partial<AgentMeta>) => void;
   resetAgentMeta: () => void;
+
+  /** Session ids with a live Chat instance (mirror of the LRU cache). */
+  chatIds: string[];
 
   // Sessions
   sessionsHydrated: boolean;
@@ -177,17 +190,46 @@ const NOOP_LIVE: Live = {
 const CHATS_LRU_CAP = 8;
 const chats = new Map<string, Chat<UIMessage>>();
 
+// Responders live outside zustand: bridges re-register every render and
+// nothing renders from them, so reactivity would be wasted churn.
+const approvalResponders = new Map<string, ApprovalResponder>();
+
+/** True while a session is mid-run or holding a pending approval. */
+export function isAgentMetaBusy(meta: AgentMeta | undefined): boolean {
+  return (
+    !!meta &&
+    (meta.status === "thinking" ||
+      meta.status === "streaming" ||
+      meta.status === "awaiting-approval")
+  );
+}
+
+function syncChatIds() {
+  // Deferred: getOrCreateChat runs during render (useMemo), and a store
+  // write there would mean setState-during-render warnings downstream.
+  queueMicrotask(() => {
+    useChatStore.setState({ chatIds: Array.from(chats.keys()) });
+  });
+}
+
 function touchChat(id: string, c: Chat<UIMessage>) {
   if (chats.has(id)) chats.delete(id);
   chats.set(id, c);
-  while (chats.size > CHATS_LRU_CAP) {
-    const oldest = chats.keys().next().value;
-    if (!oldest || oldest === id) break;
-    if (useChatStore.getState().activeSessionId === oldest) break;
-    flushPersistEntry(oldest);
-    void chats.get(oldest)?.stop();
-    chats.delete(oldest);
+  if (chats.size > CHATS_LRU_CAP) {
+    const state = useChatStore.getState();
+    for (const oldest of Array.from(chats.keys())) {
+      if (chats.size <= CHATS_LRU_CAP) break;
+      if (oldest === id) continue;
+      if (state.activeSessionId === oldest) continue;
+      // Never evict a session that is mid-run or holding an approval —
+      // evicting calls stop() and would silently kill a background agent.
+      if (isAgentMetaBusy(state.metaBySession[oldest])) continue;
+      flushPersistEntry(oldest);
+      void chats.get(oldest)?.stop();
+      chats.delete(oldest);
+    }
   }
+  syncChatIds();
 }
 // Initial messages for a session, populated at hydration time and consumed
 // when the matching Chat is constructed.
@@ -241,13 +283,25 @@ function makeChat(sessionId: string): Chat<UIMessage> {
   const transport = createContextAwareTransport({
     getKeys: () => useChatStore.getState().apiKeys,
     toolContext,
-    getModelId: () => useChatStore.getState().selectedModelId,
+    getModelId: () => {
+      const st = useChatStore.getState();
+      // Sessions spawned from the agents panel pin their model; plain chat
+      // sessions follow the global selection.
+      return (
+        st.sessions.find((s) => s.id === sessionId)?.modelId ??
+        st.selectedModelId
+      );
+    },
     getCustomInstructions: () =>
       usePreferencesStore.getState().customInstructions,
     getAgentPersona: () => {
       const { activeId, customAgents } = useAgentsStore.getState();
       const all = [...BUILTIN_AGENTS, ...customAgents];
-      const a = all.find((x) => x.id === activeId) ?? BUILTIN_AGENTS[0];
+      const pinned = useChatStore
+        .getState()
+        .sessions.find((s) => s.id === sessionId)?.agentId;
+      const a =
+        all.find((x) => x.id === (pinned ?? activeId)) ?? BUILTIN_AGENTS[0];
       return { name: a.name, instructions: a.instructions };
     },
     getLive: () => {
@@ -277,19 +331,22 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     getCustomEndpoints: () => usePreferencesStore.getState().customEndpoints,
     getCustomEndpointKeys: () => useChatStore.getState().customEndpointKeys,
     onStep: (step) => {
-      useChatStore.getState().patchAgentMeta({ step });
+      useChatStore.getState().patchSessionMeta(sessionId, { step });
     },
     onCompact: (info) => {
-      useChatStore.getState().patchAgentMeta({
+      useChatStore.getState().patchSessionMeta(sessionId, {
         compactionNotice: { droppedCount: info.droppedCount, at: Date.now() },
       });
     },
     onFinishMeta: (info) => {
-      useChatStore.getState().patchAgentMeta({ hitStepCap: info.hitStepCap });
+      useChatStore
+        .getState()
+        .patchSessionMeta(sessionId, { hitStepCap: info.hitStepCap });
     },
     onUsage: (delta) => {
-      const cur = useChatStore.getState().agentMeta.tokens;
-      useChatStore.getState().patchAgentMeta({
+      const st = useChatStore.getState();
+      const cur = (st.metaBySession[sessionId] ?? IDLE_META).tokens;
+      st.patchSessionMeta(sessionId, {
         tokens: {
           inputTokens: cur.inputTokens + delta.inputTokens,
           outputTokens: cur.outputTokens + delta.outputTokens,
@@ -310,7 +367,7 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     messages: initialMessages,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onError: (e) => {
-      useChatStore.getState().patchAgentMeta({
+      useChatStore.getState().patchSessionMeta(sessionId, {
         status: "error",
         error: e instanceof Error ? e.message : String(e),
       });
@@ -322,11 +379,14 @@ export const useChatStore = create<StoreState>((set, get) => ({
   live: NOOP_LIVE,
   setLive: (live) => set({ live }),
 
-  approvalResponder: null,
-  setApprovalResponder: (fn) => set({ approvalResponder: fn }),
-  respondToApproval: (approvalId, approved) => {
-    const fn = get().approvalResponder;
-    if (fn) fn(approvalId, approved);
+  setApprovalResponder: (sessionId, fn) => {
+    if (fn) approvalResponders.set(sessionId, fn);
+    else approvalResponders.delete(sessionId);
+  },
+  respondToApproval: (approvalId, approved, sessionId) => {
+    const target = sessionId ?? get().activeSessionId;
+    if (!target) return;
+    approvalResponders.get(target)?.(approvalId, approved);
   },
 
   apiKeys: { ...EMPTY_PROVIDER_KEYS },
@@ -389,9 +449,28 @@ export const useChatStore = create<StoreState>((set, get) => ({
   },
 
   agentMeta: IDLE_META,
-  patchAgentMeta: (patch) =>
-    set((s) => ({ agentMeta: { ...s.agentMeta, ...patch } })),
-  resetAgentMeta: () => set({ agentMeta: IDLE_META }),
+  metaBySession: {},
+  chatIds: [],
+  patchSessionMeta: (sessionId, patch) =>
+    set((s) => {
+      const next = { ...(s.metaBySession[sessionId] ?? IDLE_META), ...patch };
+      return {
+        metaBySession: { ...s.metaBySession, [sessionId]: next },
+        ...(s.activeSessionId === sessionId ? { agentMeta: next } : {}),
+      };
+    }),
+  patchAgentMeta: (patch) => {
+    const id = get().activeSessionId;
+    if (id) get().patchSessionMeta(id, patch);
+    else set((s) => ({ agentMeta: { ...s.agentMeta, ...patch } }));
+  },
+  resetAgentMeta: () => {
+    const id = get().activeSessionId;
+    set((s) => ({
+      agentMeta: IDLE_META,
+      ...(id ? { metaBySession: { ...s.metaBySession, [id]: IDLE_META } } : {}),
+    }));
+  },
 
   sessionsHydrated: false,
   sessions: [],
@@ -452,7 +531,12 @@ export const useChatStore = create<StoreState>((set, get) => ({
     // Lazily seed the chat with persisted messages the first time we open
     // this session. Subsequent switches reuse the cached Chat instance.
     const flip = () => {
-      set({ activeSessionId: id, agentMeta: IDLE_META });
+      // Restore the session's own run state — switching to a background
+      // agent must show its live status, not a blank slate.
+      set((s) => ({
+        activeSessionId: id,
+        agentMeta: s.metaBySession[id] ?? IDLE_META,
+      }));
       void saveActiveId(id);
     };
     if (chats.has(id) || seedMessages.has(id)) {
@@ -469,6 +553,12 @@ export const useChatStore = create<StoreState>((set, get) => ({
     const remaining = get().sessions.filter((s) => s.id !== id);
     chats.get(id)?.stop();
     chats.delete(id);
+    syncChatIds();
+    approvalResponders.delete(id);
+    set((s) => {
+      const { [id]: _gone, ...rest } = s.metaBySession;
+      return { metaBySession: rest };
+    });
     seedMessages.delete(id);
     const pend = pendingPersist.get(id);
     if (pend) {
@@ -590,8 +680,73 @@ export async function sendMessage(text: string): Promise<boolean> {
   return true;
 }
 
+/** Send into a specific session without touching the active one. */
+export async function sendMessageTo(
+  sessionId: string,
+  text: string,
+): Promise<boolean> {
+  const state = useChatStore.getState();
+  const meta = state.sessions.find((s) => s.id === sessionId);
+  if (!meta) return false;
+  if (!hasKeyForModel(meta.modelId ?? state.selectedModelId)) return false;
+  const c = getOrCreateChat(sessionId);
+  await c.sendMessage({ text });
+  return true;
+}
+
 export function stop(): void {
   const id = useChatStore.getState().activeSessionId;
   if (!id) return;
-  void chats.get(id)?.stop();
+  stopSession(id);
+}
+
+export function stopSession(sessionId: string): void {
+  void chats.get(sessionId)?.stop();
+}
+
+export type SpawnAgentOptions = {
+  prompt: string;
+  /** Persona to pin to the session; defaults to the global selection. */
+  agentId?: string;
+  /** Model to pin to the session; defaults to the current global model. */
+  modelId?: string;
+  /** Also switch the UI to the new session. */
+  activate?: boolean;
+};
+
+/**
+ * Create a new session pinned to a persona/model and kick it off with the
+ * given task prompt. Runs in the background unless `activate` is set.
+ * Returns the session id, or null when the model has no usable key.
+ */
+export function spawnAgentSession(opts: SpawnAgentOptions): string | null {
+  const st = useChatStore.getState();
+  const modelId = opts.modelId ?? st.selectedModelId;
+  if (!hasKeyForModel(modelId)) return null;
+
+  const id = newSessionId();
+  const firstLine = opts.prompt.trim().split("\n")[0].trim();
+  const title =
+    firstLine.length > 40
+      ? `${firstLine.slice(0, 40)}…`
+      : firstLine || "Agent task";
+  const meta: SessionMeta = {
+    id,
+    title,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    modelId,
+    ...(opts.agentId ? { agentId: opts.agentId } : {}),
+  };
+  const next = [meta, ...st.sessions];
+  useChatStore.setState((s) => ({
+    sessions: next,
+    ...(opts.activate
+      ? { activeSessionId: id, agentMeta: s.metaBySession[id] ?? IDLE_META }
+      : {}),
+  }));
+  void saveSessionsList(next);
+  if (opts.activate) void saveActiveId(id);
+  void sendMessageTo(id, opts.prompt);
+  return id;
 }

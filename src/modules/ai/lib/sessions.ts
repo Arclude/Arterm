@@ -6,6 +6,12 @@ export type SessionMeta = {
   title: string;
   createdAt: number;
   updatedAt: number;
+  /** Persona pinned at spawn time; absent on sessions that follow the
+   * globally selected agent. */
+  agentId?: string;
+  /** Model pinned at spawn time; absent on sessions that follow the
+   * globally selected model. */
+  modelId?: string;
 };
 
 const STORE_PATH = "artex-ai-sessions.json";
