@@ -48,7 +48,7 @@ tempfile = "3"
 notify = "8.2.0"
 base64 = "0.22"
 flate2 = "1"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "4", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 proptest = "1"
