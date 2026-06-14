@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, dap, extensions, fs, git, lsp, net, pty, secrets, shell, workspace};
+use modules::{agent, dap, extensions, fs, git, lsp, net, pty, secrets, shell, ssh, workspace};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
@@ -172,6 +172,7 @@ pub fn run() {
         .manage(dap::DapState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
+        .manage(ssh::SshState::default())
         .manage(fs::watch::FsWatchState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
@@ -190,6 +191,21 @@ pub fn run() {
             pty::pty_close_all,
             pty::pty_has_foreground_process,
             pty::pty_shell_label,
+            ssh::ssh_connect,
+            ssh::ssh_open_shell,
+            ssh::ssh_write,
+            ssh::ssh_resize,
+            ssh::ssh_close,
+            ssh::ssh_disconnect,
+            ssh::ssh_known_host_decision,
+            ssh::ssh_sftp_list,
+            ssh::ssh_sftp_read,
+            ssh::ssh_sftp_write,
+            ssh::ssh_sftp_download,
+            ssh::ssh_sftp_upload,
+            ssh::ssh_sftp_mkdir,
+            ssh::ssh_sftp_rename,
+            ssh::ssh_sftp_delete,
             lsp::lsp_start,
             lsp::lsp_send,
             lsp::lsp_stop,

@@ -101,6 +101,7 @@ import {
 import { DebugPanel, stopAllDebugAdapters } from "@/modules/dap";
 import { SidebarRail, type SidebarViewId } from "@/modules/sidebar";
 import { SourceControlPanel, useSourceControl } from "@/modules/source-control";
+import { SshPanel } from "@/modules/ssh/SshPanel";
 import { StatusBar } from "@/modules/statusbar";
 import {
   MAX_PANES_PER_TAB,
@@ -201,7 +202,8 @@ function readSidebarView(): SidebarViewId {
     if (
       stored === "explorer" ||
       stored === "source-control" ||
-      stored === "agents"
+      stored === "agents" ||
+      stored === "ssh"
     )
       return stored;
   } catch {
@@ -217,6 +219,7 @@ export default function App() {
     setActiveId,
     newTab,
     newAgentTab,
+    newSshTab,
     newPrivateTab,
     openFileTab,
     pinTab,
@@ -1758,6 +1761,12 @@ export default function App() {
                       />
                     ) : sidebarView === "agents" ? (
                       <AgentsPanel onOpenSession={openMini} />
+                    ) : sidebarView === "ssh" ? (
+                      <SshPanel
+                        onOpenTerminal={(connId, title) =>
+                          newSshTab(connId, title)
+                        }
+                      />
                     ) : (
                       <SourceControlPanel
                         open

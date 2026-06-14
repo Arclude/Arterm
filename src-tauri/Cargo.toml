@@ -1,6 +1,6 @@
 [package]
 name = "arterm"
-version = "0.9.4"
+version = "0.9.5"
 description = "Arterm — an open-source AI-native terminal emulator"
 authors = ["Arclude"]
 license = "Apache-2.0"
@@ -43,7 +43,21 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 bytes = "1"
 futures-util = "0.3"
-tokio = { version = "1", default-features = false, features = ["rt"] }
+tokio = { version = "1", default-features = false, features = [
+	"rt",
+	"rt-multi-thread",
+	"net",
+	"io-util",
+	"macros",
+	"sync",
+	"time",
+] }
+russh = { version = "0.54", default-features = false, features = [
+	"ring",
+	"flate2",
+	"rsa",
+] }
+russh-sftp = "2"
 tempfile = "3"
 notify = "8.2.0"
 base64 = "0.22"

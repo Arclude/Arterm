@@ -10,6 +10,7 @@ import {
   registerPromptTracker,
 } from "./osc-handlers";
 import { openPty, ptyShellLabel, type PtySession } from "./pty-bridge";
+import { openSshShell } from "@/modules/ssh/lib/ssh-bridge";
 import {
   acquireSlot,
   applyBackgroundActive,
@@ -40,10 +41,17 @@ type Callbacks = {
  */
 const UNBIND_GRACE_MS = 45_000;
 
+/** Where a terminal's bytes come from: the local machine, or an already-
+ *  authenticated remote SSH connection (identified by its connection id). */
+export type TerminalSource =
+  | { kind: "local" }
+  | { kind: "ssh"; connId: number };
+
 type Session = {
   pty: PtySession | null;
   ptyOpening: boolean;
   initialCwd: string | undefined;
+  source: TerminalSource;
   lastCwd: string | null;
   /** Shell kind label ("pwsh", "bash", …) reported by the backend at spawn. */
   shellLabel: string | null;
@@ -183,7 +191,11 @@ configureRendererPool({
   },
 });
 
-function ensureSession(leafId: number, initialCwd?: string): Session {
+function ensureSession(
+  leafId: number,
+  initialCwd?: string,
+  source?: TerminalSource,
+): Session {
   const existing = sessions.get(leafId);
   if (existing) return existing;
 
@@ -191,6 +203,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     pty: null,
     ptyOpening: false,
     initialCwd,
+    source: source ?? { kind: "local" },
     lastCwd: null,
     shellLabel: null,
     pendingExit: null,
@@ -243,22 +256,26 @@ async function openPtyForSession(
 ): Promise<PtySession> {
   const startCols = s.cols > 0 ? s.cols : 80;
   const startRows = s.rows > 0 ? s.rows : 24;
-  const pty = await openPty(
-    startCols,
-    startRows,
-    {
-      onData: (bytes) => deliverPtyBytes(leafId, bytes),
-      onExit: (code) => {
-        s.shellExited = true;
-        s.pty = null;
-        const slot = getSlotForLeaf(leafId);
-        if (slot) slot.term.options.disableStdin = true;
-        if (s.callbacks.onExit) s.callbacks.onExit(code);
-        else s.pendingExit = code;
-      },
+  const handlers = {
+    onData: (bytes: Uint8Array) => deliverPtyBytes(leafId, bytes),
+    onExit: (code: number) => {
+      s.shellExited = true;
+      s.pty = null;
+      const slot = getSlotForLeaf(leafId);
+      if (slot) slot.term.options.disableStdin = true;
+      if (s.callbacks.onExit) s.callbacks.onExit(code);
+      else s.pendingExit = code;
     },
-    cwd,
-  );
+  };
+
+  // Remote sessions stream over an already-authenticated SSH connection but are
+  // otherwise identical to a local pty from the renderer's point of view.
+  if (s.source.kind === "ssh") {
+    s.shellLabel = "ssh";
+    return openSshShell(s.source.connId, startCols, startRows, handlers);
+  }
+
+  const pty = await openPty(startCols, startRows, handlers, cwd);
   void ptyShellLabel(pty.id).then((label) => {
     if (label) s.shellLabel = label;
   });
@@ -502,6 +519,8 @@ type Options = {
   visible: boolean;
   focused?: boolean;
   initialCwd?: string;
+  /** Stream source. Defaults to a local shell when omitted. */
+  source?: TerminalSource;
   onSearchReady?: (addon: SearchAddon) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
@@ -513,6 +532,7 @@ export function useTerminalSession({
   visible,
   focused = true,
   initialCwd,
+  source,
   onSearchReady,
   onExit,
   onCwd,
@@ -522,7 +542,7 @@ export function useTerminalSession({
 
   useEffect(() => {
     let cancelled = false;
-    const s = ensureSession(leafId, initialCwd);
+    const s = ensureSession(leafId, initialCwd, source);
     s.ready.then(() => {
       if (cancelled || s.disposed) return;
       const node = container.current;

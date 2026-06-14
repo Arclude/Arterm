@@ -12,6 +12,7 @@ import {
   type SplitDir,
 } from "@/modules/terminal/lib/panes";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
+import { setTerminalSource } from "@/modules/terminal/lib/terminalSources";
 import {
   buildInitialState,
   type SessionSnapshotV1,
@@ -225,6 +226,26 @@ export function useTabs(
         title,
         cwd,
         paneTree: { kind: "leaf", id: leafId, cwd },
+        activeLeafId: leafId,
+      },
+    ]);
+    setActiveId(tabId);
+    return { tabId, leafId };
+  }, []);
+
+  const newSshTab = useCallback((connId: number, title: string) => {
+    const tabId = nextIdRef.current++;
+    const leafId = nextIdRef.current++;
+    // Register the stream source before the pane mounts so the terminal hook
+    // opens an SSH shell instead of a local one for this leaf.
+    setTerminalSource(leafId, { kind: "ssh", connId });
+    setTabs((t) => [
+      ...t,
+      {
+        id: tabId,
+        kind: "terminal",
+        title,
+        paneTree: { kind: "leaf", id: leafId },
         activeLeafId: leafId,
       },
     ]);
@@ -958,6 +979,7 @@ export function useTabs(
     closeEditorTab,
     newTab,
     newAgentTab,
+    newSshTab,
     newPrivateTab,
     openFileTab,
     pinTab,

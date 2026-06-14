@@ -2,6 +2,7 @@ import { useTheme } from "@/modules/theme";
 import type { SearchAddon } from "@xterm/addon-search";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { useTerminalSession } from "./lib/useTerminalSession";
+import { getTerminalSource } from "./lib/terminalSources";
 import { TerminalAiCommand } from "./TerminalAiCommand";
 
 export type TerminalPaneHandle = {
@@ -46,6 +47,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       visible,
       focused,
       initialCwd,
+      source: getTerminalSource(leafId),
       onSearchReady: (a) => onSearchReady?.(leafId, a),
       onExit: (c) => onExit?.(leafId, c),
       onCwd: (c) => onCwd?.(leafId, c),
