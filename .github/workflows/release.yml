@@ -65,7 +65,9 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Arterm ${{ github.ref_name }}"
-          releaseBody: "See the assets to download and install. Auto-update is built in."
-          releaseDraft: true
+          # Auto-generate the release notes/body from merged commits & PRs, and
+          # publish immediately (no draft) so the tag's release shows as latest.
+          generateReleaseNotes: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
