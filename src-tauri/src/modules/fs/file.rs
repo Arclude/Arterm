@@ -6,7 +6,7 @@ use serde::Serialize;
 use tauri::Emitter;
 use tempfile::NamedTempFile;
 
-use crate::modules::workspace::{resolve_path, WorkspaceEnv};
+use crate::modules::workspace::{authorize_fs_path, resolve_path, WorkspaceEnv, WorkspaceRegistry};
 
 const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 const BINARY_SNIFF_BYTES: usize = 8 * 1024;
@@ -45,9 +45,21 @@ pub struct FileStat {
 }
 
 #[tauri::command]
-pub fn fs_read_file(path: String, workspace: Option<WorkspaceEnv>) -> Result<ReadResult, String> {
+pub fn fs_read_file(
+    path: String,
+    workspace: Option<WorkspaceEnv>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+) -> Result<ReadResult, String> {
+    read_file_inner(&path, workspace, &registry)
+}
+
+fn read_file_inner(
+    path: &str,
+    workspace: Option<WorkspaceEnv>,
+    registry: &WorkspaceRegistry,
+) -> Result<ReadResult, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = resolve_path(&path, &workspace);
+    let p = authorize_fs_path(registry, path, &workspace)?;
     let meta = std::fs::metadata(&p).map_err(|e| {
         log::debug!("fs_read_file stat({}) failed: {e}", p.display());
         e.to_string()
@@ -110,11 +122,20 @@ pub struct DataUrlResult {
 pub fn fs_read_file_data_url(
     path: String,
     workspace: Option<WorkspaceEnv>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+) -> Result<DataUrlResult, String> {
+    read_file_data_url_inner(&path, workspace, &registry)
+}
+
+fn read_file_data_url_inner(
+    path: &str,
+    workspace: Option<WorkspaceEnv>,
+    registry: &WorkspaceRegistry,
 ) -> Result<DataUrlResult, String> {
     use base64::Engine as _;
 
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = resolve_path(&path, &workspace);
+    let p = authorize_fs_path(registry, path, &workspace)?;
     let mime = image_mime_from_path(&p).ok_or_else(|| "unsupported preview type".to_string())?;
 
     let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
@@ -160,9 +181,10 @@ pub fn fs_write_file(
     workspace: Option<WorkspaceEnv>,
     source: Option<String>,
     app: tauri::AppHandle,
+    registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let target = resolve_path(&path, &workspace);
+    let target = authorize_fs_path(&registry, &path, &workspace)?;
     let original_permissions = fs::metadata(&target).ok().map(|m| m.permissions());
     write_atomic(&target, content.as_bytes()).map_err(|e| {
         log::warn!("fs_write_file({}) failed: {e}", target.display());
@@ -192,9 +214,13 @@ pub fn fs_canonicalize(path: String, workspace: Option<WorkspaceEnv>) -> Result<
 }
 
 #[tauri::command]
-pub fn fs_stat(path: String, workspace: Option<WorkspaceEnv>) -> Result<FileStat, String> {
+pub fn fs_stat(
+    path: String,
+    workspace: Option<WorkspaceEnv>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+) -> Result<FileStat, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = resolve_path(&path, &workspace);
+    let p = authorize_fs_path(&registry, &path, &workspace)?;
     let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
     let kind = if meta.is_dir() {
         StatKind::Dir
@@ -220,12 +246,20 @@ pub fn fs_stat(path: String, workspace: Option<WorkspaceEnv>) -> Result<FileStat
 mod tests {
     use super::*;
 
+    /// A registry that authorizes `dir` so the fs gate lets test reads through.
+    fn test_reg(dir: &Path) -> WorkspaceRegistry {
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(dir).expect("authorize test dir");
+        reg
+    }
+
     #[test]
     fn read_file_classifies_utf8_as_text() {
         let dir = tempfile::tempdir().unwrap();
+        let reg = test_reg(dir.path());
         let f = dir.path().join("a.txt");
         std::fs::write(&f, b"hello world").unwrap();
-        match fs_read_file(f.to_string_lossy().into_owned(), None).unwrap() {
+        match read_file_inner(&f.to_string_lossy(), None, &reg).unwrap() {
             ReadResult::Text { content, size } => {
                 assert_eq!(content, "hello world");
                 assert_eq!(size, 11);
@@ -237,10 +271,11 @@ mod tests {
     #[test]
     fn read_file_detects_binary_via_null_byte() {
         let dir = tempfile::tempdir().unwrap();
+        let reg = test_reg(dir.path());
         let f = dir.path().join("a.bin");
         std::fs::write(&f, b"PNG\0\x89image").unwrap();
         assert!(matches!(
-            fs_read_file(f.to_string_lossy().into_owned(), None).unwrap(),
+            read_file_inner(&f.to_string_lossy(), None, &reg).unwrap(),
             ReadResult::Binary { .. }
         ));
     }
@@ -248,11 +283,12 @@ mod tests {
     #[test]
     fn read_file_detects_binary_via_invalid_utf8() {
         let dir = tempfile::tempdir().unwrap();
+        let reg = test_reg(dir.path());
         let f = dir.path().join("a.bin");
         // Invalid UTF-8 with no null byte: must still classify as binary.
         std::fs::write(&f, [0xff, 0xfe, 0xfd, 0xfc]).unwrap();
         assert!(matches!(
-            fs_read_file(f.to_string_lossy().into_owned(), None).unwrap(),
+            read_file_inner(&f.to_string_lossy(), None, &reg).unwrap(),
             ReadResult::Binary { .. }
         ));
     }
@@ -280,9 +316,10 @@ mod tests {
     fn data_url_round_trips_a_png() {
         use base64::Engine as _;
         let dir = tempfile::tempdir().unwrap();
+        let reg = test_reg(dir.path());
         let f = dir.path().join("p.png");
         std::fs::write(&f, b"\x89PNG\r\n\x1a\n_fake_bytes").unwrap();
-        let res = fs_read_file_data_url(f.to_string_lossy().into_owned(), None).unwrap();
+        let res = read_file_data_url_inner(&f.to_string_lossy(), None, &reg).unwrap();
         assert!(res.data_url.starts_with("data:image/png;base64,"));
         let b64 = res.data_url.trim_start_matches("data:image/png;base64,");
         let decoded = base64::engine::general_purpose::STANDARD
@@ -294,9 +331,10 @@ mod tests {
     #[test]
     fn data_url_rejects_non_image() {
         let dir = tempfile::tempdir().unwrap();
+        let reg = test_reg(dir.path());
         let f = dir.path().join("a.txt");
         std::fs::write(&f, b"hello").unwrap();
-        assert!(fs_read_file_data_url(f.to_string_lossy().into_owned(), None).is_err());
+        assert!(read_file_data_url_inner(&f.to_string_lossy(), None, &reg).is_err());
     }
 
     #[test]

@@ -114,6 +114,44 @@ pub fn authorize_user_spawn_cwd(
     Ok(Some(canonical))
 }
 
+/// Gate for filesystem commands (read/write/list/search/mutate). Resolves the
+/// frontend path, then requires it to live under an authorized root. Symlink
+/// escapes are caught by canonicalizing; a not-yet-existing target (create /
+/// write / rename destination) is validated against its nearest existing
+/// ancestor. Returns the resolved (non-canonical) path for the caller to act
+/// on, preserving prior behavior.
+///
+/// The registry is seeded with the home dir and launch dir at startup and
+/// widened as the user opens terminals / navigates, so ordinary in-workspace
+/// access is unaffected; this only blocks a compromised webview from reaching
+/// arbitrary unrelated paths (other users' homes, system dirs, other drives).
+pub fn authorize_fs_path(
+    registry: &WorkspaceRegistry,
+    path: &str,
+    workspace: &WorkspaceEnv,
+) -> Result<PathBuf, String> {
+    let resolved = resolve_path(path, workspace);
+    let mut probe = resolved.clone();
+    let canonical = loop {
+        match std::fs::canonicalize(&probe) {
+            Ok(c) => break c,
+            Err(_) => match probe.parent() {
+                Some(parent) if parent != probe && !parent.as_os_str().is_empty() => {
+                    probe = parent.to_path_buf();
+                }
+                _ => return Err(format!("path not accessible: {}", resolved.display())),
+            },
+        }
+    };
+    if !registry.is_authorized(&canonical) {
+        return Err(format!(
+            "path is outside the authorized workspace: {}",
+            resolved.display()
+        ));
+    }
+    Ok(resolved)
+}
+
 pub fn bootstrap_registry(registry: &WorkspaceRegistry) {
     let _ = registry.authorize(resolve_launch_dir());
     if let Some(home) = dirs::home_dir() {
