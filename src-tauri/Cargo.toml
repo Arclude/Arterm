@@ -86,6 +86,10 @@ windows-sys = { version = "0.61", features = [
 	"Win32_System_Threading",
 	"Win32_System_Diagnostics_ToolHelp",
 ] }
+# Used to strip the "Emoji" entry from WebView2's built-in context menu.
+# Pin to the versions Tauri/wry already resolve so the COM types unify.
+webview2-com = "0.38"
+windows = "0.61"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"

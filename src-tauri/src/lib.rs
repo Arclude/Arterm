@@ -83,6 +83,9 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
 
     let _window = builder.build().map_err(|e| e.to_string())?;
 
+    #[cfg(windows)]
+    install_context_menu_filter(&_window);
+
     // Some Linux compositors (GNOME/Mutter with CSD-by-default) ignore the
     // builder-time decorations flag — re-assert it after realize.
     #[cfg(target_os = "linux")]
@@ -108,6 +111,54 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
     }
 
     Ok(())
+}
+
+/// Strip the "Emoji" entry (Win+.) from WebView2's built-in context menu.
+///
+/// The emoji picker is injected by WebView2 for editable fields; there's no
+/// frontend hook for it, so we filter the native menu via the COM
+/// `ContextMenuRequested` event and drop the item named "emojiPicker".
+#[cfg(windows)]
+fn install_context_menu_filter(window: &tauri::WebviewWindow) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2ContextMenuRequestedEventArgs, ICoreWebView2_11,
+    };
+    use webview2_com::{take_pwstr, ContextMenuRequestedEventHandler};
+    use windows::core::Interface;
+
+    let _ = window.with_webview(|webview| {
+        // SAFETY: all COM calls run on the WebView2 UI thread with live pointers.
+        let Ok(core) = (unsafe { webview.controller().CoreWebView2() }) else {
+            return;
+        };
+        let Ok(core) = core.cast::<ICoreWebView2_11>() else {
+            return;
+        };
+        let mut token = Default::default();
+        let _ = unsafe {
+            core.add_ContextMenuRequested(
+                &ContextMenuRequestedEventHandler::create(Box::new(
+                    |_sender, args: Option<ICoreWebView2ContextMenuRequestedEventArgs>| {
+                        let Some(args) = args else { return Ok(()) };
+                        let items = args.MenuItems()?;
+                        let mut count = 0u32;
+                        items.Count(&mut count)?;
+                        // Walk back-to-front so a removal doesn't shift later indices.
+                        for i in (0..count).rev() {
+                            let item = items.GetValueAtIndex(i)?;
+                            let mut name = windows::core::PWSTR::null();
+                            item.Name(&mut name)?;
+                            if take_pwstr(name) == "emoji" {
+                                items.RemoveValueAtIndex(i)?;
+                            }
+                        }
+                        Ok(())
+                    },
+                )),
+                &mut token,
+            )
+        };
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -149,6 +200,12 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
+            // Drop WebView2's native "Emoji" context-menu entry on the main window.
+            #[cfg(windows)]
+            if let Some(main) = _app.get_webview_window("main") {
+                install_context_menu_filter(&main);
+            }
+
             // macOS skips parent() for the settings window, so tie its lifecycle
             // to the main window here instead. Other platforms keep parent().
             #[cfg(target_os = "macos")]
