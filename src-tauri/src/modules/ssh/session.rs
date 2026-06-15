@@ -69,11 +69,27 @@ impl client::Handler for Client {
             .to_string();
 
         match &self.expected_host_key {
-            // Known and unchanged — trust silently.
-            Some(known) if known == &presented => Ok(true),
-            // Known but changed — refuse and warn. The user must delete the
-            // saved profile key to re-trust (prevents silent MITM acceptance).
-            Some(_) => {
+            Some(known) => {
+                // Trust decision is keyed on the cryptographic fingerprint, not
+                // a byte-for-byte match of the serialized key string. Two
+                // encodings of the same key (or a library-version change in how
+                // `to_openssh()` renders comments/whitespace) must NOT read as a
+                // mismatch. We parse the stored key and compare fingerprints;
+                // an exact string match is kept as a fallback for keys persisted
+                // before this comparison existed.
+                let known_matches = ssh_key::PublicKey::from_openssh(known)
+                    .map(|k| {
+                        k.fingerprint(Default::default())
+                            == server_public_key.fingerprint(Default::default())
+                    })
+                    .unwrap_or(false)
+                    || known == &presented;
+                if known_matches {
+                    // Known and unchanged — trust silently.
+                    return Ok(true);
+                }
+                // Known but changed — refuse and warn. The user must delete the
+                // saved profile key to re-trust (prevents silent MITM acceptance).
                 let _ = self.app.emit(
                     "ssh-hostkey-mismatch",
                     serde_json::json!({

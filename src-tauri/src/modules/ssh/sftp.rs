@@ -8,6 +8,11 @@ use serde::Serialize;
 
 use super::session::Client;
 
+/// Cap for opening a remote file into the editor. Matches the local fs read
+/// cap; without it a multi-GB (or hostile) remote file is slurped fully into
+/// memory and OOMs the app.
+const MAX_READ_TEXT_BYTES: u64 = 10 * 1024 * 1024;
+
 /// Open the SFTP subsystem on a fresh channel of an authenticated connection.
 pub async fn open_sftp(handle: &Handle<Client>) -> Result<SftpSession, String> {
     let channel = handle
@@ -59,6 +64,18 @@ pub async fn list(sftp: &SftpSession, path: &str) -> Result<Vec<SftpEntry>, Stri
 }
 
 pub async fn read_text(sftp: &SftpSession, path: &str) -> Result<String, String> {
+    // Reject oversized files up front (the server reports the size) so a huge
+    // or hostile remote file can't be read fully into memory.
+    let meta = sftp
+        .metadata(path)
+        .await
+        .map_err(|e| format!("stat failed: {e}"))?;
+    if meta.len() > MAX_READ_TEXT_BYTES {
+        return Err(format!(
+            "file too large to open ({} bytes; limit {MAX_READ_TEXT_BYTES} bytes)",
+            meta.len()
+        ));
+    }
     let bytes = sftp
         .read(path)
         .await
