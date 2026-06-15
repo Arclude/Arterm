@@ -10,6 +10,7 @@ import {
   registerPromptTracker,
 } from "./osc-handlers";
 import { openPty, ptyShellLabel, type PtySession } from "./pty-bridge";
+import { currentWorkspaceEnv } from "@/modules/workspace";
 import { openSshShell } from "@/modules/ssh/lib/ssh-bridge";
 import {
   acquireSlot,
@@ -322,6 +323,13 @@ function bindLeafToSlot(leafId: number, s: Session): void {
           markSessionReady(leafId);
           if (s.lastCwd === next) return;
           s.lastCwd = next;
+          // Authorize the new cwd for the backend fs gate so AI/editor file
+          // access under a `cd`-ed directory works even when the file explorer
+          // isn't tracking it. Best-effort; remote (SSH) cwds simply no-op.
+          void invoke("workspace_authorize", {
+            path: next,
+            workspace: currentWorkspaceEnv(),
+          }).catch(() => {});
           s.callbacks.onCwd?.(next);
         },
         shellState,

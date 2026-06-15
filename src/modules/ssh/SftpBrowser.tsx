@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -66,6 +67,9 @@ export function SftpBrowser({ connId, title, onClose }: Props) {
         if (!p.paths.length) return;
         try {
           for (const local of p.paths) {
+            // The dropped file is an explicit user choice; authorize its path
+            // so the backend fs gate permits reading it for the upload.
+            await invoke("workspace_authorize", { path: local });
             await sftpUpload(
               connId,
               local,

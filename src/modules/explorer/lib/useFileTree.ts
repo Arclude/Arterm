@@ -177,10 +177,24 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     setNodes({});
 
     const toWatch = [rootPath, ...restored];
-    void fetchChildren(rootPath);
-    for (const d of restored) void fetchChildren(d);
-    for (const p of toWatch) watchedRef.current.add(p);
-    watchAdd(toWatch);
+    // Authorize the workspace root before touching it. The backend fs gate
+    // only allows reads/watches under an authorized root; a root reached via a
+    // terminal `cd` outside the home dir isn't authorized yet, so authorize it
+    // here (awaited) before fetching. Child paths pass by prefix afterward.
+    void (async () => {
+      try {
+        await invoke("workspace_authorize", {
+          path: rootPath,
+          workspace: currentWorkspaceEnv(),
+        });
+      } catch {
+        // Non-fatal — the reads below will surface any real access error.
+      }
+      void fetchChildren(rootPath);
+      for (const d of restored) void fetchChildren(d);
+      for (const p of toWatch) watchedRef.current.add(p);
+      watchAdd(toWatch);
+    })();
 
     return () => {
       rememberExpansion(rootPath, expandedRef.current);
