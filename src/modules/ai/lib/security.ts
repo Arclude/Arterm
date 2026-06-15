@@ -215,6 +215,22 @@ export function checkReadable(path: string): SafetyResult {
     }
   }
 
+  // Also reject when any *ancestor directory* segment matches a secret
+  // pattern (e.g. `/home/me/.env/config.json`, `secrets.json/leaked.txt`).
+  // The basename check alone misses secrets stored *inside* a
+  // sensitively-named directory (Doppler/sops/backup conventions).
+  const segments = path.split(/[/\\]/).filter((s) => s.length > 0);
+  for (const seg of segments) {
+    for (const re of SECRET_BASENAME_PATTERNS) {
+      if (re.test(seg)) {
+        return {
+          ok: false,
+          reason: `Refused: path segment "${seg}" matches a sensitive-file pattern.`,
+        };
+      }
+    }
+  }
+
   const cmp = comparisonForm(path);
   for (const dir of PROTECTED_DIRS) {
     if (isUnderProtected(cmp, dir)) {
@@ -361,9 +377,9 @@ export function checkShellCommand(cmd: string): SafetyResult {
         "Refused: command attempts to recursively delete the filesystem root.",
     };
   }
-  // rm -rf ~ / $HOME — wiping the user's home dir
+  // rm -rf ~ / $HOME / ${HOME} — wiping the user's home dir
   if (
-    /\brm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(['"]?(~|\$HOME)['"]?)(\s|$|;|&|\|)/.test(
+    /\brm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(['"]?(~|\$\{?HOME\}?)['"]?)(\s|$|;|&|\|)/.test(
       c,
     )
   ) {
@@ -371,6 +387,19 @@ export function checkShellCommand(cmd: string): SafetyResult {
       ok: false,
       reason:
         "Refused: command attempts to recursively delete the home directory.",
+    };
+  }
+  // rm -rf /* (and /. /.* ) — globbed root wipe that the bare-root rule above
+  // (which requires the path to *be* `/`) does not catch.
+  if (
+    /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*|-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*)\s+['"]?\/(\*|\.\.?)['"]?(\s|$|;|&|\|)/.test(
+      c,
+    )
+  ) {
+    return {
+      ok: false,
+      reason:
+        "Refused: command attempts to recursively delete the filesystem root.",
     };
   }
   if (/--no-preserve-root/.test(c)) {
@@ -404,6 +433,27 @@ export function checkShellCommand(cmd: string): SafetyResult {
       ok: false,
       reason:
         "Refused: piping a network download directly into a shell is blocked. Download first, inspect, then run.",
+    };
+  }
+  // Decode-then-execute: `… | base64 -d | sh`, `… | xxd -r | bash` — a common
+  // obfuscation that hides the real payload from the approval card.
+  if (/\b(base64|xxd|openssl\s+(base64|enc))\b[^|]*\|\s*(ba|z|k|d|fi|c)?sh\b/.test(c)) {
+    return {
+      ok: false,
+      reason:
+        "Refused: decoding an opaque payload directly into a shell is blocked.",
+    };
+  }
+  // Raw block-device / disk-formatting on Windows (the dd /dev rule above is
+  // Unix-only). `\\.\PhysicalDriveN`, `format C:`, `diskpart`.
+  if (
+    /\\\\\.\\physicaldrive\d/i.test(c) ||
+    /\bformat\s+[a-z]:/i.test(c) ||
+    /\bdiskpart\b/i.test(c)
+  ) {
+    return {
+      ok: false,
+      reason: "Refused: raw-disk or drive-formatting commands are not allowed.",
     };
   }
   return { ok: true };

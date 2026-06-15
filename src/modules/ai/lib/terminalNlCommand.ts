@@ -56,6 +56,13 @@ function extractCommand(raw: string): string {
   const fence = t.match(/^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n?```$/);
   if (fence) t = fence[1].trim();
   t = t.replace(/^\$\s+/, "").replace(/^>\s+/, "");
+  // Strip dangerous control bytes from the model reply before it is inserted
+  // into the PTY. The text is pasted (not executed) but a raw ESC/BEL/etc.
+  // could drive terminal escape sequences; tab and newline are preserved
+  // (newlines are bracketed-paste-wrapped by the caller, so they cannot
+  // auto-submit).
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control bytes is the intent
+  t = t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "");
   return t.trim();
 }
 

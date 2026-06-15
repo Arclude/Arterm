@@ -233,3 +233,58 @@ describe("checkShellCommand — control-character / newline injection", () => {
     });
   });
 });
+
+describe("checkReadable — secret-named directories (segment match)", () => {
+  it("blocks files inside a .env directory", () => {
+    expect(checkReadable("/home/me/.env/config.json")).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("blocks files inside a secrets.json directory and an id_rsa dir", () => {
+    expect(checkReadable("/home/me/secrets.json/leaked.txt")).toMatchObject({
+      ok: false,
+    });
+    expect(checkReadable("/srv/id_rsa/backup")).toMatchObject({ ok: false });
+  });
+
+  it("still allows ordinary nested paths", () => {
+    expect(checkReadable("/home/me/projects/app/src/index.ts")).toMatchObject({
+      ok: true,
+    });
+  });
+});
+
+describe("checkShellCommand — expanded destructive patterns", () => {
+  it("blocks rm -rf ${HOME} (brace form)", () => {
+    expect(checkShellCommand("rm -rf ${HOME}")).toMatchObject({ ok: false });
+  });
+
+  it("blocks globbed root wipe rm -rf /*", () => {
+    expect(checkShellCommand("rm -rf /*")).toMatchObject({ ok: false });
+    expect(checkShellCommand("rm -rf /.")).toMatchObject({ ok: false });
+  });
+
+  it("blocks decode-then-execute pipelines", () => {
+    expect(
+      checkShellCommand("echo cm0gLXJmIC8= | base64 -d | bash"),
+    ).toMatchObject({ ok: false });
+  });
+
+  it("blocks Windows raw-disk / format / diskpart", () => {
+    expect(
+      checkShellCommand("dd if=evil of=\\\\.\\PhysicalDrive0"),
+    ).toMatchObject({ ok: false });
+    expect(checkShellCommand("format C:")).toMatchObject({ ok: false });
+    expect(checkShellCommand("diskpart")).toMatchObject({ ok: false });
+  });
+
+  it("does not over-block benign base64 / format-patch usage", () => {
+    expect(checkShellCommand("echo aGVsbG8= | base64 -d")).toMatchObject({
+      ok: true,
+    });
+    expect(checkShellCommand("git format-patch -1")).toMatchObject({
+      ok: true,
+    });
+  });
+});
