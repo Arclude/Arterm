@@ -7,7 +7,90 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Build categorized release notes once, from Conventional Commits between the
+  # previous tag and this one. The publish jobs consume it as the release body.
+  changelog:
+    runs-on: ubuntu-22.04
+    outputs:
+      body: ${{ steps.gen.outputs.body }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: gen
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [ -n "$PREV_TAG" ]; then RANGE="${PREV_TAG}..${TAG}"; else RANGE="${TAG}"; fi
+
+          # User-facing sections in display order. Anything else (chore, ci,
+          # build, test, style) is intentionally omitted.
+          order=(
+            "breaking:### ⚠️ Breaking Changes"
+            "security:### 🔒 Security"
+            "feat:### ✨ Features"
+            "fix:### 🐛 Bug Fixes"
+            "perf:### ⚡ Performance"
+            "refactor:### ♻️ Refactor"
+            "docs:### 📝 Documentation"
+          )
+          declare -A SECTIONS
+
+          while IFS=$'\t' read -r subject hash; do
+            [ -n "$subject" ] || continue
+            type="${subject%%:*}"            # e.g. "fix(security)" or "feat!"
+            desc="${subject#*: }"
+            breaking=0
+            [[ "$type" == *"!" ]] && breaking=1
+            type="${type%!}"
+            scope=""
+            base="$type"
+            if [[ "$type" == *"("* ]]; then
+              base="${type%%(*}"
+              scope="${type##*(}"; scope="${scope%)}"
+            fi
+            key=""
+            case "$base" in
+              feat) key="feat";;
+              fix) key="fix";;
+              perf) key="perf";;
+              refactor) key="refactor";;
+              docs) key="docs";;
+            esac
+            [ "$scope" = "security" ] && key="security"
+            [ "$breaking" -eq 1 ] && key="breaking"
+            [ -n "$key" ] || continue        # drop chore/ci/build/test/style
+            SECTIONS[$key]+="- ${desc} (${hash})"$'\n'
+          done < <(git log --no-merges --pretty=tformat:'%s%x09%h' "${RANGE}")
+
+          {
+            for entry in "${order[@]}"; do
+              k="${entry%%:*}"; title="${entry#*:}"
+              if [ -n "${SECTIONS[$k]:-}" ]; then
+                printf '%s\n\n%s\n' "$title" "${SECTIONS[$k]}"
+              fi
+            done
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+            fi
+          } > notes.md
+
+          {
+            echo "body<<__RELEASE_NOTES_EOF__"
+            cat notes.md
+            echo "__RELEASE_NOTES_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Preview notes
+        shell: bash
+        run: cat notes.md
+
   publish-tauri:
+    needs: changelog
     permissions:
       contents: write
     strategy:
@@ -65,9 +148,9 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Arterm ${{ github.ref_name }}"
-          # Auto-generate the release notes/body from merged commits & PRs, and
-          # publish immediately (no draft) so the tag's release shows as latest.
-          generateReleaseNotes: true
+          # Categorized notes generated from Conventional Commits by the
+          # changelog job above; published immediately (no draft).
+          releaseBody: ${{ needs.changelog.outputs.body }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
