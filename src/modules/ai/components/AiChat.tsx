@@ -358,8 +358,8 @@ function UserMessage({
 
   if (editing) {
     return (
-      <Message from="user">
-        <MessageContent className="w-full">
+      <Message from="user" className="max-w-full">
+        <div className="w-full rounded-2xl border border-border/60 bg-muted/40 p-2">
           <textarea
             // biome-ignore lint/a11y/noAutofocus: edit box should grab focus
             autoFocus
@@ -378,7 +378,7 @@ function UserMessage({
                 setEditing(false);
               }
             }}
-            className="min-h-16 w-full resize-none rounded-md border border-border/60 bg-background/60 p-2 text-xs outline-none focus:border-border"
+            className="min-h-16 w-full resize-none bg-transparent text-xs outline-none"
           />
           <div className="mt-1 flex items-center justify-end gap-1.5">
             <button
@@ -396,14 +396,14 @@ function UserMessage({
               Save & resend
             </button>
           </div>
-        </MessageContent>
+        </div>
       </Message>
     );
   }
 
   return (
     <Message from="user">
-      <MessageContent className="group relative">
+      <MessageContent>
         {commandName ? <CommandSnippet name={commandName} /> : null}
         {stripped.chips.length > 0 ? (
           <ContextChips chips={stripped.chips} />
@@ -411,18 +411,19 @@ function UserMessage({
         {stripped.text ? (
           <p className="whitespace-pre-wrap wrap-break-word">{stripped.text}</p>
         ) : null}
-        {canEdit && onEdit && stripped.text ? (
-          <button
-            type="button"
-            onClick={begin}
-            title="Edit & resend"
-            aria-label="Edit & resend"
-            className="absolute -top-2 -right-2 rounded border border-border/60 bg-card p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover:opacity-100"
-          >
-            <HugeiconsIcon icon={PencilEdit02Icon} size={11} strokeWidth={2} />
-          </button>
-        ) : null}
       </MessageContent>
+      {canEdit && onEdit && stripped.text ? (
+        <button
+          type="button"
+          onClick={begin}
+          title="Edit & resend"
+          aria-label="Edit & resend"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+        >
+          <HugeiconsIcon icon={PencilEdit02Icon} size={10} strokeWidth={2} />
+          Edit
+        </button>
+      ) : null}
     </Message>
   );
 }
