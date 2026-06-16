@@ -11,7 +11,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useChatStore } from "@/modules/ai";
 import { AgentStatusPill } from "@/modules/ai/components/AgentStatusPill";
 import { AiStatusBarControls } from "@/modules/ai/components/AiStatusBarControls";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -55,7 +54,6 @@ export function StatusBar({
   hasComposer,
   privateActive,
 }: Props) {
-  const panelOpen = useChatStore((s) => s.panelOpen);
   const { status: git, refresh: refreshGit } = useGitStatus(cwd);
   const items = usePreferencesStore((s) => s.statusBar);
 
@@ -152,7 +150,7 @@ export function StatusBar({
           />
         ) : null}
         {items.clock ? <Clock /> : null}
-        {panelOpen && hasComposer ? <AiStatusBarControls /> : null}
+        {hasComposer ? <AiStatusBarControls /> : null}
       </div>
     </footer>
   );

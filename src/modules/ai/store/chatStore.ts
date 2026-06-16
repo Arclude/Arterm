@@ -17,6 +17,7 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { BUILTIN_AGENTS } from "../lib/agents";
 import { useAgentsStore } from "./agentsStore";
 import { usePlanStore } from "./planStore";
+import { useOrchestrationStore } from "./orchestrationStore";
 import { useTodosStore } from "./todoStore";
 import type { AgentUsage } from "../lib/agent";
 import {
@@ -131,6 +132,10 @@ type StoreState = {
 
   selectedModelId: string;
   setSelectedModelId: (id: string) => void;
+
+  /** When on, nudge the lead agent to fan work out via run_agent_team. */
+  teamMode: boolean;
+  setTeamMode: (v: boolean) => void;
 
   mini: MiniState;
   openMini: () => void;
@@ -261,6 +266,9 @@ export function flushPersist(id?: string): void {
   for (const key of Array.from(pendingPersist.keys())) flushPersistEntry(key);
 }
 
+const TEAM_MODE_DIRECTIVE = `## TEAM MODE — ON
+The user has enabled multi-agent team mode. Strongly prefer fanning out via run_agent_team whenever the task has 2+ independent, parallelizable parts. Split into focused, non-overlapping subtasks, run them as a team, then synthesize the workers' reports into one answer (you perform any file changes yourself afterward). For a single linear task, just do it directly.`;
+
 function makeChat(sessionId: string): Chat<UIMessage> {
   const readCache = new Map<string, { size: number; hash: number }>();
   const toolContext: ToolContext = {
@@ -292,8 +300,18 @@ function makeChat(sessionId: string): Chat<UIMessage> {
         st.selectedModelId
       );
     },
-    getCustomInstructions: () =>
-      usePreferencesStore.getState().customInstructions,
+    getCustomInstructions: () => {
+      const base = usePreferencesStore.getState().customInstructions;
+      // Team mode nudges only the lead. Workers are read-only and must never
+      // spawn nested teams, so they never see this directive.
+      const isWorker = !!useOrchestrationStore
+        .getState()
+        .getByWorker(sessionId);
+      if (useChatStore.getState().teamMode && !isWorker) {
+        return base ? `${base}\n\n${TEAM_MODE_DIRECTIVE}` : TEAM_MODE_DIRECTIVE;
+      }
+      return base;
+    },
     getAgentPersona: () => {
       const { activeId, customAgents } = useAgentsStore.getState();
       const all = [...BUILTIN_AGENTS, ...customAgents];
@@ -403,6 +421,9 @@ export const useChatStore = create<StoreState>((set, get) => ({
     set({ selectedModelId: id });
     void pushRecentModel(id);
   },
+
+  teamMode: false,
+  setTeamMode: (v) => set({ teamMode: v }),
 
   mini: { open: false },
   openMini: () => set({ mini: { open: true } }),
