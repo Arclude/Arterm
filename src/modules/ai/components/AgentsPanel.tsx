@@ -11,7 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useChat, type UIMessage } from "@ai-sdk/react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { getModel, isKnownModelId } from "../config";
 import { BUILTIN_AGENTS } from "../lib/agents";
 import type { SessionMeta } from "../lib/sessions";
@@ -99,6 +99,19 @@ function modelLabel(modelId?: string): string | null {
 function AgentConversation({ sessionId }: { sessionId: string }) {
   const chat = useMemo(() => getOrCreateChat(sessionId), [sessionId]);
   const helpers = useChat<UIMessage>({ chat });
+
+  // Edit a prior user message: drop it and everything after, then resend the
+  // new text so the agent re-runs from that point.
+  const onEditMessage = useCallback(
+    (messageId: string, newText: string) => {
+      const idx = chat.messages.findIndex((m) => m.id === messageId);
+      if (idx < 0) return;
+      chat.messages = chat.messages.slice(0, idx);
+      void chat.sendMessage({ text: newText });
+    },
+    [chat],
+  );
+
   if (helpers.messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center px-3 text-center text-[11px] text-muted-foreground">
@@ -115,6 +128,7 @@ function AgentConversation({ sessionId }: { sessionId: string }) {
         clearError={helpers.clearError}
         addToolApprovalResponse={helpers.addToolApprovalResponse}
         stop={helpers.stop}
+        onEditMessage={onEditMessage}
       />
     </div>
   );
