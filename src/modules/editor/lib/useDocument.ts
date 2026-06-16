@@ -76,6 +76,61 @@ type Options = {
   onDirtyChange?: (dirty: boolean) => void;
 };
 
+/** Remote SFTP documents are addressed as `ssh://<connId>/<remotePath>`. */
+function isRemotePath(path: string): boolean {
+  return path.startsWith("ssh://");
+}
+
+/** `ssh://5//root/x` → { connId: 5, remote: "/root/x" } (leading slash kept). */
+function parseRemotePath(path: string): { connId: number; remote: string } {
+  const rest = path.slice("ssh://".length);
+  const slash = rest.indexOf("/");
+  if (slash < 0) return { connId: Number(rest), remote: "/" };
+  return { connId: Number(rest.slice(0, slash)), remote: rest.slice(slash + 1) };
+}
+
+/** Read a document as text — routes remote paths through SFTP. */
+async function readDocText(path: string): Promise<ReadResult> {
+  if (isRemotePath(path)) {
+    const { connId, remote } = parseRemotePath(path);
+    const content = await invoke<string>("ssh_sftp_read", {
+      connId,
+      path: remote,
+    });
+    return { kind: "text", content, size: content.length };
+  }
+  return invoke<ReadResult>("fs_read_file", {
+    path,
+    workspace: currentWorkspaceEnv(),
+  });
+}
+
+/** Read a document as a data URL (images). Remote binaries aren't supported yet. */
+async function readDocDataUrl(path: string): Promise<DataUrlResult> {
+  if (isRemotePath(path)) {
+    throw new Error("Opening image/binary files over SSH isn't supported yet.");
+  }
+  return invoke<DataUrlResult>("fs_read_file_data_url", {
+    path,
+    workspace: currentWorkspaceEnv(),
+  });
+}
+
+/** Persist a document — routes remote paths through SFTP (CREATE|TRUNCATE). */
+async function writeDocText(path: string, content: string): Promise<void> {
+  if (isRemotePath(path)) {
+    const { connId, remote } = parseRemotePath(path);
+    await invoke("ssh_sftp_write", { connId, path: remote, contents: content });
+    return;
+  }
+  await invoke("fs_write_file", {
+    path,
+    content,
+    workspace: currentWorkspaceEnv(),
+    source: "editor",
+  });
+}
+
 export function useDocument({ path, onDirtyChange }: Options) {
   const [doc, setDoc] = useState<DocumentState>({ status: "loading" });
   const [dirty, setDirty] = useState(false);
@@ -110,12 +165,7 @@ export function useDocument({ path, onDirtyChange }: Options) {
 
   const saveNow = useCallback(async () => {
     const content = bufferRef.current;
-    await invoke("fs_write_file", {
-      path,
-      content,
-      workspace: currentWorkspaceEnv(),
-      source: "editor",
-    });
+    await writeDocText(path, content);
     savedRef.current = content;
     const entry = sharedDocs.get(path);
     if (entry) {
@@ -152,10 +202,7 @@ export function useDocument({ path, onDirtyChange }: Options) {
     if (isImagePath(path)) {
       setDoc({ status: "loading" });
       setDirty(false);
-      invoke<DataUrlResult>("fs_read_file_data_url", {
-        path,
-        workspace: currentWorkspaceEnv(),
-      })
+      readDocDataUrl(path)
         .then((res) => {
           if (cancelled) return;
           setDoc({ status: "image", dataUrl: res.dataUrl, size: res.size });
@@ -206,10 +253,7 @@ export function useDocument({ path, onDirtyChange }: Options) {
     setDoc({ status: "loading" });
     setDirty(false);
 
-    invoke<ReadResult>("fs_read_file", {
-      path,
-      workspace: currentWorkspaceEnv(),
-    })
+    readDocText(path)
       .then((res) => {
         if (res.kind === "text") {
           entry.saved = res.content;
@@ -250,20 +294,14 @@ export function useDocument({ path, onDirtyChange }: Options) {
   const reload = useCallback((): boolean => {
     if (dirtyRef.current) return false;
     if (isImagePath(path)) {
-      void invoke<DataUrlResult>("fs_read_file_data_url", {
-        path,
-        workspace: currentWorkspaceEnv(),
-      })
+      void readDocDataUrl(path)
         .then((res) =>
           setDoc({ status: "image", dataUrl: res.dataUrl, size: res.size }),
         )
         .catch((e) => setDoc({ status: "error", message: String(e) }));
       return true;
     }
-    void invoke<ReadResult>("fs_read_file", {
-      path,
-      workspace: currentWorkspaceEnv(),
-    })
+    void readDocText(path)
       .then((res) => {
         if (res.kind === "text") {
           if (res.content === savedRef.current) return;

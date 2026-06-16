@@ -28,12 +28,14 @@ import {
 type Props = {
   /** Open a terminal tab bound to an established SSH connection. */
   onOpenTerminal: (connId: number, title: string) => void;
+  /** Open a remote file in the editor (path is `ssh://<connId>/<remotePath>`). */
+  onOpenFile: (path: string, pin?: boolean) => void;
 };
 
 type HostKeyPrompt = HostKeyEvent & { kind: "unknown" | "mismatch" };
 type Browsing = { connId: number; title: string };
 
-export function SshPanel({ onOpenTerminal }: Props) {
+export function SshPanel({ onOpenTerminal, onOpenFile }: Props) {
   const [profiles, setProfiles] = useState<SshProfile[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SshProfile | null>(null);
@@ -131,6 +133,7 @@ export function SshPanel({ onOpenTerminal }: Props) {
         connId={browsing.connId}
         title={browsing.title}
         onClose={() => setBrowsing(null)}
+        onOpenFile={onOpenFile}
       />
     );
   }

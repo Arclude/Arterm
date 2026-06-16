@@ -5,6 +5,7 @@
 use russh::client::Handle;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
+use tokio::io::AsyncWriteExt;
 
 use super::session::Client;
 
@@ -83,10 +84,25 @@ pub async fn read_text(sftp: &SftpSession, path: &str) -> Result<String, String>
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-pub async fn write_text(sftp: &SftpSession, path: &str, contents: &str) -> Result<(), String> {
-    sftp.write(path, contents.as_bytes())
+/// Write bytes to a remote path, creating/truncating it. `SftpSession::write`
+/// opens with WRITE only (no CREATE/TRUNCATE) — a new file fails with "No such
+/// file" and an overwrite with shorter data leaves stale trailing bytes. `create`
+/// opens CREATE|TRUNCATE|WRITE, which is what we want for both upload and save.
+async fn write_bytes(sftp: &SftpSession, remote: &str, bytes: &[u8]) -> Result<(), String> {
+    let mut file = sftp
+        .create(remote)
         .await
-        .map_err(|e| format!("write failed: {e}"))
+        .map_err(|e| format!("open failed: {e}"))?;
+    file.write_all(bytes)
+        .await
+        .map_err(|e| format!("write failed: {e}"))?;
+    file.shutdown()
+        .await
+        .map_err(|e| format!("close failed: {e}"))
+}
+
+pub async fn write_text(sftp: &SftpSession, path: &str, contents: &str) -> Result<(), String> {
+    write_bytes(sftp, path, contents.as_bytes()).await
 }
 
 /// Stream a remote file down to a local path.
@@ -101,9 +117,7 @@ pub async fn download(sftp: &SftpSession, remote: &str, local: &str) -> Result<(
 /// Upload a local file to a remote path.
 pub async fn upload(sftp: &SftpSession, local: &str, remote: &str) -> Result<(), String> {
     let bytes = std::fs::read(local).map_err(|e| format!("upload read failed: {e}"))?;
-    sftp.write(remote, &bytes)
-        .await
-        .map_err(|e| format!("upload write failed: {e}"))
+    write_bytes(sftp, remote, &bytes).await
 }
 
 pub async fn mkdir(sftp: &SftpSession, path: &str) -> Result<(), String> {

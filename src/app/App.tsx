@@ -1766,6 +1766,7 @@ export default function App() {
                         onOpenTerminal={(connId, title) =>
                           newSshTab(connId, title)
                         }
+                        onOpenFile={handleOpenFile}
                       />
                     ) : (
                       <SourceControlPanel
