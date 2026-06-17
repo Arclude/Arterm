@@ -28,6 +28,7 @@ import {
   CodeIcon,
   File01Icon,
   HashtagIcon,
+  PencilEdit02Icon,
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { SLASH_COMMANDS, ARTERM_CMD_RE } from "../lib/slashCommands";
@@ -40,7 +41,7 @@ import type {
   UIMessage,
   UIMessagePart,
 } from "ai";
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { AiToolApproval } from "./AiToolApproval";
 
 function CommandSnippet({ name }: { name: string }) {
@@ -175,6 +176,8 @@ type Props = {
   clearError: () => void;
   addToolApprovalResponse: (arg: ApprovalArg) => void | PromiseLike<void>;
   stop: () => void | PromiseLike<void>;
+  /** Edit a prior user message and re-run from there (drops later messages). */
+  onEditMessage?: (messageId: string, newText: string) => void;
 };
 
 export function AiChatView({
@@ -183,6 +186,7 @@ export function AiChatView({
   error,
   clearError,
   addToolApprovalResponse,
+  onEditMessage,
 }: Props) {
   const isBusy = status === "submitted" || status === "streaming";
   const lastMessage = messages[messages.length - 1];
@@ -226,6 +230,8 @@ export function AiChatView({
             message={m}
             onApproval={onApproval}
             streaming={m.id === streamingMessageId}
+            onEdit={onEditMessage}
+            canEdit={!isBusy}
           />
         ))}
         {compactionNotice && (
@@ -317,14 +323,123 @@ const ContinueRow = memo(function ContinueRow({
   );
 });
 
+function UserMessage({
+  messageId,
+  parts,
+  onEdit,
+  canEdit,
+}: {
+  messageId: string;
+  parts: UIMessage["parts"];
+  onEdit?: (messageId: string, newText: string) => void;
+  canEdit?: boolean;
+}) {
+  const rawText = parts
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("\n");
+  const cmdMatch = rawText.match(ARTERM_CMD_RE);
+  const commandName = cmdMatch?.[1] ?? null;
+  const withoutCmd = cmdMatch ? rawText.slice(cmdMatch[0].length) : rawText;
+  const stripped = stripUserContextBlocks(withoutCmd);
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const begin = () => {
+    setDraft(stripped.text);
+    setEditing(true);
+  };
+  const save = () => {
+    const t = draft.trim();
+    setEditing(false);
+    if (t && t !== stripped.text) onEdit?.(messageId, t);
+  };
+
+  if (editing) {
+    return (
+      <Message from="user" className="max-w-full">
+        <div className="w-full rounded-2xl border border-border/60 bg-muted/40 p-2">
+          <textarea
+            // biome-ignore lint/a11y/noAutofocus: edit box should grab focus
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
+                e.preventDefault();
+                save();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setEditing(false);
+              }
+            }}
+            className="min-h-16 w-full resize-none bg-transparent text-xs outline-none"
+          />
+          <div className="mt-1 flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded px-2 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              className="rounded bg-primary px-2 py-0.5 text-[10.5px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Save & resend
+            </button>
+          </div>
+        </div>
+      </Message>
+    );
+  }
+
+  return (
+    <Message from="user">
+      <MessageContent>
+        {commandName ? <CommandSnippet name={commandName} /> : null}
+        {stripped.chips.length > 0 ? (
+          <ContextChips chips={stripped.chips} />
+        ) : null}
+        {stripped.text ? (
+          <p className="whitespace-pre-wrap wrap-break-word">{stripped.text}</p>
+        ) : null}
+      </MessageContent>
+      {canEdit && onEdit && stripped.text ? (
+        <button
+          type="button"
+          onClick={begin}
+          title="Edit & resend"
+          aria-label="Edit & resend"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+        >
+          <HugeiconsIcon icon={PencilEdit02Icon} size={10} strokeWidth={2} />
+          Edit
+        </button>
+      ) : null}
+    </Message>
+  );
+}
+
 const RenderedMessage = memo(function RenderedMessage({
   message,
   onApproval,
   streaming,
+  onEdit,
+  canEdit,
 }: {
   message: UIMessage;
   onApproval: (id: string, approved: boolean) => void;
   streaming: boolean;
+  onEdit?: (messageId: string, newText: string) => void;
+  canEdit?: boolean;
 }) {
   // Index of the trailing text part — only that one is "live" mid-stream.
   // Earlier text parts (separated by tool calls) are already finalized.
@@ -336,30 +451,13 @@ const RenderedMessage = memo(function RenderedMessage({
     }
   }
   if (message.role === "user") {
-    const rawText = message.parts
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("\n");
-
-    const cmdMatch = rawText.match(ARTERM_CMD_RE);
-    const commandName = cmdMatch?.[1] ?? null;
-    const withoutCmd = cmdMatch ? rawText.slice(cmdMatch[0].length) : rawText;
-    const stripped = stripUserContextBlocks(withoutCmd);
-
     return (
-      <Message from="user">
-        <MessageContent>
-          {commandName ? <CommandSnippet name={commandName} /> : null}
-          {stripped.chips.length > 0 ? (
-            <ContextChips chips={stripped.chips} />
-          ) : null}
-          {stripped.text ? (
-            <p className="whitespace-pre-wrap wrap-break-word">
-              {stripped.text}
-            </p>
-          ) : null}
-        </MessageContent>
-      </Message>
+      <UserMessage
+        messageId={message.id}
+        parts={message.parts}
+        onEdit={onEdit}
+        canEdit={canEdit}
+      />
     );
   }
 

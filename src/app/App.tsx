@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { homeDir } from "@tauri-apps/api/path";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { SearchAddon } from "@xterm/addon-search";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import {
@@ -34,9 +34,6 @@ import { useManagedAgentsStore } from "@/modules/agents/store/managedAgentsStore
 import {
   AgentRunBridge,
   AgentsPanel,
-  AiInputBar,
-  AiInputBarConnect,
-  AiMiniWindow,
   getAllCustomEndpointKeys,
   getAllKeys,
   hasAnyKey,
@@ -209,7 +206,9 @@ function readSidebarView(): SidebarViewId {
   } catch {
     // ignore
   }
-  return "explorer";
+  // AI-first terminal: default to the Agents section so the AI is always there
+  // on launch without needing Ctrl+I.
+  return "agents";
 }
 
 export default function App() {
@@ -458,12 +457,8 @@ export default function App() {
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [paletteFileMode, setPaletteFileMode] = useState(false);
-  const miniOpen = useChatStore((s) => s.mini.open);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
-  const openMini = useChatStore((s) => s.openMini);
   const focusInput = useChatStore((s) => s.focusInput);
-  const openPanel = useChatStore((s) => s.openPanel);
-  const panelOpen = useChatStore((s) => s.panelOpen);
   const apiKeys = useChatStore((s) => s.apiKeys);
   const setApiKeys = useChatStore((s) => s.setApiKeys);
   const setCustomEndpointKeys = useChatStore((s) => s.setCustomEndpointKeys);
@@ -502,7 +497,7 @@ export default function App() {
   const hasComposer = hasAnyKey(apiKeys) || hasLocalModel;
 
   const prefsHydrated = usePreferencesStore((s) => s.hydrated);
-  const [keysLoaded, setKeysLoaded] = useState(false);
+  const [, setKeysLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
     const reload = () => {
@@ -824,18 +819,40 @@ export default function App() {
     return null;
   }, [tabs, activeId]);
 
+  const revealAgentsSidebar = useCallback(() => {
+    const panel = sidebarRef.current;
+    const collapsed = panel ? panel.getSize().asPercentage <= 0 : false;
+    if (panel && collapsed) panel.resize(`${sidebarWidthRef.current}px`);
+    if (sidebarView !== "agents") persistSidebarView("agents");
+  }, [sidebarView, persistSidebarView]);
+
   const togglePanelAndFocus = useCallback(() => {
     if (!hasComposer) {
       void openSettingsWindow("models");
       return;
     }
-    if (panelOpen) {
-      useChatStore.getState().closePanel();
-    } else {
-      openPanel();
-      focusInput(null);
+    // The whole AI experience lives in the Agents sidebar section now (thread +
+    // composer). Toggle it: collapse if already showing, else reveal + focus.
+    const panel = sidebarRef.current;
+    const collapsed = panel ? panel.getSize().asPercentage <= 0 : false;
+    if (sidebarView === "agents" && !collapsed) {
+      panel?.collapse();
+      return;
     }
-  }, [hasComposer, panelOpen, openPanel, focusInput]);
+    revealAgentsSidebar();
+    focusInput(null);
+  }, [hasComposer, sidebarView, focusInput, revealAgentsSidebar]);
+
+  // Clicking a session/worker in the Agents panel: reveal the section and focus
+  // the embedded composer. The thread renders inside the Agents panel itself.
+  const openAgentConversation = useCallback(() => {
+    if (!hasComposer) {
+      void openSettingsWindow("models");
+      return;
+    }
+    revealAgentsSidebar();
+    focusInput(null);
+  }, [hasComposer, revealAgentsSidebar, focusInput]);
 
   const attachSelection = useChatStore((s) => s.attachSelection);
 
@@ -850,10 +867,10 @@ export default function App() {
       window.dispatchEvent(
         new CustomEvent<string>("arterm:ai-attach-file", { detail: path }),
       );
-      openPanel();
+      revealAgentsSidebar();
       focusInput(null);
     },
-    [hasComposer, openPanel, focusInput],
+    [hasComposer, revealAgentsSidebar, focusInput],
   );
 
   const askFromSelection = useCallback(() => {
@@ -861,6 +878,7 @@ export default function App() {
       void openSettingsWindow("models");
       return;
     }
+    revealAgentsSidebar();
     const selection = captureActiveSelection();
     if (!selection || !selection.trim()) {
       focusInput(null);
@@ -875,6 +893,7 @@ export default function App() {
     focusInput,
     attachSelection,
     activeTab,
+    revealAgentsSidebar,
   ]);
 
   const [askPopup, setAskPopup] = useState<{ x: number; y: number } | null>(
@@ -1355,9 +1374,9 @@ export default function App() {
   );
 
   const onActivateLocalAgent = useCallback(() => {
-    openPanel();
+    revealAgentsSidebar();
     focusInput(null);
-  }, [openPanel, focusInput]);
+  }, [revealAgentsSidebar, focusInput]);
 
   const handleLeafExit = useCallback(
     (leafId: number, _code: number) => {
@@ -1760,7 +1779,7 @@ export default function App() {
                         cwd={explorerRoot ?? workspaceFallbackPath}
                       />
                     ) : sidebarView === "agents" ? (
-                      <AgentsPanel onOpenSession={openMini} />
+                      <AgentsPanel onOpenSession={openAgentConversation} />
                     ) : sidebarView === "ssh" ? (
                       <SshPanel
                         onOpenTerminal={(connId, title) =>
@@ -1780,7 +1799,7 @@ export default function App() {
                   </div>
                   <SidebarRail
                     activeView={sidebarView}
-                    onSelectView={persistSidebarView}
+                    onSelectView={cycleSidebarView}
                     changedCount={sourceControl.changedCount}
                     busyAgentCount={busyAgentCount}
                   />
@@ -1792,28 +1811,6 @@ export default function App() {
                   <div className="relative min-h-0 flex-1">
                     {workspaceSurface}
                   </div>
-
-                  {keysLoaded ? (
-                    <motion.div
-                      data-ai-input-bar
-                      initial={false}
-                      animate={{
-                        height: panelOpen ? "auto" : 0,
-                        opacity: panelOpen ? 1 : 0,
-                      }}
-                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden"
-                      aria-hidden={!panelOpen}
-                    >
-                      {hasComposer ? (
-                        <AiInputBar />
-                      ) : (
-                        <AiInputBarConnect
-                          onAdd={() => void openSettingsWindow("models")}
-                        />
-                      )}
-                    </motion.div>
-                  ) : null}
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
@@ -1826,7 +1823,7 @@ export default function App() {
               home={home}
               onCd={sendCd}
               onWorkspaceChange={switchWorkspace}
-              onOpenMini={openMini}
+              onOpenMini={openAgentConversation}
               onNewTab={openNewTab}
               onToggleSidebar={toggleSidebar}
               activeLeafId={activeLeafId}
@@ -1860,7 +1857,6 @@ export default function App() {
           ) : null}
 
           <AnimatePresence>
-            {miniOpen && hasComposer ? <AiMiniWindow key="ai-mini" /> : null}
             {askPopup ? (
               <SelectionAskAi
                 key="ask-ai-popup"
