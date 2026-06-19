@@ -13,6 +13,7 @@ export const vimCompartment = new Compartment();
 export const lspCompartment = new Compartment();
 export const minimapCompartment = new Compartment();
 export const debugCompartment = new Compartment();
+export const mergeConflictCompartment = new Compartment();
 
 // Only what basicSetup doesn't already cover, to avoid duplicate extensions.
 // basicSetup gives us line numbers, fold gutter, history, indentOnInput,

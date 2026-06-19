@@ -34,6 +34,7 @@ import {
   debugCompartment,
   languageCompartment,
   lspCompartment,
+  mergeConflictCompartment,
   minimapCompartment,
   vimCompartment,
 } from "./lib/extensions";
@@ -41,6 +42,7 @@ import { offsetToPosition } from "@/modules/lsp/codemirror/position";
 import { EditorBreadcrumb } from "./EditorBreadcrumb";
 import { type AnySymbol, resolveSymbolPath } from "./lib/breadcrumbSymbols";
 import { debugExtension } from "./lib/debugGutter";
+import { mergeConflictExtension } from "./lib/mergeConflictExtension";
 import { minimapExtension } from "./lib/minimap";
 import { EDITOR_THEME_EXT } from "./lib/themes";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
@@ -234,6 +236,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         languageCompartment.of([]),
         lspCompartment.of([]),
         debugCompartment.of([]),
+        mergeConflictCompartment.of([]),
         EditorView.updateListener.of((u) => {
           if (u.selectionSet || u.docChanged) {
             cursorHandlerRef.current(u.state.selection.main.head, u.docChanged);
@@ -321,6 +324,26 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
       return () => {
         cmRef.current?.view?.dispatch({
           effects: debugCompartment.reconfigure([]),
+        });
+      };
+    }, [path, doc.status, editorReady]);
+
+    // Inline merge-conflict resolver (Accept Current/Incoming/Both). The
+    // extension is inert until the document actually contains conflict markers,
+    // so it can stay enabled for any real text buffer; gated off for huge files
+    // where the per-edit line scan would add latency.
+    useEffect(() => {
+      if (doc.status !== "ready") return;
+      const view = cmRef.current?.view;
+      if (!view) return;
+      view.dispatch({
+        effects: mergeConflictCompartment.reconfigure(
+          isLargeRef.current ? [] : mergeConflictExtension(),
+        ),
+      });
+      return () => {
+        cmRef.current?.view?.dispatch({
+          effects: mergeConflictCompartment.reconfigure([]),
         });
       };
     }, [path, doc.status, editorReady]);

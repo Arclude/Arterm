@@ -58,7 +58,18 @@ export type SourceControlFileEntry = {
   staged: boolean;
   unstaged: boolean;
   untracked: boolean;
+  /** True for files with an unresolved merge conflict (porcelain `u` records). */
+  conflicted: boolean;
 };
+
+// Two-letter porcelain v2 XY codes for unmerged (conflicted) entries. Note that
+// statusLabel alone is unreliable here — e.g. AU/DU/DD/AA never contain 'U' and
+// get mislabeled "Added"/"Deleted" by the backend's status_label().
+const CONFLICT_XY = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
+
+function isConflictedFile(file: GitChangedFile): boolean {
+  return CONFLICT_XY.has(`${file.indexStatus}${file.worktreeStatus}`);
+}
 
 export type PendingDiscard = {
   scope: "single" | "all";
@@ -449,6 +460,7 @@ export function useSourceControlPanel(
         staged: file.staged,
         unstaged: file.unstaged,
         untracked: file.untracked,
+        conflicted: isConflictedFile(file),
       });
     }
     return out;

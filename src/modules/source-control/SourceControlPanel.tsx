@@ -949,6 +949,12 @@ const EntryRow = memo(function EntryRow({
     : null;
   const isDeleted = entry.statusCode === "D";
   const revealLabel = IS_MAC ? "Reveal in Finder" : "Reveal in File Manager";
+  // Conflicted files have no valid stage-0 blob, so the diff view can't render
+  // them — open the real buffer instead, where the inline merge resolver lives.
+  const openConflict =
+    entry.conflicted && onOpenFile && absolutePath
+      ? () => onOpenFile(absolutePath)
+      : null;
 
   return (
     <ContextMenu>
@@ -983,7 +989,8 @@ const EntryRow = memo(function EntryRow({
             type="button"
             onClick={() => {
               onFocusRow(row.key);
-              void onSelectFile(entry);
+              if (openConflict) openConflict();
+              else void onSelectFile(entry);
             }}
             className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
           >
@@ -1010,6 +1017,11 @@ const EntryRow = memo(function EntryRow({
                 </span>
               ) : null}
             </div>
+            {entry.conflicted ? (
+              <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-500">
+                Conflict
+              </span>
+            ) : null}
           </button>
 
           {showDiscard ? (
@@ -1055,10 +1067,11 @@ const EntryRow = memo(function EntryRow({
           className={COMPACT_ITEM}
           onSelect={() => {
             onFocusRow(row.key);
-            void onSelectFile(entry);
+            if (openConflict) openConflict();
+            else void onSelectFile(entry);
           }}
         >
-          Open Diff
+          {openConflict ? "Resolve Conflict" : "Open Diff"}
         </ContextMenuItem>
         {!isDeleted && onOpenFile && absolutePath ? (
           <ContextMenuItem
