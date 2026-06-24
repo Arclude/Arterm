@@ -76,6 +76,8 @@ type Props = {
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
   onClose?: () => void;
+  /** Split this editor group (wired through to the breadcrumb buttons). */
+  onSplit?: (dir: "row" | "col") => void;
 };
 
 function formatBytes(n: number): string {
@@ -92,7 +94,7 @@ const LARGE_FILE_CHARS = 500_000;
 
 export const EditorPane = forwardRef<EditorPaneHandle, Props>(
   function EditorPane(
-    { path, workspaceRoot, onDirtyChange, onSaved, onClose },
+    { path, workspaceRoot, onDirtyChange, onSaved, onClose, onSplit },
     ref,
   ) {
     const { doc, onChange, save, reload } = useDocument({
@@ -562,6 +564,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
           path={path}
           workspaceRoot={workspaceRoot ?? null}
           symbolPath={symbolPath}
+          onSplit={onSplit}
         />
         <CodeMirror
           ref={cmRef}

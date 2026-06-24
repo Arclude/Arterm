@@ -730,12 +730,27 @@ export function useTabs(
     );
   }, []);
 
+  // Editor tabs now live in the global tab bar alongside terminals. Selecting
+  // an editor tab there must also make it the active tab inside its editor
+  // group, otherwise the editor surface keeps showing the group's old tab.
+  const selectTab = useCallback(
+    (id: number) => {
+      const t = tabsRef.current.find((x) => x.id === id);
+      if (t?.kind === "editor") {
+        applyGroups(activateEditorOp(groupsRef.current, id));
+      } else {
+        setActiveId(id);
+      }
+    },
+    [applyGroups],
+  );
+
   const selectByIndex = useCallback(
     (idx: number) => {
       const t = tabs[idx];
-      if (t) setActiveId(t.id);
+      if (t) selectTab(t.id);
     },
-    [tabs],
+    [tabs, selectTab],
   );
 
   /** Update a leaf's cwd; mirror to the tab's `cwd` when the leaf is active.
@@ -993,6 +1008,7 @@ export function useTabs(
     closeAiDiffTab,
     closeTab,
     updateTab,
+    selectTab,
     selectByIndex,
     setLeafCwd,
     focusPane,

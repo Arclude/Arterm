@@ -49,12 +49,6 @@ type Props = {
   onSplit: (dir: "row" | "col") => void;
   /** Active tab is a terminal and below the per-tab pane cap. */
   canSplit: boolean;
-  /** At least one editor group is open (editor tabs live in the grid, not here). */
-  hasEditors: boolean;
-  /** The editor grid is the foreground surface. */
-  editorsActive: boolean;
-  /** Bring the editor grid to the foreground. */
-  onShowEditors: () => void;
   onActivateAgent: (tabId: number, leafId: number) => void;
   onActivateLocalAgent: () => void;
   onOpenSettings: () => void;
@@ -79,9 +73,6 @@ export function Header({
   onToggleSidebar,
   onSplit,
   canSplit,
-  hasEditors,
-  editorsActive,
-  onShowEditors,
   onActivateAgent,
   onActivateLocalAgent,
   onOpenSettings,
@@ -203,27 +194,8 @@ export function Header({
         className="flex min-w-0 flex-1 items-center gap-2"
         data-tauri-drag-region
       >
-        {hasEditors ? (
-          <button
-            type="button"
-            onClick={onShowEditors}
-            title="Editors"
-            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium outline-none transition-colors ${
-              editorsActive
-                ? "bg-foreground/[0.08] text-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            }`}
-          >
-            <HugeiconsIcon
-              icon={LayoutTwoColumnIcon}
-              size={14}
-              strokeWidth={1.75}
-            />
-            Editors
-          </button>
-        ) : null}
         <TabBar
-          tabs={tabs.filter((t) => t.kind !== "editor")}
+          tabs={tabs}
           activeId={activeId}
           onSelect={onSelect}
           onNew={onNew}

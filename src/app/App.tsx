@@ -242,9 +242,8 @@ export default function App() {
     editorGroups,
     splitEditorGroup,
     focusEditorGroup,
-    activateEditorInGroup,
     moveEditorTab,
-    showEditors,
+    selectTab,
   } = useTabs(
     getLaunchDir() ? { cwd: getLaunchDir() } : undefined,
     getSavedSession(),
@@ -1636,7 +1635,6 @@ export default function App() {
           workspaceRoot={explorerRoot}
           registerHandle={registerEditorHandle}
           onDirtyChange={handleEditorDirty}
-          onActivateTab={activateEditorInGroup}
           onCloseTab={handleClose}
           onFocusGroup={focusEditorGroup}
           onSplitGroup={splitEditorGroup}
@@ -1714,7 +1712,7 @@ export default function App() {
             <Header
               tabs={tabs}
               activeId={activeId}
-              onSelect={setActiveId}
+              onSelect={selectTab}
               onNew={openNewTab}
               onNewPrivate={openNewPrivateTab}
               onNewPreview={() => openPreviewTab("")}
@@ -1731,9 +1729,6 @@ export default function App() {
                     MAX_PANES_PER_TAB) ||
                 isEditorTab
               }
-              hasEditors={editorGroups.layout !== null}
-              editorsActive={isEditorTab}
-              onShowEditors={showEditors}
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
               onOpenSettings={() => void openSettingsWindow()}

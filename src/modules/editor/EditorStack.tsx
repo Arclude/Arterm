@@ -6,7 +6,6 @@ import {
 } from "@/components/ui/resizable";
 import type { EditorGroupsState, EditorTab, Tab } from "@/modules/tabs";
 import type { PaneNode, SplitDir } from "@/modules/terminal/lib/panes";
-import { EditorGroupStrip } from "./EditorGroupStrip";
 import { EditorPane, type EditorPaneHandle } from "./EditorPane";
 import { getDraggedTab, TAB_MIME } from "./lib/tabDnd";
 
@@ -19,13 +18,11 @@ type Props = {
   workspaceRoot: string | null;
   onDirtyChange: (id: number, dirty: boolean) => void;
   registerHandle: (id: number, handle: EditorPaneHandle | null) => void;
-  /** Activate a tab within a group (and focus that group). */
-  onActivateTab: (groupId: number, tabId: number) => void;
   /** Close an editor tab (prompts on dirty upstream). */
   onCloseTab: (id: number) => void;
   /** Focus a group (e.g. clicking in its body). */
   onFocusGroup: (groupId: number) => void;
-  /** Split the focused group. */
+  /** Split the focused group (wired to the per-pane breadcrumb buttons). */
   onSplitGroup: (dir: SplitDir) => void;
   /** Move a dragged tab into a group at an index (drag & drop). */
   onMoveTab: (tabId: number, toGroupId: number, index: number) => void;
@@ -37,7 +34,6 @@ export function EditorStack({
   workspaceRoot,
   onDirtyChange,
   registerHandle,
-  onActivateTab,
   onCloseTab,
   onFocusGroup,
   onSplitGroup,
@@ -115,20 +111,6 @@ export function EditorStack({
           if (!focused) onFocusGroup(gid);
         }}
       >
-        <EditorGroupStrip
-          groupId={gid}
-          group={g}
-          tabsById={editorsById}
-          isFocused={focused}
-          workspaceRoot={workspaceRoot}
-          onActivate={(tabId) => onActivateTab(gid, tabId)}
-          onClose={onCloseTab}
-          onSplit={(dir) => {
-            if (!focused) onFocusGroup(gid);
-            onSplitGroup(dir);
-          }}
-          onMoveTab={onMoveTab}
-        />
         <div
           className="relative min-h-0 flex-1"
           onDragOver={(e) => {
@@ -165,6 +147,10 @@ export function EditorStack({
                     workspaceRoot={workspaceRoot}
                     onDirtyChange={getDirtyCallback(id)}
                     onClose={getCloseCallback(id)}
+                    onSplit={(dir) => {
+                      if (!focused) onFocusGroup(gid);
+                      onSplitGroup(dir);
+                    }}
                   />
                 </div>
               </div>
