@@ -16,7 +16,12 @@ const NERD_FONT_CANDIDATES = [
   "Hasklug Nerd Font",
 ];
 
-const FALLBACK_CHAIN = '"JetBrains Mono", SFMono-Regular, Menlo, monospace';
+// Bundled block-art font (see styles/fonts.css). unicode-range scopes it to
+// box-drawing/block/braille codepoints only, so prepending it never affects
+// normal text metrics or the user's chosen font — it just guarantees those
+// glyphs tile full-cell in xterm's DOM renderer.
+const BLOCK_GLYPH_FONT = '"ArtermBlocks"';
+const FALLBACK_CHAIN = `${BLOCK_GLYPH_FONT}, "JetBrains Mono", SFMono-Regular, Menlo, monospace`;
 
 let detected: string | null = null;
 let monoReady: Promise<void> | null = null;
@@ -30,6 +35,8 @@ export function ensureMonoFontsLoaded(): Promise<void> {
   monoReady = Promise.allSettled([
     document.fonts.load('400 14px "JetBrains Mono"'),
     document.fonts.load('700 14px "JetBrains Mono"'),
+    // U+2588 (full block) forces the block-art subset to load.
+    document.fonts.load('400 14px "ArtermBlocks"', "█"),
   ]).then(() => undefined);
   return monoReady;
 }
@@ -43,7 +50,8 @@ export function detectMonoFontFamily(): string {
   for (const f of NERD_FONT_CANDIDATES) {
     try {
       if (document.fonts.check(`12px "${f}"`)) {
-        detected = `"${f}", ${FALLBACK_CHAIN}`;
+        // Block font stays first; the detected Nerd Font follows it.
+        detected = `${BLOCK_GLYPH_FONT}, "${f}", "JetBrains Mono", SFMono-Regular, Menlo, monospace`;
         return detected;
       }
     } catch {

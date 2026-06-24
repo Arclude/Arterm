@@ -341,8 +341,13 @@ export function acquireSlot(params: AcquireParams): Slot {
 }
 
 function bindSlot(slot: Slot, p: AcquireParams): void {
+  // Moving the host (and its WebGL canvas) into another container blanks the
+  // GPU glyph atlas, so a reparent forces a fresh WebGL context below.
+  const reparenting = slot.host.parentNode !== p.container;
   const stale =
-    !slot.webglAddon || performance.now() - slot.lastUsedAt > SLOT_STALE_MS;
+    reparenting ||
+    !slot.webglAddon ||
+    performance.now() - slot.lastUsedAt > SLOT_STALE_MS;
   slot.currentLeafId = p.leafId;
   slot.lastUsedAt = performance.now();
 
@@ -354,8 +359,14 @@ function bindSlot(slot: Slot, p: AcquireParams): void {
   // host visible throughout; the clear()/reset()/snapshot below still run before
   // the next paint, so there is no stale-content flash.
 
-  if (slot.host.parentNode !== p.container) {
+  if (reparenting) {
+    // Dispose the stale WebGL context before the move; attach a fresh one after
+    // the host is in its visible container so the glyph atlas rebuilds. Done
+    // synchronously (not in scheduleUnhide's rAF, which WebView2 runs flakily)
+    // so glyphs never paint blank. Mirrors upstream terax bindSlot.
+    if (slot.webglAddon) disposeSlotWebgl(slot);
     p.container.appendChild(slot.host);
+    attachWebgl(slot);
   }
 
   slot.term.options.disableStdin = p.shellExited;
@@ -568,15 +579,14 @@ const WEBGL_RECOVERY_DELAY_MS = 250;
 // unhide to defeat silent GPU/context staleness.
 const SLOT_STALE_MS = 10_000;
 
-// WebGL is force-disabled: under the Tauri WebView2 runtime on Windows the
-// xterm WebGL renderer paints blank glyphs (the cursor shows but text never
-// rasterizes — the GPU glyph atlas stays empty after the slot is reparented
-// out of the off-screen recycler). The DOM renderer is reliable here. Flip
-// this to re-enable WebGL only behind a runtime capability check.
-const WEBGL_FORCE_DISABLED: boolean = true;
-
+// WebGL renderer: required for crisp block-art (xterm draws block/box glyphs
+// via customGlyphs only in the GPU renderers, not the DOM renderer — see the
+// Claude Code logo). The blank-glyph bug that previously forced this off (empty
+// GPU atlas after the host is reparented out of the off-screen recycler) is now
+// handled by disposing + re-attaching a fresh WebGL context on reparent in
+// bindSlot — same approach as upstream terax. The bundled ArtermBlocks font
+// (styles/fonts.css) remains a DOM-renderer fallback when WebGL is unavailable.
 function attachWebgl(slot: Slot): void {
-  if (WEBGL_FORCE_DISABLED) return;
   if (slot.webglAddon || !slot.term.element) return;
   if (!usePreferencesStore.getState().terminalWebglEnabled) return;
   const elem = slot.term.element;

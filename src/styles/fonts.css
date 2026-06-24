@@ -1,3 +1,17 @@
+/* ArtermBlocks — full-cell box-drawing / block-element / braille glyphs.
+   Subset of Cascadia Mono (OFL-1.1), scoped via unicode-range so it serves
+   ONLY block-art codepoints. Listed first in the terminal font chain so these
+   characters always tile perfectly (fixes the corrupted Claude Code logo and
+   any block-art the user's primary font renders with gaps in the DOM renderer). */
+@font-face {
+  font-family: "ArtermBlocks";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/arterm-blocks.woff2") format("woff2");
+  unicode-range: U+2500-257F, U+2580-259F, U+2800-28FF;
+}
+
 /* Inter Variable — latin + cyrillic only. */
 @font-face {
   font-family: "Inter Variable";
