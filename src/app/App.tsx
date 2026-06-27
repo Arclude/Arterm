@@ -1423,7 +1423,7 @@ export default function App() {
       return {
         kind: "git-history",
         handle: gitHistoryHandle,
-        focus: () => {},
+        focus: () => { },
       };
     return null;
   }, [
@@ -1557,7 +1557,7 @@ export default function App() {
         useManagedAgentsStore
           .getState()
           .register({ leafId, tabId, sessionId, task: oneLine, cwd });
-        const hooksReady = invoke("agent_enable_claude_hooks").catch(() => {});
+        const hooksReady = invoke("agent_enable_claude_hooks").catch(() => { });
         void (async () => {
           await Promise.all([whenSessionReady(leafId), hooksReady]);
           if (!writeToSession(leafId, "claude\r")) {
@@ -1726,7 +1726,7 @@ export default function App() {
               canSplit={
                 (activeTerminalTab !== null &&
                   leafIds(activeTerminalTab.paneTree).length <
-                    MAX_PANES_PER_TAB) ||
+                  MAX_PANES_PER_TAB) ||
                 isEditorTab
               }
               onActivateAgent={onActivateAgent}
@@ -1895,9 +1895,8 @@ export default function App() {
                 <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
                 <AlertDialogDescription>
                   {tabs.find((t) => t.id === pendingCloseTab)?.title
-                    ? `"${
-                        tabs.find((t) => t.id === pendingCloseTab)?.title
-                      }" has unsaved changes. Close anyway?`
+                    ? `"${tabs.find((t) => t.id === pendingCloseTab)?.title
+                    }" has unsaved changes. Close anyway?`
                     : "This file has unsaved changes. Close anyway?"}
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -1952,13 +1951,13 @@ export default function App() {
                 <AlertDialogDescription>
                   {pendingDeleteTabs?.length === 1
                     ? (() => {
-                        const title = tabs.find(
-                          (t) => t.id === pendingDeleteTabs[0],
-                        )?.title;
-                        return title
-                          ? `"${title}" has unsaved changes. The file has been deleted. Close anyway?`
-                          : "This file has unsaved changes. The file has been deleted. Close anyway?";
-                      })()
+                      const title = tabs.find(
+                        (t) => t.id === pendingDeleteTabs[0],
+                      )?.title;
+                      return title
+                        ? `"${title}" has unsaved changes. The file has been deleted. Close anyway?`
+                        : "This file has unsaved changes. The file has been deleted. Close anyway?";
+                    })()
                     : `${pendingDeleteTabs?.length ?? 0} files have unsaved changes. They have been deleted. Close all anyway?`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
