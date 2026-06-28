@@ -4,6 +4,7 @@
 //! PTY uses, so the frontend cannot tell a remote session from a local one.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use russh::client::{self, Handle};
 use russh::keys::*;
@@ -249,16 +250,34 @@ pub async fn open_shell(
     tauri::async_runtime::spawn(async move {
         let mut channel = channel;
         let mut exit_code: i32 = 0;
+        // Coalesce server output the way the local PTY does: buffer bursts and
+        // flush after a short idle gap or once a size cap is hit, turning a
+        // chatty stream into a few large IPC messages instead of hundreds of
+        // tiny ones. Previously every russh packet became its own Tauri event +
+        // xterm.write, which is why SSH felt laggier than a local terminal.
+        const FLUSH_COALESCE: Duration = Duration::from_millis(4);
+        const FLUSH_MAX_BYTES: usize = 32 * 1024;
+        let mut pending: Vec<u8> = Vec::new();
         loop {
             tokio::select! {
                 msg = channel.wait() => match msg {
                     Some(ChannelMsg::Data { data }) => {
-                        if on_data.send(Response::new(data.to_vec())).is_err() {
+                        pending.extend_from_slice(&data);
+                        if pending.len() >= FLUSH_MAX_BYTES
+                            && on_data
+                                .send(Response::new(std::mem::take(&mut pending)))
+                                .is_err()
+                        {
                             break;
                         }
                     }
                     Some(ChannelMsg::ExtendedData { data, .. }) => {
-                        if on_data.send(Response::new(data.to_vec())).is_err() {
+                        pending.extend_from_slice(&data);
+                        if pending.len() >= FLUSH_MAX_BYTES
+                            && on_data
+                                .send(Response::new(std::mem::take(&mut pending)))
+                                .is_err()
+                        {
                             break;
                         }
                     }
@@ -282,7 +301,20 @@ pub async fn open_shell(
                         break;
                     }
                 },
+                // Idle flush: emit buffered output once the burst pauses.
+                _ = tokio::time::sleep(FLUSH_COALESCE), if !pending.is_empty() => {
+                    if on_data
+                        .send(Response::new(std::mem::take(&mut pending)))
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
             }
+        }
+        // Flush whatever is still buffered before signalling exit.
+        if !pending.is_empty() {
+            let _ = on_data.send(Response::new(std::mem::take(&mut pending)));
         }
         let _ = on_exit.send(exit_code);
     });
