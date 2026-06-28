@@ -1,6 +1,6 @@
 [package]
 name = "arterm"
-version = "0.9.9"
+version = "0.10.0"
 description = "Arterm — an open-source AI-native terminal emulator"
 authors = ["Arclude"]
 license = "Apache-2.0"
