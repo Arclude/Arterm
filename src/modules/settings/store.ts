@@ -156,6 +156,7 @@ export type Preferences = {
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
+  formatOnSave: boolean;
   minimap: boolean;
   lspEnabled: boolean;
   lspServers: Record<string, LspServerConfig>;
@@ -205,6 +206,7 @@ const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
+const KEY_FORMAT_ON_SAVE = "formatOnSave";
 const KEY_MINIMAP = "minimap";
 const KEY_LSP_ENABLED = "lspEnabled";
 const KEY_LSP_SERVERS = "lspServers";
@@ -267,6 +269,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
+  formatOnSave: false,
   minimap: true,
   lspEnabled: true,
   lspServers: {},
@@ -408,6 +411,8 @@ export async function loadPreferences(): Promise<Preferences> {
       get<number>(KEY_EDITOR_AUTO_SAVE_DELAY) ??
         DEFAULT_PREFERENCES.editorAutoSaveDelay,
     ),
+    formatOnSave:
+      get<boolean>(KEY_FORMAT_ON_SAVE) ?? DEFAULT_PREFERENCES.formatOnSave,
     minimap: get<boolean>(KEY_MINIMAP) ?? DEFAULT_PREFERENCES.minimap,
     lspEnabled: get<boolean>(KEY_LSP_ENABLED) ?? DEFAULT_PREFERENCES.lspEnabled,
     lspServers:
@@ -635,6 +640,10 @@ export async function setMinimap(value: boolean): Promise<void> {
   await writePref(KEY_MINIMAP, value);
 }
 
+export async function setFormatOnSave(value: boolean): Promise<void> {
+  await writePref(KEY_FORMAT_ON_SAVE, value);
+}
+
 export async function setLspEnabled(value: boolean): Promise<void> {
   await writePref(KEY_LSP_ENABLED, value);
 }
@@ -716,6 +725,7 @@ export async function onPreferencesChange(
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
+    [KEY_FORMAT_ON_SAVE]: "formatOnSave",
     [KEY_MINIMAP]: "minimap",
     [KEY_LSP_ENABLED]: "lspEnabled",
     [KEY_LSP_SERVERS]: "lspServers",

@@ -26,6 +26,7 @@ import {
   setAutostart,
   setEditorAutoSave,
   setEditorAutoSaveDelay,
+  setFormatOnSave,
   setMinimap,
   setRestoreSession,
   setRestoreWindowState,
@@ -77,6 +78,7 @@ export function GeneralSection() {
   const restoreSession = usePreferencesStore((s) => s.restoreSession);
   const vimMode = usePreferencesStore((s) => s.vimMode);
   const minimap = usePreferencesStore((s) => s.minimap);
+  const formatOnSave = usePreferencesStore((s) => s.formatOnSave);
   const editorAutoSave = usePreferencesStore((s) => s.editorAutoSave);
   const editorAutoSaveDelay = usePreferencesStore((s) => s.editorAutoSaveDelay);
   const showHidden = usePreferencesStore((s) => s.showHidden);
@@ -187,6 +189,15 @@ export function GeneralSection() {
           <Switch
             checked={minimap}
             onCheckedChange={(v) => void setMinimap(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Format on save"
+          description="Reformat the file with the language server when you save (Shift+Alt+F to format manually). No effect if the server has no formatter."
+        >
+          <Switch
+            checked={formatOnSave}
+            onCheckedChange={(v) => void setFormatOnSave(v)}
           />
         </SettingRow>
         <SettingRow

@@ -80,7 +80,13 @@ import {
   type SearchInlineHandle,
   type SearchTarget,
 } from "@/modules/header";
-import { lspManager } from "@/modules/lsp";
+import { lspManager, uriToPath } from "@/modules/lsp";
+import {
+  WORKSPACE_EDIT_EVENT,
+  type WorkspaceEditDetail,
+  applyTextEditsToString,
+  normalizeWorkspaceEdit,
+} from "@/modules/lsp/codemirror/workspaceEdit";
 import { MarkdownStack } from "@/modules/markdown";
 import { type PreviewPaneHandle, PreviewStack } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
@@ -706,6 +712,53 @@ export default function App() {
     window.addEventListener("arterm:lsp-goto", onLspGoto);
     return () => window.removeEventListener("arterm:lsp-goto", onLspGoto);
   }, [openFileTab]);
+
+  // Apply LSP WorkspaceEdits (rename, code actions) across the workspace.
+  // Files open in a tab are edited in their live buffer (becomes a dirty
+  // editor, matching VS Code); closed files are patched on disk. Splits share
+  // one buffer, so a single applyLspEdits per path also updates siblings.
+  useEffect(() => {
+    const apply = async (detail: WorkspaceEditDetail) => {
+      for (const { uri, edits } of normalizeWorkspaceEdit(detail.edit)) {
+        const path = uriToPath(uri);
+        const norm = path.replace(/\\/g, "/").toLowerCase();
+        const openTab = tabsRef.current.find(
+          (t) =>
+            t.kind === "editor" &&
+            t.path.replace(/\\/g, "/").toLowerCase() === norm,
+        );
+        if (openTab) {
+          editorRefs.current.get(openTab.id)?.applyLspEdits(edits);
+          continue;
+        }
+        if (path.startsWith("ssh://")) {
+          console.warn("[lsp] skip edit to unopened remote file:", path);
+          continue;
+        }
+        try {
+          const res = await invoke<{ kind: string; content?: string }>(
+            "fs_read_file",
+            { path, workspace: currentWorkspaceEnv() },
+          );
+          if (res.kind !== "text" || res.content == null) continue;
+          await invoke("fs_write_file", {
+            path,
+            content: applyTextEditsToString(res.content, edits),
+            workspace: currentWorkspaceEnv(),
+            source: "rename",
+          });
+        } catch (err) {
+          console.warn("[lsp] failed to apply edit to", path, err);
+        }
+      }
+    };
+    const onEdit = (e: Event) => {
+      const detail = (e as CustomEvent<WorkspaceEditDetail>).detail;
+      if (detail?.edit) void apply(detail);
+    };
+    window.addEventListener(WORKSPACE_EDIT_EVENT, onEdit);
+    return () => window.removeEventListener(WORKSPACE_EDIT_EVENT, onEdit);
+  }, []);
 
   const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
     activeTab,

@@ -38,7 +38,10 @@ import {
   minimapCompartment,
   vimCompartment,
 } from "./lib/extensions";
+import { formatDocument } from "@/modules/lsp/codemirror/format";
 import { offsetToPosition } from "@/modules/lsp/codemirror/position";
+import { applyTextEditsToView } from "@/modules/lsp/codemirror/workspaceEdit";
+import type { TextEdit } from "vscode-languageserver-protocol";
 import { EditorBreadcrumb } from "./EditorBreadcrumb";
 import { type AnySymbol, resolveSymbolPath } from "./lib/breadcrumbSymbols";
 import { debugExtension } from "./lib/debugGutter";
@@ -68,6 +71,8 @@ export type EditorPaneHandle = {
   /** Apply CodeMirror's undo/redo commands. */
   undo: () => void;
   redo: () => void;
+  /** Apply LSP text edits to this pane's live buffer (rename, code actions). */
+  applyLspEdits: (edits: TextEdit[]) => void;
 };
 
 type Props = {
@@ -182,6 +187,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const symbolsStaleRef = useRef(true);
     const symbolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Clear any pending symbol-resolution timer on unmount so a late callback
+    // can't call setSymbolPath() after this pane is gone.
+    useEffect(
+      () => () => {
+        if (symbolTimerRef.current) clearTimeout(symbolTimerRef.current);
+      },
+      [],
+    );
+
     const resolveSymbols = useCallback(async (offset: number) => {
       const client = lspClientRef.current;
       const view = cmRef.current?.view;
@@ -282,11 +296,38 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
           {
             key: "Mod-s",
             preventDefault: true,
-            run: () => {
+            run: (view) => {
               void (async () => {
+                // Format before saving when enabled and the server supports it.
+                // formatDocument is a no-op (returns false) without a provider,
+                // so a plain save still happens.
+                if (usePreferencesStore.getState().formatOnSave) {
+                  const client = lspClientRef.current;
+                  if (client) {
+                    try {
+                      await formatDocument(
+                        view,
+                        client,
+                        pathToUri(pathRef.current),
+                      );
+                    } catch {
+                      // Ignore formatting errors and save anyway.
+                    }
+                  }
+                }
                 await saveRef.current();
                 onSavedRef.current?.();
               })();
+              return true;
+            },
+          },
+          {
+            key: "Shift-Alt-f",
+            preventDefault: true,
+            run: (view) => {
+              const client = lspClientRef.current;
+              if (!client) return false;
+              void formatDocument(view, client, pathToUri(pathRef.current));
               return true;
             },
           },
@@ -451,9 +492,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         symbolsRef.current = null;
         symbolsStaleRef.current = true;
         setSymbolPath([]);
-        cmRef.current?.view?.dispatch({
-          effects: lspCompartment.reconfigure([]),
-        });
+        // didClose + lspRelease must always run (server bookkeeping). The
+        // compartment reconfigure is only meaningful when the view still
+        // exists (deps changed, pane staying mounted); on a real unmount the
+        // view is already gone and its state is discarded, so skipping the
+        // dispatch is correct rather than a silent failure.
+        const view = cmRef.current?.view;
+        if (view) {
+          view.dispatch({ effects: lspCompartment.reconfigure([]) });
+        }
         lspRelease(path);
       };
     }, [path, doc.status, lspEnabled, lspServersKey]);
@@ -505,6 +552,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         redo: () => {
           const view = cmRef.current?.view;
           if (view) redo(view);
+        },
+        applyLspEdits: (edits: TextEdit[]) => {
+          const view = cmRef.current?.view;
+          if (view) applyTextEditsToView(view, edits);
         },
       }),
       [path],

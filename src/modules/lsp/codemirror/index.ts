@@ -1,9 +1,11 @@
 import type { Extension } from "@codemirror/state";
 import type { LspClient } from "../client";
+import { lspCodeAction } from "./codeAction";
 import { lspCompletion } from "./completion";
 import { lspDefinition } from "./definition";
 import { lspDiagnostics } from "./diagnostics";
 import { lspHover } from "./hover";
+import { lspRename } from "./rename";
 import { lspSync } from "./sync";
 
 export type LspGotoTarget = { uri: string; line: number; character: number };
@@ -19,5 +21,7 @@ export function lspExtensions(
     lspCompletion(client, uri),
     lspHover(client, uri),
     lspDefinition(client, uri, onGoto),
+    lspRename(client, uri),
+    lspCodeAction(client, uri),
   ];
 }

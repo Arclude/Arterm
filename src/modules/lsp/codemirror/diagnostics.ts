@@ -34,6 +34,15 @@ function toCm(view: EditorView, d: LspDiagnostic): Diagnostic {
   };
 }
 
+// Latest raw LSP diagnostics per document URI. Kept alongside the CodeMirror
+// conversion so code actions can send the server its own diagnostic objects
+// (preserving fields like `code`/`data` that some quick-fixes rely on).
+const lspDiagnosticsByUri = new Map<string, LspDiagnostic[]>();
+
+export function getLspDiagnostics(uri: string): LspDiagnostic[] {
+  return lspDiagnosticsByUri.get(uri) ?? [];
+}
+
 export function lspDiagnostics(client: LspClient, uri: string): Extension {
   return ViewPlugin.define((view) => {
     const unsub = client.onNotification(
@@ -41,6 +50,7 @@ export function lspDiagnostics(client: LspClient, uri: string): Extension {
       (raw) => {
         const params = raw as PublishDiagnosticsParams;
         if (!sameUri(params.uri, uri)) return;
+        lspDiagnosticsByUri.set(uri, params.diagnostics);
         const diags = params.diagnostics
           .map((d) => toCm(view, d))
           .sort((a, b) => a.from - b.from);

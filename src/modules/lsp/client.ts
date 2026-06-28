@@ -3,6 +3,11 @@ import type {
   ServerCapabilities,
 } from "vscode-languageserver-protocol";
 import { type LspTransport, startLspServer } from "./transport";
+import type { WorkspaceEdit } from "vscode-languageserver-protocol";
+import {
+  WORKSPACE_EDIT_EVENT,
+  type WorkspaceEditDetail,
+} from "./codemirror/workspaceEdit";
 
 // JSON-RPC 2.0 client over the Rust transport. Owns the initialize handshake,
 // request/response correlation, document open/change/close sync, and the
@@ -240,6 +245,19 @@ export class LspClient {
       case "workspace/workspaceFolders": {
         const name = this.rootPath.split(/[\\/]/).pop() || "workspace";
         this.respond(id, [{ uri: this.rootUri, name }]);
+        return;
+      }
+      case "workspace/applyEdit": {
+        // Code actions that run as commands ask the client to apply edits.
+        // Route through the same event the editor uses and report success.
+        const edit = (params as { edit?: WorkspaceEdit }).edit;
+        if (edit) {
+          const detail: WorkspaceEditDetail = { edit };
+          window.dispatchEvent(
+            new CustomEvent(WORKSPACE_EDIT_EVENT, { detail }),
+          );
+        }
+        this.respond(id, { applied: edit != null });
         return;
       }
       case "client/registerCapability":
