@@ -230,6 +230,23 @@ pub async fn ssh_sftp_download(
 }
 
 #[tauri::command]
+pub async fn ssh_sftp_download_dir(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SshState>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+    conn_id: u32,
+    op_id: u32,
+    remote: String,
+    local: String,
+) -> Result<sftp::DownloadSummary, String> {
+    // Same gate as the single-file download: the destination must resolve under
+    // an authorized root (the home dir, which covers ~/Downloads).
+    let local = authorize_fs_path(&registry, &local, &WorkspaceEnv::Local)?;
+    let sftp = get_sftp(&state, conn_id).await?;
+    sftp::download_dir(&app, op_id, &sftp, &remote, &local.to_string_lossy()).await
+}
+
+#[tauri::command]
 pub async fn ssh_sftp_upload(
     state: tauri::State<'_, SshState>,
     registry: tauri::State<'_, WorkspaceRegistry>,

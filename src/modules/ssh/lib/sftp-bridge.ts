@@ -19,6 +19,21 @@ export const sftpWrite = (connId: number, path: string, contents: string) =>
 export const sftpDownload = (connId: number, remote: string, local: string) =>
   invoke<void>("ssh_sftp_download", { connId, remote, local });
 
+export type SftpDownloadSummary = { downloaded: number; failed: number };
+
+export const sftpDownloadDir = (
+  connId: number,
+  opId: number,
+  remote: string,
+  local: string,
+) =>
+  invoke<SftpDownloadSummary>("ssh_sftp_download_dir", {
+    connId,
+    opId,
+    remote,
+    local,
+  });
+
 export const sftpUpload = (connId: number, local: string, remote: string) =>
   invoke<void>("ssh_sftp_upload", { connId, local, remote });
 

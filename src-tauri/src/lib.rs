@@ -259,6 +259,7 @@ pub fn run() {
             ssh::ssh_sftp_read,
             ssh::ssh_sftp_write,
             ssh::ssh_sftp_download,
+            ssh::ssh_sftp_download_dir,
             ssh::ssh_sftp_upload,
             ssh::ssh_sftp_mkdir,
             ssh::ssh_sftp_rename,

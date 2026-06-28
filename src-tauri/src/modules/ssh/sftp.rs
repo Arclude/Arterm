@@ -2,9 +2,12 @@
 //! runs on its own channel, so file transfers never contend with an interactive
 //! shell on the same connection.
 
+use std::path::Path;
+
 use russh::client::Handle;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
+use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
 use super::session::Client;
@@ -105,13 +108,126 @@ pub async fn write_text(sftp: &SftpSession, path: &str, contents: &str) -> Resul
     write_bytes(sftp, path, contents.as_bytes()).await
 }
 
-/// Stream a remote file down to a local path.
+/// Stream a remote file down to a local path, creating parent dirs as needed.
 pub async fn download(sftp: &SftpSession, remote: &str, local: &str) -> Result<(), String> {
     let bytes = sftp
         .read(remote)
         .await
         .map_err(|e| format!("download read failed: {e}"))?;
+    if let Some(parent) = Path::new(local).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create local dir failed: {e}"))?;
+    }
     std::fs::write(local, bytes).map_err(|e| format!("download write failed: {e}"))
+}
+
+/// Join a remote (POSIX) path with a child name.
+fn remote_join(base: &str, name: &str) -> String {
+    if base.ends_with('/') {
+        format!("{base}{name}")
+    } else {
+        format!("{base}/{name}")
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    pub op_id: u32,
+    pub done: u64,
+    pub failed: u64,
+    pub current: String,
+    pub finished: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadSummary {
+    pub downloaded: u64,
+    pub failed: u64,
+}
+
+/// Recursively download a remote directory tree into `local`, recreating the
+/// folder structure and emitting an `ssh-sftp-progress` event per file. Symlinks
+/// are skipped (loop/escape safety) and per-item failures are counted and
+/// skipped rather than aborting the whole transfer — a remote file whose name is
+/// illegal on the host (e.g. `:` on Windows) shouldn't kill the rest.
+pub async fn download_dir(
+    app: &AppHandle,
+    op_id: u32,
+    sftp: &SftpSession,
+    remote: &str,
+    local: &str,
+) -> Result<DownloadSummary, String> {
+    let mut done: u64 = 0;
+    let mut failed: u64 = 0;
+    download_dir_inner(app, op_id, sftp, remote, local, &mut done, &mut failed).await?;
+    let _ = app.emit(
+        "ssh-sftp-progress",
+        DownloadProgress {
+            op_id,
+            done,
+            failed,
+            current: String::new(),
+            finished: true,
+        },
+    );
+    Ok(DownloadSummary {
+        downloaded: done,
+        failed,
+    })
+}
+
+async fn download_dir_inner(
+    app: &AppHandle,
+    op_id: u32,
+    sftp: &SftpSession,
+    remote: &str,
+    local: &str,
+    done: &mut u64,
+    failed: &mut u64,
+) -> Result<(), String> {
+    std::fs::create_dir_all(local)
+        .map_err(|e| format!("create local dir failed: {e}"))?;
+    for entry in list(sftp, remote).await? {
+        if entry.is_symlink {
+            continue;
+        }
+        let remote_child = remote_join(remote, &entry.name);
+        let local_child = Path::new(local)
+            .join(&entry.name)
+            .to_string_lossy()
+            .into_owned();
+        if entry.is_dir {
+            // Box the recursive future: async fns can't recurse directly.
+            if let Err(e) =
+                Box::pin(download_dir_inner(app, op_id, sftp, &remote_child, &local_child, done, failed))
+                    .await
+            {
+                eprintln!("[sftp] subdir failed {remote_child}: {e}");
+                *failed += 1;
+            }
+        } else {
+            match download(sftp, &remote_child, &local_child).await {
+                Ok(()) => *done += 1,
+                Err(e) => {
+                    eprintln!("[sftp] file failed {remote_child}: {e}");
+                    *failed += 1;
+                }
+            }
+            let _ = app.emit(
+                "ssh-sftp-progress",
+                DownloadProgress {
+                    op_id,
+                    done: *done,
+                    failed: *failed,
+                    current: entry.name.clone(),
+                    finished: false,
+                },
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Upload a local file to a remote path.

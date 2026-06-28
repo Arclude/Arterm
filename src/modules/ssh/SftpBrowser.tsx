@@ -2,6 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { downloadDir, join } from "@tauri-apps/api/path";
+import { listen } from "@tauri-apps/api/event";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type SftpEntry,
@@ -9,6 +12,8 @@ import {
   localBaseName,
   parentRemote,
   sftpDelete,
+  sftpDownload,
+  sftpDownloadDir,
   sftpList,
   sftpMkdir,
   sftpUpload,
@@ -28,6 +33,12 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
   const [loading, setLoading] = useState(false);
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [progress, setProgress] = useState<{
+    done: number;
+    failed: number;
+    current: string;
+  } | null>(null);
+  const opIdRef = useRef(0);
   const pathRef = useRef(path);
   pathRef.current = path;
 
@@ -109,6 +120,59 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
     }
   }
 
+  // Download a remote file or folder into the OS Downloads folder, then reveal
+  // it. Folders are pulled recursively, recreating their structure.
+  async function download(entry: SftpEntry) {
+    try {
+      const local = await join(await downloadDir(), entry.name);
+      const remote = joinRemote(path, entry.name);
+      // No explicit authorize call: Downloads lives under the home dir, which
+      // the backend authorizes at startup, so the fs gate already permits it.
+      // (Authorizing the not-yet-existing path would fail canonicalize.)
+      if (entry.isDir) {
+        // Folders stream file-by-file with live progress events.
+        const opId = ++opIdRef.current;
+        setProgress({ done: 0, failed: 0, current: "" });
+        const unlisten = await listen<{
+          opId: number;
+          done: number;
+          failed: number;
+          current: string;
+          finished: boolean;
+        }>("ssh-sftp-progress", (e) => {
+          if (e.payload.opId !== opId) return;
+          setProgress({
+            done: e.payload.done,
+            failed: e.payload.failed,
+            current: e.payload.current,
+          });
+        });
+        try {
+          const summary = await sftpDownloadDir(connId, opId, remote, local);
+          if (summary.failed > 0) {
+            setError(
+              `Downloaded ${summary.downloaded} file(s); ${summary.failed} skipped (couldn't be written locally).`,
+            );
+          }
+        } finally {
+          unlisten();
+          setProgress(null);
+        }
+      } else {
+        await sftpDownload(connId, remote, local);
+      }
+      // Best-effort reveal: the download already succeeded if this throws.
+      try {
+        await revealItemInDir(local);
+      } catch {
+        /* reveal is optional */
+      }
+    } catch (e) {
+      setProgress(null);
+      setError(String(e));
+    }
+  }
+
   return (
     <div
       className={
@@ -148,6 +212,14 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
       <div className="truncate px-3 pb-1 text-[11px] text-muted-foreground" title={path}>
         {path === "." ? "~" : path}
       </div>
+
+      {progress && (
+        <div className="truncate px-3 pb-1 text-[11px] text-primary" title={progress.current}>
+          Downloading… {progress.done} file{progress.done === 1 ? "" : "s"}
+          {progress.failed > 0 ? `, ${progress.failed} skipped` : ""}
+          {progress.current ? ` · ${progress.current}` : ""}
+        </div>
+      )}
 
       {error && (
         <p className="mx-3 mb-1 rounded bg-destructive/10 px-2 py-1 text-xs text-destructive">
@@ -208,6 +280,19 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
                   </span>
                 )}
               </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 shrink-0 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={() => download(entry)}
+                title={
+                  entry.isDir
+                    ? "Download this folder to your Downloads folder"
+                    : "Download to your Downloads folder"
+                }
+              >
+                Download
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
