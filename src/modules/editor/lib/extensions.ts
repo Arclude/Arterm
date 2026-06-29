@@ -3,7 +3,9 @@ import { lintGutter } from "@codemirror/lint";
 import { search } from "@codemirror/search";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import { detectMonoFontFamily } from "@/lib/fonts";
+import { multiCursorKeymap } from "./multiCursor";
 
 // Compartments allow runtime reconfiguration without rebuilding state.
 export const languageCompartment = new Compartment();
@@ -25,6 +27,20 @@ export function buildSharedExtensions(): Extension[] {
     EditorState.tabSize.of(2),
     search({ top: true }),
     lintGutter(),
+    multiCursorKeymap(),
+    // VS Code-style indentation guides. Colors are CSS vars so they track the
+    // active theme; the active block's guide is highlighted a touch brighter.
+    indentationMarkers({
+      highlightActiveBlock: true,
+      hideFirstIndent: false,
+      markerType: "fullScope",
+      colors: {
+        light: "color-mix(in srgb, var(--foreground) 12%, transparent)",
+        dark: "color-mix(in srgb, var(--foreground) 12%, transparent)",
+        activeLight: "color-mix(in srgb, var(--foreground) 28%, transparent)",
+        activeDark: "color-mix(in srgb, var(--foreground) 28%, transparent)",
+      },
+    }),
     EditorView.theme({
       "&, &.cm-editor, &.cm-editor.cm-focused": {
         backgroundColor: "transparent !important",

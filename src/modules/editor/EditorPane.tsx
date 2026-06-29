@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { TextEdit } from "vscode-languageserver-protocol";
 import {
   type LspClient,
   type LspGotoTarget,
@@ -28,7 +29,13 @@ import {
   pathToUri,
   uriToPath,
 } from "@/modules/lsp";
+import { formatDocument } from "@/modules/lsp/codemirror/format";
+import { offsetToPosition } from "@/modules/lsp/codemirror/position";
+import { applyTextEditsToView } from "@/modules/lsp/codemirror/workspaceEdit";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { EditorBreadcrumb } from "./EditorBreadcrumb";
+import { type AnySymbol, resolveSymbolPath } from "./lib/breadcrumbSymbols";
+import { debugExtension } from "./lib/debugGutter";
 import {
   buildSharedExtensions,
   debugCompartment,
@@ -38,13 +45,6 @@ import {
   minimapCompartment,
   vimCompartment,
 } from "./lib/extensions";
-import { formatDocument } from "@/modules/lsp/codemirror/format";
-import { offsetToPosition } from "@/modules/lsp/codemirror/position";
-import { applyTextEditsToView } from "@/modules/lsp/codemirror/workspaceEdit";
-import type { TextEdit } from "vscode-languageserver-protocol";
-import { EditorBreadcrumb } from "./EditorBreadcrumb";
-import { type AnySymbol, resolveSymbolPath } from "./lib/breadcrumbSymbols";
-import { debugExtension } from "./lib/debugGutter";
 import { mergeConflictExtension } from "./lib/mergeConflictExtension";
 import { minimapExtension } from "./lib/minimap";
 import { EDITOR_THEME_EXT } from "./lib/themes";
@@ -55,6 +55,8 @@ initVimGlobals();
 import { getKey } from "@/modules/ai/lib/keyring";
 import { onKeysChanged } from "@/modules/settings/store";
 import { inlineCompletion } from "./lib/autocomplete/inlineExtension";
+import { useEditorStatusStore } from "./lib/editorStatusStore";
+import { languageLabel } from "./lib/languageLabel";
 import { resolveLanguage } from "./lib/languageResolver";
 import { useDocument } from "./lib/useDocument";
 
@@ -192,6 +194,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     useEffect(
       () => () => {
         if (symbolTimerRef.current) clearTimeout(symbolTimerRef.current);
+        // Drop this pane's status-bar info if it was the active editor.
+        useEditorStatusStore.getState().clear(pathRef.current);
       },
       [],
     );
@@ -256,6 +260,29 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         EditorView.updateListener.of((u) => {
           if (u.selectionSet || u.docChanged) {
             cursorHandlerRef.current(u.state.selection.main.head, u.docChanged);
+          }
+          // Publish Ln/Col + selection + language to the status bar while this
+          // pane is the focused editor (mirrors VS Code's active editor).
+          if (
+            (u.selectionSet || u.docChanged || u.focusChanged) &&
+            u.view.hasFocus
+          ) {
+            const st = u.state;
+            const head = st.selection.main.head;
+            const line = st.doc.lineAt(head);
+            const selectedChars = st.selection.ranges.reduce(
+              (n, r) => n + (r.to - r.from),
+              0,
+            );
+            useEditorStatusStore.getState().set({
+              path: pathRef.current,
+              line: line.number,
+              col: head - line.from + 1,
+              selections: st.selection.ranges.length,
+              selectedChars,
+              language: languageLabel(pathRef.current),
+              indent: "Spaces: 2",
+            });
           }
         }),
         // Built lazily by the minimap/language effects below (gated on file
@@ -633,6 +660,9 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
             bracketMatching: true,
             closeBrackets: true,
             autocompletion: true,
+            // Alt-drag rectangular selection shows a crosshair cursor (off by
+            // default in @uiw's basicSetup).
+            crosshairCursor: true,
             highlightActiveLine: true,
             // Off on large files: this scans the whole document on every
             // selection change.

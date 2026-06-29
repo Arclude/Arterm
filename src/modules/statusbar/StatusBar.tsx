@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AgentStatusPill } from "@/modules/ai/components/AgentStatusPill";
 import { AiStatusBarControls } from "@/modules/ai/components/AiStatusBarControls";
+import { useEditorStatusStore } from "@/modules/editor/lib/editorStatusStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import { BranchSwitcher } from "./BranchSwitcher";
@@ -56,6 +57,20 @@ export function StatusBar({
 }: Props) {
   const { status: git, refresh: refreshGit } = useGitStatus(cwd);
   const items = usePreferencesStore((s) => s.statusBar);
+  const editorStatus = useEditorStatusStore((s) => s.status);
+  // Only show editor info when the focused editor matches the active file
+  // (hidden on terminal tabs and for non-active splits).
+  const editor =
+    editorStatus && filePath && editorStatus.path === filePath
+      ? editorStatus
+      : null;
+  const selectionLabel = editor
+    ? editor.selections > 1
+      ? `${editor.selections} selections`
+      : editor.selectedChars > 0
+        ? `${editor.selectedChars} selected`
+        : null
+    : null;
 
   return (
     <footer className="flex h-8 shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-card/60 px-2 text-[11px]">
@@ -126,8 +141,18 @@ export function StatusBar({
         ) : null}
       </div>
 
-      {/* Right: path + branch + clock + AI controls */}
+      {/* Right: editor info + path + branch + clock + AI controls */}
       <div className="flex min-w-0 items-center justify-end gap-2">
+        {editor ? (
+          <div className="flex shrink-0 items-center gap-2 text-[10.5px] text-muted-foreground tabular-nums">
+            <span title="Line and column">
+              Ln {editor.line}, Col {editor.col}
+              {selectionLabel ? ` (${selectionLabel})` : ""}
+            </span>
+            <span title="Indentation">{editor.indent}</span>
+            <span title="Language mode">{editor.language}</span>
+          </div>
+        ) : null}
         {items.workspace ? (
           <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
         ) : null}
