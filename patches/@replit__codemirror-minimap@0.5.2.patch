@@ -1,0 +1,38 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 3f0c98aba65c44b0ff033dd299649985cfc7951c..b16bcf41aad44b0ea5726b967140d6397197bb17 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs	
+@@ -47,8 +47,12 @@ const Config = state.Facet.define({
+     },
+ });
+ const Scale = {
+-    // Multiply the number of canvas pixels
+-    PixelMultiplier: 2,
++    // Multiply the number of canvas pixels.
++    // Patched: bind to the device pixel ratio so the canvas backing store is
++    // always exactly 2x the physical device resolution (a clean integer
++    // downscale) rather than a fixed 2x CSS pixels. Fixes blurry minimap text
++    // on HiDPI / Windows fractional scaling (devicePixelRatio 1.25 / 1.5 / ...).
++    PixelMultiplier: 2 * (typeof window !== "undefined" && window.devicePixelRatio ? window.devicePixelRatio : 1),
+     // Downscale the editor contents by this ratio
+     SizeRatio: 4,
+     // Maximum width of the minimap in pixels
+diff --git a/dist/index.js b/dist/index.js
+index c7c9a0406e1cfa2277ab6324fe47f70dd577e7c1..72f2e77fc2e52a073754097e5f3ddbbd3e86e923 100644
+--- a/dist/index.js
++++ b/dist/index.js	
+@@ -39,8 +39,12 @@ const Config = /*@__PURE__*/Facet.define({
+     },
+ });
+ const Scale = {
+-    // Multiply the number of canvas pixels
+-    PixelMultiplier: 2,
++    // Multiply the number of canvas pixels.
++    // Patched: bind to the device pixel ratio so the canvas backing store is
++    // always exactly 2x the physical device resolution (a clean integer
++    // downscale) rather than a fixed 2x CSS pixels. Fixes blurry minimap text
++    // on HiDPI / Windows fractional scaling (devicePixelRatio 1.25 / 1.5 / ...).
++    PixelMultiplier: 2 * (typeof window !== "undefined" && window.devicePixelRatio ? window.devicePixelRatio : 1),
+     // Downscale the editor contents by this ratio
+     SizeRatio: 4,
+     // Maximum width of the minimap in pixels

@@ -725,10 +725,23 @@ export const DEFAULT_AUTOCOMPLETE_MODEL: Partial<Record<ProviderId, string>> = {
   "openai-compatible": "",
 };
 
-/** Curated list of fast models suitable for inline completion (speed ≥ 4). */
+/** Providers that run against a user-supplied endpoint (no API key). Their
+ *  real speed depends on local hardware, so we don't gate them on the curated
+ *  speed rating — the user opting into a local model IS the speed decision. */
+const LOCAL_AUTOCOMPLETE_PROVIDERS: ReadonlySet<ProviderId> = new Set([
+  "lmstudio",
+  "mlx",
+  "ollama",
+]);
+
+/** Models offered in the inline-completion picker: curated fast cloud models
+ *  (speed ≥ 4) plus every local provider (Ollama / LM Studio / MLX). */
 export function getAutocompleteEligibleModels(): readonly ModelInfo[] {
   return MODELS.filter(
-    (m) => m.capabilities.speed >= 4 && m.id !== "openai-compatible-custom",
+    (m) =>
+      m.id !== "openai-compatible-custom" &&
+      (m.capabilities.speed >= 4 ||
+        LOCAL_AUTOCOMPLETE_PROVIDERS.has(m.provider)),
   );
 }
 

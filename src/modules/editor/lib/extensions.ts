@@ -16,6 +16,9 @@ export const lspCompartment = new Compartment();
 export const minimapCompartment = new Compartment();
 export const debugCompartment = new Compartment();
 export const mergeConflictCompartment = new Compartment();
+// Holds a transient inline AI-edit diff (unifiedMergeView + read-only) while a
+// Ctrl+K edit is pending review; empty otherwise.
+export const aiEditCompartment = new Compartment();
 
 // Only what basicSetup doesn't already cover, to avoid duplicate extensions.
 // basicSetup gives us line numbers, fold gutter, history, indentOnInput,

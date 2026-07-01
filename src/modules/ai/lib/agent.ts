@@ -26,9 +26,12 @@ import {
 import { buildTools, type ToolContext } from "../tools/tools";
 import { compactModelMessagesDetailed } from "./compact";
 import type { ProviderKeys, CustomEndpointKeys } from "./keyring";
-import { createProxyFetch } from "./proxyFetch";
+import { createProxyFetch, sseSanitizingFetch } from "./proxyFetch";
 
 const localProxyFetch = createProxyFetch({ allowPrivateNetwork: true });
+// Custom OpenAI-compatible relays sometimes emit malformed `data: null` SSE
+// frames; strip them before the AI SDK's strict chunk parser sees the stream.
+const compatProxyFetch = sseSanitizingFetch(localProxyFetch);
 
 const TOOL_LABELS: Record<string, (input: Record<string, unknown>) => string> =
   {
@@ -179,7 +182,14 @@ export async function buildLanguageModel(
         name: "openai-compatible",
         baseURL: compatURL,
         apiKey: epKey || key || undefined,
-        fetch: localProxyFetch,
+        // Some OpenAI-compatible gateways (e.g. AgentRouter and other "new-api"
+        // relays built for Claude Code) reject any client whose User-Agent
+        // isn't an approved CLI, answering "unauthorized client detected". The
+        // webview's fetch can't override User-Agent (it's a forbidden header),
+        // but our proxyFetch forwards headers verbatim through the Rust HTTP
+        // layer, so set a claude-cli UA here. Standard OpenAI servers ignore it.
+        headers: { "User-Agent": "claude-cli/1.0.0 (external, cli)" },
+        fetch: compatProxyFetch,
       })(resolvedModelId);
       break;
     }

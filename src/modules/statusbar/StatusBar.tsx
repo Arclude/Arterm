@@ -16,6 +16,7 @@ import { AiStatusBarControls } from "@/modules/ai/components/AiStatusBarControls
 import { useEditorStatusStore } from "@/modules/editor/lib/editorStatusStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { WorkspaceEnv } from "@/modules/workspace";
+import { AiAutocompleteStatus } from "./AiAutocompleteStatus";
 import { BranchSwitcher } from "./BranchSwitcher";
 import { Clock } from "./Clock";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
@@ -153,6 +154,7 @@ export function StatusBar({
             <span title="Language mode">{editor.language}</span>
           </div>
         ) : null}
+        {filePath ? <AiAutocompleteStatus /> : null}
         {items.workspace ? (
           <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
         ) : null}

@@ -3,3 +3,5 @@ minimumReleaseAgeStrict: true
 allowBuilds:
   esbuild: true
   msw: true
+patchedDependencies:
+  '@replit/codemirror-minimap@0.5.2': patches/@replit__codemirror-minimap@0.5.2.patch

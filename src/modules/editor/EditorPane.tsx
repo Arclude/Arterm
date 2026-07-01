@@ -34,9 +34,11 @@ import { offsetToPosition } from "@/modules/lsp/codemirror/position";
 import { applyTextEditsToView } from "@/modules/lsp/codemirror/workspaceEdit";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { EditorBreadcrumb } from "./EditorBreadcrumb";
+import { EditorInlineAiEdit } from "./EditorInlineAiEdit";
 import { type AnySymbol, resolveSymbolPath } from "./lib/breadcrumbSymbols";
 import { debugExtension } from "./lib/debugGutter";
 import {
+  aiEditCompartment,
   buildSharedExtensions,
   debugCompartment,
   languageCompartment,
@@ -182,6 +184,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const pathRef = useRef(path);
     pathRef.current = path;
 
+    // Ctrl+K inline AI edit overlay. The keymap (built once) calls through a
+    // ref so it can trigger the latest React state setter.
+    const [aiEditOpen, setAiEditOpen] = useState(false);
+    const openAiEditRef = useRef<() => void>(() => {});
+    openAiEditRef.current = () => {
+      if (!isLargeRef.current) setAiEditOpen(true);
+    };
+
     // --- breadcrumb symbol path (cursor's enclosing symbol chain via LSP) ---
     const [symbolPath, setSymbolPath] = useState<string[]>([]);
     const lspClientRef = useRef<LspClient | null>(null);
@@ -257,6 +267,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         lspCompartment.of([]),
         debugCompartment.of([]),
         mergeConflictCompartment.of([]),
+        aiEditCompartment.of([]),
         EditorView.updateListener.of((u) => {
           if (u.selectionSet || u.docChanged) {
             cursorHandlerRef.current(u.state.selection.main.head, u.docChanged);
@@ -355,6 +366,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
               const client = lspClientRef.current;
               if (!client) return false;
               void formatDocument(view, client, pathToUri(pathRef.current));
+              return true;
+            },
+          },
+          {
+            key: "Mod-k",
+            preventDefault: true,
+            run: () => {
+              openAiEditRef.current();
               return true;
             },
           },
@@ -670,6 +689,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
             searchKeymap: true,
           }}
         />
+        {aiEditOpen && cmRef.current?.view ? (
+          <EditorInlineAiEdit
+            view={cmRef.current.view}
+            path={path}
+            onClose={() => {
+              setAiEditOpen(false);
+              cmRef.current?.view?.focus();
+            }}
+          />
+        ) : null}
       </div>
     );
   },

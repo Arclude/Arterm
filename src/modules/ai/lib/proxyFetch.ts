@@ -152,3 +152,47 @@ async function proxyFetchImpl(
 function makeAbortError(): DOMException {
   return new DOMException("Request aborted", "AbortError");
 }
+
+/** Strip malformed `data: null` SSE lines from a byte stream. Some OpenAI-
+ *  compatible relays (e.g. AgentRouter and other "new-api" gateways) inject a
+ *  literal `data: null` frame between valid chunks; the AI SDK's strict chunk
+ *  schema then rejects the whole stream with "expected object, received null".
+ *  Dropping just that line leaves the surrounding SSE framing intact. */
+function makeSseNullStripper(): TransformStream<Uint8Array, Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const lines = buffer.split("\n");
+      // Keep the last (possibly partial) line buffered until its newline lands.
+      buffer = lines.pop() ?? "";
+      const kept = lines.filter((l) => l.trim() !== "data: null");
+      if (kept.length > 0) {
+        controller.enqueue(encoder.encode(`${kept.join("\n")}\n`));
+      }
+    },
+    flush(controller) {
+      if (buffer && buffer.trim() !== "data: null") {
+        controller.enqueue(encoder.encode(buffer));
+      }
+    },
+  });
+}
+
+/** Wrap a fetch so event-stream responses have their `data: null` frames
+ *  stripped (see {@link makeSseNullStripper}). Non-streaming responses pass
+ *  through untouched. */
+export function sseSanitizingFetch(base: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const res = await base(input, init);
+    const ct = res.headers.get("content-type") ?? "";
+    if (!res.body || !ct.includes("text/event-stream")) return res;
+    return new Response(res.body.pipeThrough(makeSseNullStripper()), {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    });
+  };
+}
