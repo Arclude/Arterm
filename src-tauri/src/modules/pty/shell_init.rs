@@ -49,18 +49,23 @@ fn fish_init_script() -> &'static str {
 
 /// Returns the spawn command plus a static shell label ("bash" | "zsh" |
 /// "fish" | "pwsh" | "powershell" | "cmd"; WSL reports the inner shell).
+///
+/// `id` is the PTY session id; it is exported to the child as
+/// `ARTERM_TERMINAL_ID` so an Arterm CLI running in the terminal can advertise
+/// which desktop terminal tab it belongs to (see docs/arterm-cli-integration.md).
 pub fn build_command(
+    id: u32,
     cwd: Option<String>,
     workspace: WorkspaceEnv,
 ) -> Result<(CommandBuilder, &'static str), String> {
     #[cfg(unix)]
     {
         let _ = workspace;
-        unix::build(cwd)
+        unix::build(id, cwd)
     }
     #[cfg(windows)]
     {
-        windows::build(cwd, workspace)
+        windows::build(id, cwd, workspace)
     }
 }
 
@@ -84,10 +89,11 @@ fn ensure_utf8_locale(cmd: &mut CommandBuilder) {
     cmd.env("LANG", fallback);
 }
 
-fn apply_common(cmd: &mut CommandBuilder, cwd: Option<String>) {
+fn apply_common(cmd: &mut CommandBuilder, id: u32, cwd: Option<String>) {
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("ARTERM_TERMINAL", "1");
+    cmd.env("ARTERM_TERMINAL_ID", id.to_string());
     ensure_utf8_locale(cmd);
 
     let resolved_cwd = cwd
@@ -160,10 +166,10 @@ mod unix {
         }
     }
 
-    pub fn build(cwd: Option<String>) -> Result<(CommandBuilder, &'static str), String> {
+    pub fn build(id: u32, cwd: Option<String>) -> Result<(CommandBuilder, &'static str), String> {
         let (shell, shell_path) = Shell::detect();
         let mut cmd = CommandBuilder::new(&shell_path);
-        super::apply_common(&mut cmd, cwd);
+        super::apply_common(&mut cmd, id, cwd);
 
         let label = match shell {
             Shell::Zsh => {
@@ -330,11 +336,12 @@ mod windows {
     }
 
     pub fn build(
+        id: u32,
         cwd: Option<String>,
         workspace: WorkspaceEnv,
     ) -> Result<(CommandBuilder, &'static str), String> {
         if let WorkspaceEnv::Wsl { distro } = workspace {
-            return build_wsl(cwd, distro);
+            return build_wsl(id, cwd, distro);
         }
         let shell_path = super::windows_shell_path();
         let shell_name = shell_path
@@ -345,7 +352,7 @@ mod windows {
         let is_powershell = shell_name == "pwsh.exe" || shell_name == "powershell.exe";
 
         let mut cmd = CommandBuilder::new(&shell_path);
-        super::apply_common(&mut cmd, cwd);
+        super::apply_common(&mut cmd, id, cwd);
 
         if is_powershell {
             match prepare_ps_profile() {
@@ -375,6 +382,7 @@ mod windows {
     }
 
     fn build_wsl(
+        id: u32,
         cwd: Option<String>,
         distro: String,
     ) -> Result<(CommandBuilder, &'static str), String> {
@@ -438,6 +446,7 @@ mod windows {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("ARTERM_TERMINAL", "1");
+        cmd.env("ARTERM_TERMINAL_ID", id.to_string());
         super::ensure_utf8_locale(&mut cmd);
         log::info!("spawning WSL shell: {distro} ({shell_path})");
         Ok((cmd, shell_kind.label()))

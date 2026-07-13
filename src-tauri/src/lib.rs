@@ -1,6 +1,8 @@
 pub mod modules;
 
-use modules::{agent, dap, extensions, fs, git, lsp, net, pty, secrets, shell, ssh, workspace};
+use modules::{
+    agent, arterm_cli, dap, extensions, fs, git, lsp, net, pty, secrets, shell, ssh, workspace,
+};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
@@ -330,6 +332,7 @@ pub fn run() {
             open_settings_window,
             agent::agent_enable_claude_hooks,
             agent::agent_claude_hooks_status,
+            arterm_cli::arterm_cli_list_sessions,
             extensions::extensions_list,
             extensions::extensions_dir_path,
             extensions::extensions_write,

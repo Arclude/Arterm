@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod arterm_cli;
 pub mod dap;
 pub mod extensions;
 pub mod fs;

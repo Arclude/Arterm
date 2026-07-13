@@ -5,7 +5,7 @@ const ST_FINAL: u8 = b'\\';
 
 const OSC_MAX: usize = 2048;
 
-const DEFAULT_AGENTS: &[&str] = &["claude", "codex"];
+const DEFAULT_AGENTS: &[&str] = &["claude", "codex", "arterm"];
 
 // OSC 777 marker our Claude Code hooks emit via `terminalSequence`.
 const ARTERM_MARKER: &[u8] = b"notify;Arterm;";
@@ -309,6 +309,17 @@ mod tests {
         assert_eq!(
             run(&mut d2, &osc("133;C;npx claude")),
             vec![started("claude")]
+        );
+    }
+
+    #[test]
+    fn arms_on_arterm_command() {
+        let mut d = AgentDetector::new();
+        assert_eq!(run(&mut d, &osc("133;C;arterm")), vec![started("arterm")]);
+        let mut d2 = AgentDetector::new();
+        assert_eq!(
+            run(&mut d2, &osc("133;C;/usr/local/bin/arterm --print hi")),
+            vec![started("arterm")]
         );
     }
 
