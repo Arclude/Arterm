@@ -42,6 +42,16 @@ import {
   SelectionAskAi,
   useChatStore,
 } from "@/modules/ai";
+import {
+  CliAgentsDashboard,
+  CliAgentsSidebarPanel,
+  CliRailFlyout,
+  CliStatusBridge,
+  selectCliBusy,
+  selectOnlineSessionCount,
+  selectTotalActiveAgents,
+  useCliStatusStore,
+} from "@/modules/cli-status";
 import { AiComposerProvider } from "@/modules/ai/lib/composer";
 import { native } from "@/modules/ai/lib/native";
 import { redactSensitive } from "@/modules/ai/lib/redact";
@@ -118,6 +128,7 @@ import {
   findLeafCwd,
   hasLeaf,
   leafHasForegroundProcess,
+  leafIdForPty,
   leafIds,
   respawnSession,
   type TerminalPaneHandle,
@@ -206,6 +217,7 @@ function readSidebarView(): SidebarViewId {
       stored === "explorer" ||
       stored === "source-control" ||
       stored === "agents" ||
+      stored === "cli-agents" ||
       stored === "ssh"
     )
       return stored;
@@ -234,6 +246,7 @@ export default function App() {
     closeAiDiffTab,
     openGitDiffTab,
     openCommitHistoryTab,
+    openCliAgentsTab,
     openCommitFileDiffTab,
     closeTab,
     updateTab,
@@ -320,6 +333,17 @@ export default function App() {
     },
     [persistSidebarView, sidebarView],
   );
+  // The CLI Agents rail button (and flyout) does both: switch the sidebar to the
+  // CLI Agents panel AND open/focus the main-area dashboard tab — so one click
+  // changes the sidebar too, instead of leaving the AI Agents chat in place.
+  const openCliAgents = useCallback(() => {
+    const panel = sidebarRef.current;
+    if (panel && panel.getSize().asPercentage <= 0) {
+      panel.resize(`${sidebarWidthRef.current}px`);
+    }
+    if (sidebarView !== "cli-agents") persistSidebarView("cli-agents");
+    openCliAgentsTab();
+  }, [persistSidebarView, sidebarView, openCliAgentsTab]);
   const persistSidebarWidth = useCallback((next: number) => {
     sidebarWidthRef.current = next;
     if (sidebarWidthWriteTimerRef.current) {
@@ -473,6 +497,9 @@ export default function App() {
   const busyAgentCount = useChatStore(
     (s) => Object.values(s.metaBySession).filter(isAgentMetaBusy).length,
   );
+  const cliAgentCount = useCliStatusStore(selectTotalActiveAgents);
+  const cliOnline = useCliStatusStore(selectOnlineSessionCount);
+  const cliBusy = useCliStatusStore(selectCliBusy);
 
   useEffect(() => {
     if (activeSessionId) firePendingReviewForSession(activeSessionId);
@@ -562,6 +589,7 @@ export default function App() {
   const isGitDiffTab =
     activeTab?.kind === "git-diff" || activeTab?.kind === "git-commit-file";
   const isGitHistoryTab = activeTab?.kind === "git-history";
+  const isCliAgentsTab = activeTab?.kind === "cli-agents";
 
   // When an AI diff is approved (write_file applied to disk), reload any
   // open editor tabs for that path so the user sees the new content. We
@@ -1425,6 +1453,23 @@ export default function App() {
     [setActiveId, focusPane],
   );
 
+  // For a CLI session's `terminalId` (a PTY id), return a focus callback when
+  // that PTY still backs an open terminal tab — else null, so the panel hides
+  // the terminal chip. Read live (not reactive) via the pty→leaf map + tabs ref.
+  const resolveTerminalFocus = useCallback(
+    (terminalId: number): (() => void) | null => {
+      const leafId = leafIdForPty(terminalId);
+      if (leafId === null) return null;
+      const tab = tabsRef.current.find(
+        (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
+      );
+      if (!tab) return null;
+      const tabId = tab.id;
+      return () => onActivateAgent(tabId, leafId);
+    },
+    [onActivateAgent],
+  );
+
   const onActivateLocalAgent = useCallback(() => {
     revealAgentsSidebar();
     focusInput(null);
@@ -1476,7 +1521,7 @@ export default function App() {
       return {
         kind: "git-history",
         handle: gitHistoryHandle,
-        focus: () => { },
+        focus: () => {},
       };
     return null;
   }, [
@@ -1610,7 +1655,7 @@ export default function App() {
         useManagedAgentsStore
           .getState()
           .register({ leafId, tabId, sessionId, task: oneLine, cwd });
-        const hooksReady = invoke("agent_enable_claude_hooks").catch(() => { });
+        const hooksReady = invoke("agent_enable_claude_hooks").catch(() => {});
         void (async () => {
           await Promise.all([whenSessionReady(leafId), hooksReady]);
           if (!writeToSession(leafId, "claude\r")) {
@@ -1754,6 +1799,23 @@ export default function App() {
           onSearchHandle={setGitHistoryHandle}
         />
       </div>
+      <div
+        className={cn(
+          "absolute inset-0",
+          // `hidden` (display:none), NOT `invisible` (visibility:hidden): the CLI
+          // dashboard hosts a React-Flow graph whose absolutely-positioned panes
+          // ignore an ancestor's visibility and would paint over the active tab
+          // (e.g. a terminal). display:none removes it from layout entirely so it
+          // cannot leak. Scoped to THIS wrapper only (not the shared tab wrappers).
+          !isCliAgentsTab && "hidden",
+        )}
+        aria-hidden={!isCliAgentsTab}
+      >
+        <CliAgentsDashboard
+          resolveTerminalFocus={resolveTerminalFocus}
+          visible={isCliAgentsTab}
+        />
+      </div>
     </div>
   );
 
@@ -1779,7 +1841,7 @@ export default function App() {
               canSplit={
                 (activeTerminalTab !== null &&
                   leafIds(activeTerminalTab.paneTree).length <
-                  MAX_PANES_PER_TAB) ||
+                    MAX_PANES_PER_TAB) ||
                 isEditorTab
               }
               onActivateAgent={onActivateAgent}
@@ -1828,6 +1890,8 @@ export default function App() {
                       />
                     ) : sidebarView === "agents" ? (
                       <AgentsPanel onOpenSession={openAgentConversation} />
+                    ) : sidebarView === "cli-agents" ? (
+                      <CliAgentsSidebarPanel onOpenSession={openCliAgents} />
                     ) : sidebarView === "ssh" ? (
                       <SshPanel
                         onOpenTerminal={(connId, title) =>
@@ -1850,6 +1914,17 @@ export default function App() {
                     onSelectView={cycleSidebarView}
                     changedCount={sourceControl.changedCount}
                     busyAgentCount={busyAgentCount}
+                    cliAgentCount={cliAgentCount}
+                    onOpenCliAgents={openCliAgents}
+                    cliAgentsActive={isCliAgentsTab}
+                    cliBusy={cliBusy}
+                    cliOnline={cliOnline}
+                    cliFlyout={
+                      <CliRailFlyout
+                        onOpenDashboard={openCliAgents}
+                        resolveTerminalFocus={resolveTerminalFocus}
+                      />
+                    }
                   />
                 </div>
               </ResizablePanel>
@@ -1892,6 +1967,7 @@ export default function App() {
             activeId={activeId}
             onActivate={onActivateAgent}
           />
+          <CliStatusBridge />
           <Toaster position="bottom-right" />
 
           {hasComposer ? (
@@ -1948,8 +2024,9 @@ export default function App() {
                 <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
                 <AlertDialogDescription>
                   {tabs.find((t) => t.id === pendingCloseTab)?.title
-                    ? `"${tabs.find((t) => t.id === pendingCloseTab)?.title
-                    }" has unsaved changes. Close anyway?`
+                    ? `"${
+                        tabs.find((t) => t.id === pendingCloseTab)?.title
+                      }" has unsaved changes. Close anyway?`
                     : "This file has unsaved changes. Close anyway?"}
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -2004,13 +2081,13 @@ export default function App() {
                 <AlertDialogDescription>
                   {pendingDeleteTabs?.length === 1
                     ? (() => {
-                      const title = tabs.find(
-                        (t) => t.id === pendingDeleteTabs[0],
-                      )?.title;
-                      return title
-                        ? `"${title}" has unsaved changes. The file has been deleted. Close anyway?`
-                        : "This file has unsaved changes. The file has been deleted. Close anyway?";
-                    })()
+                        const title = tabs.find(
+                          (t) => t.id === pendingDeleteTabs[0],
+                        )?.title;
+                        return title
+                          ? `"${title}" has unsaved changes. The file has been deleted. Close anyway?`
+                          : "This file has unsaved changes. The file has been deleted. Close anyway?";
+                      })()
                     : `${pendingDeleteTabs?.length ?? 0} files have unsaved changes. They have been deleted. Close all anyway?`}
                 </AlertDialogDescription>
               </AlertDialogHeader>

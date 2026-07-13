@@ -1,0 +1,280 @@
+/*
+ * CLI Agents dashboard — bespoke palette + animations, scoped to `.cli-dash`.
+ * Structural chrome (surfaces, borders, text) uses Arterm's Tailwind theme
+ * tokens so it follows every custom theme; only the things the theme has no
+ * equivalent for live here: a teal brand accent, the 8-color agent identity
+ * palette, the semantic state colors, and the pulse/blink motion.
+ *
+ * Dark is the default; light comes via prefers-color-scheme, and the app's
+ * explicit [data-theme] toggle wins over the media query in both directions.
+ */
+
+.cli-dash {
+  --cli-accent: #35d0c0;
+  --cli-accent-ghost: rgba(53, 208, 192, 0.14);
+  --cli-run: #57d996;
+  --cli-think: #f2b64c;
+  --cli-idle: #7c8ea0;
+  --cli-fail: #ff6b6b;
+  --cli-await: #b28bff;
+  --cli-lost: #d05a63;
+  --cli-a-cyan: #4fd8e6;
+  --cli-a-blue: #6fb3ff;
+  --cli-a-green: #6fdd8b;
+  --cli-a-purple: #c39bff;
+  --cli-a-orange: #f2a15c;
+  --cli-a-pink: #ff9ecb;
+  --cli-a-yellow: #f0c65c;
+  --cli-a-red: #f2777a;
+}
+
+@media (prefers-color-scheme: light) {
+  .cli-dash {
+    --cli-accent: #128577;
+    --cli-accent-ghost: rgba(18, 133, 119, 0.1);
+    --cli-run: #1f9d5f;
+    --cli-think: #b5791a;
+    --cli-idle: #7c8ea0;
+    --cli-fail: #d23c3c;
+    --cli-await: #7a55d1;
+    --cli-lost: #c0424b;
+    --cli-a-cyan: #1596a6;
+    --cli-a-blue: #2f78d1;
+    --cli-a-green: #229a52;
+    --cli-a-purple: #7a54c9;
+    --cli-a-orange: #c9701f;
+    --cli-a-pink: #c85a95;
+    --cli-a-yellow: #b98a12;
+    --cli-a-red: #d64547;
+  }
+}
+
+:root[data-theme="dark"] .cli-dash {
+  --cli-accent: #35d0c0;
+  --cli-accent-ghost: rgba(53, 208, 192, 0.14);
+  --cli-run: #57d996;
+  --cli-think: #f2b64c;
+  --cli-idle: #7c8ea0;
+  --cli-fail: #ff6b6b;
+  --cli-await: #b28bff;
+  --cli-lost: #d05a63;
+  --cli-a-cyan: #4fd8e6;
+  --cli-a-blue: #6fb3ff;
+  --cli-a-green: #6fdd8b;
+  --cli-a-purple: #c39bff;
+  --cli-a-orange: #f2a15c;
+  --cli-a-pink: #ff9ecb;
+  --cli-a-yellow: #f0c65c;
+  --cli-a-red: #f2777a;
+}
+
+:root[data-theme="light"] .cli-dash {
+  --cli-accent: #128577;
+  --cli-accent-ghost: rgba(18, 133, 119, 0.1);
+  --cli-run: #1f9d5f;
+  --cli-think: #b5791a;
+  --cli-idle: #7c8ea0;
+  --cli-fail: #d23c3c;
+  --cli-await: #7a55d1;
+  --cli-lost: #c0424b;
+  --cli-a-cyan: #1596a6;
+  --cli-a-blue: #2f78d1;
+  --cli-a-green: #229a52;
+  --cli-a-purple: #7a54c9;
+  --cli-a-orange: #c9701f;
+  --cli-a-pink: #c85a95;
+  --cli-a-yellow: #b98a12;
+  --cli-a-red: #d64547;
+}
+
+/* Telemetry / labels are monospace + tabular; prose stays on the app sans. */
+.cli-mono {
+  font-family:
+    ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status dots */
+.cli-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.cli-dot-run {
+  background: var(--cli-run);
+  animation: cli-pulse 2s infinite;
+}
+.cli-dot-think {
+  background: var(--cli-think);
+  animation: cli-blink 1.1s steps(2, end) infinite;
+}
+.cli-dot-idle {
+  background: var(--cli-idle);
+}
+.cli-dot-done {
+  background: var(--cli-run);
+  opacity: 0.5;
+}
+.cli-dot-fail {
+  background: var(--cli-fail);
+}
+.cli-dot-await {
+  background: var(--cli-await);
+}
+.cli-dot-lost {
+  background: var(--cli-lost);
+}
+
+.cli-caret {
+  animation: cli-blink 1s steps(2, end) infinite;
+  color: var(--cli-accent);
+}
+
+/* State pills */
+.cli-pill {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-weight: 700;
+}
+.cli-pill-run {
+  background: color-mix(in oklab, var(--cli-run) 20%, transparent);
+  color: var(--cli-run);
+}
+.cli-pill-think {
+  background: color-mix(in oklab, var(--cli-think) 20%, transparent);
+  color: var(--cli-think);
+}
+.cli-pill-done {
+  background: color-mix(in oklab, var(--cli-idle) 22%, transparent);
+  color: var(--cli-idle);
+}
+.cli-pill-await {
+  background: color-mix(in oklab, var(--cli-await) 22%, transparent);
+  color: var(--cli-await);
+}
+.cli-pill-fail {
+  background: color-mix(in oklab, var(--cli-fail) 20%, transparent);
+  color: var(--cli-fail);
+}
+
+/* Gauge / meter */
+.cli-meter {
+  height: 4px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--cli-idle) 30%, transparent);
+  overflow: hidden;
+}
+.cli-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* Agent id-bar on a card */
+.cli-idbar {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 3px;
+}
+
+/* Timeline swimlane */
+.cli-lane {
+  height: 12px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--cli-idle) 22%, transparent);
+  position: relative;
+  overflow: hidden;
+}
+.cli-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+}
+.cli-nowline {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1.5px;
+  background: var(--cli-accent);
+  right: 0;
+}
+
+/* React-Flow topology graph — blend the library chrome into the dashboard,
+ * keeping our cli-dash palette. Scoped to the .cli-flow wrapper so it never
+ * leaks onto any other React-Flow instance in the app. */
+.cli-flow .react-flow {
+  background: transparent;
+}
+.cli-flow .react-flow__attribution {
+  display: none;
+}
+.cli-flow .react-flow__background {
+  opacity: 0.5;
+}
+.cli-flow .react-flow__edge-path {
+  stroke: var(--cli-accent);
+}
+.cli-flow .react-flow__handle {
+  min-width: 1px;
+  min-height: 1px;
+  border: none;
+  background: transparent;
+}
+.cli-flow .react-flow__controls {
+  box-shadow: none;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--cli-idle) 22%, transparent);
+}
+.cli-flow .react-flow__controls-button {
+  background: color-mix(in oklab, var(--cli-idle) 14%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--cli-idle) 22%, transparent);
+  color: var(--cli-idle);
+  fill: currentColor;
+}
+.cli-flow .react-flow__controls-button:hover {
+  background: color-mix(in oklab, var(--cli-accent) 18%, transparent);
+  color: var(--cli-accent);
+}
+.cli-flow .react-flow__minimap {
+  background: color-mix(in oklab, var(--cli-idle) 10%, transparent);
+  border-radius: 8px;
+}
+
+@keyframes cli-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--cli-run) 60%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes cli-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0.28;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cli-dash *,
+  .cli-dash *::before,
+  .cli-dash *::after {
+    animation: none !important;
+  }
+}

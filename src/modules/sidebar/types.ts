@@ -3,4 +3,5 @@ export type SidebarViewId =
   | "source-control"
   | "debug"
   | "agents"
+  | "cli-agents"
   | "ssh";

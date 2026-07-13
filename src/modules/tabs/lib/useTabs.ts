@@ -123,6 +123,13 @@ export type GitCommitFileDiffTab = {
   originalPath: string | null;
 };
 
+/** Singleton main-area tab hosting the CLI Agents monitoring dashboard. */
+export type CliAgentsTab = {
+  id: number;
+  kind: "cli-agents";
+  title: string;
+};
+
 export type Tab =
   | TerminalTab
   | EditorTab
@@ -131,7 +138,8 @@ export type Tab =
   | AiDiffTab
   | GitDiffTab
   | GitHistoryTab
-  | GitCommitFileDiffTab;
+  | GitCommitFileDiffTab
+  | CliAgentsTab;
 
 export type TabPatch = Partial<{
   title: string;
@@ -583,6 +591,24 @@ export function useTabs(
     [],
   );
 
+  const openCliAgentsTab = useCallback(() => {
+    const curr = tabsRef.current;
+    const existing = curr.find((t) => t.kind === "cli-agents");
+    if (existing) {
+      setActiveId(existing.id);
+      return existing.id;
+    }
+    const id = nextIdRef.current++;
+    const nextTabs = [
+      ...curr,
+      { id, kind: "cli-agents", title: "CLI Agents" } satisfies CliAgentsTab,
+    ];
+    tabsRef.current = nextTabs;
+    setTabs(nextTabs);
+    setActiveId(id);
+    return id;
+  }, []);
+
   const openCommitFileDiffTab = useCallback(
     (input: {
       repoRoot: string;
@@ -1003,6 +1029,7 @@ export function useTabs(
     openAiDiffTab,
     openGitDiffTab,
     openCommitHistoryTab,
+    openCliAgentsTab,
     openCommitFileDiffTab,
     setAiDiffStatus,
     closeAiDiffTab,

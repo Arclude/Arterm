@@ -19,6 +19,7 @@ import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
 import {
   Cancel01Icon,
   Clock01Icon,
+  CommandLineIcon,
   ComputerTerminal02Icon,
   GitBranchIcon,
   GitCompareIcon,
@@ -349,6 +350,16 @@ function TabIcon({ tab }: { tab: Tab }) {
     return (
       <HugeiconsIcon
         icon={Clock01Icon}
+        size={14}
+        strokeWidth={2}
+        className="shrink-0"
+      />
+    );
+  }
+  if (tab.kind === "cli-agents") {
+    return (
+      <HugeiconsIcon
+        icon={CommandLineIcon}
         size={14}
         strokeWidth={2}
         className="shrink-0"
