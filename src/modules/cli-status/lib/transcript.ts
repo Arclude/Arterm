@@ -217,7 +217,9 @@ export function buildTranscript(feed: StampedEvent[]): TranscriptTurn[] {
         });
         break;
       default:
-        break; // team_plan / team_done / team_member_state / usage → not shown
+        // team_plan / team_done / team_member_state / usage → not shown;
+        // team_message / team_memory have their own panels (board / memos).
+        break;
     }
   }
   return turns;

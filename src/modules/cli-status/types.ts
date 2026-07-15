@@ -50,6 +50,26 @@ export type TeamMessageEvent = StampedEvent & {
   text: string;
 };
 
+/**
+ * A private note a team member left its future self via its `memo` tool,
+ * streamed as a live `agent` frame — like `team_message`, NOT folded into the
+ * snapshot, so a consumer accumulates it client-side from the SSE feed (see
+ * docs/arterm-cli-integration.md §6). Members run isolated per round: the
+ * blackboard covers what a member SHARES, this covers what it KEEPS. `member`
+ * is a member id matching `team[].id`; `round` is the 1-based team round;
+ * `text` is truncated (~600 chars). `kind: "note"` is the only kind emitted
+ * today — the contract says unknown kinds are ignorable, so the narrowing in
+ * lib/memory.ts drops anything else.
+ */
+export type TeamMemoryEvent = StampedEvent & {
+  type: "team_memory";
+  round: number;
+  member: string;
+  memberName: string;
+  kind: "note";
+  text: string;
+};
+
 export type TeamMemberState = "pending" | "running" | "done" | "failed";
 
 export type TeamMemberStatus = {

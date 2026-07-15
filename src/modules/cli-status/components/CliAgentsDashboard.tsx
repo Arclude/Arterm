@@ -13,12 +13,13 @@ import { useCliStatusStore } from "../store/cliStatusStore";
 import { AgentDrilldown } from "./AgentDrilldown";
 import { BlackboardPanel } from "./BlackboardPanel";
 import { GlobalFeed } from "./GlobalFeed";
+import { MemoryPanel } from "./MemoryPanel";
 import { SessionDetail } from "./SessionDetail";
 import { SessionNavigator } from "./SessionNavigator";
 import type { TopologyMode } from "./TopologyGraph";
 import { TranscriptConsole } from "./TranscriptConsole";
 
-type RightTab = "inspect" | "console" | "blackboard";
+type RightTab = "inspect" | "console" | "blackboard" | "memory";
 
 const GRAPH_MODE_KEY = "arterm.cli.graphMode";
 function readGraphMode(): TopologyMode {
@@ -251,24 +252,28 @@ export function CliAgentsDashboard({
         {/* right: inspect (drill-down + feed) or the live console */}
         <div className="flex min-h-0 flex-col border-l border-border bg-card/30">
           <div className="flex items-center gap-1 border-b border-border px-3 py-2">
-            {(["inspect", "console", "blackboard"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setRightTab(t)}
-                className={cn(
-                  "cli-mono rounded-md px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition-colors",
-                  rightTab === t
-                    ? "bg-[color:var(--cli-accent)]/15 text-[color:var(--cli-accent)]"
-                    : "text-muted-foreground/70 hover:text-foreground",
-                )}
-              >
-                {t === "blackboard" ? "board" : t}
-              </button>
-            ))}
+            {(["inspect", "console", "blackboard", "memory"] as const).map(
+              (t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setRightTab(t)}
+                  className={cn(
+                    "cli-mono rounded-md px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] transition-colors",
+                    rightTab === t
+                      ? "bg-[color:var(--cli-accent)]/15 text-[color:var(--cli-accent)]"
+                      : "text-muted-foreground/70 hover:text-foreground",
+                  )}
+                >
+                  {t === "blackboard" ? "board" : t === "memory" ? "memos" : t}
+                </button>
+              ),
+            )}
           </div>
           {rightTab === "blackboard" ? (
             <BlackboardPanel feed={currentEntry?.feed ?? []} />
+          ) : rightTab === "memory" ? (
+            <MemoryPanel feed={currentEntry?.feed ?? []} />
           ) : rightTab === "console" ? (
             <TranscriptConsole
               feed={currentEntry?.feed ?? []}
