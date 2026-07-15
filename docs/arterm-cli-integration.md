@@ -191,6 +191,28 @@ Mirrors the CLI TUI (`packages/tui/src/App.tsx` bus switch):
   - `tool_denied` → `activity = "⊘ denied"`, append to `recentActivities`.
   - `usage` → `tokenCount += promptTokens + completionTokens`.
   `recentActivities` is capped at 5 (newest last). Other inner types are ignored.
+- `team_message {round, from, fromName, to?, toName?, kind, text}` — a posting on the shared
+  team **blackboard** (breaks the star topology). This is a stream-only event: it is NOT folded
+  into the snapshot, so a consumer accumulates it client-side from the SSE `agent` frames.
+  - `kind: "message"` — a member's directed/broadcast note (via its `message` tool). `to`/`toName`
+    set → a **member→member edge** (`from` → `to`) for a topology graph; `to` absent → a broadcast
+    (member → all / the board hub).
+  - `kind: "result"` — a member's round output auto-posted to the board at round end. `to` is
+    always absent (member → board hub / leader). Emitted once per non-failed member per round.
+  - `from`/`to` are member ids matching `team[].id` (or `"leader"` for `from`). `round` is the
+    1-based team round. `text` is truncated (~600 chars). Only present when the shared blackboard
+    is enabled (`config.team.blackboard`, default on).
+- `team_memory {round, member, memberName, kind, text}` — a private note a member left its
+  **future self** (via its `memo` tool). Members run isolated per round, so this is how a
+  decision or a ruled-out approach survives into their next round; the board covers what a
+  member shares, this covers what it keeps. Stream-only, same as `team_message` — accumulate
+  it client-side; it is NOT folded into the snapshot.
+  - `member` is a member id matching `team[].id`; `round` is the 1-based team round; `text`
+    is truncated (~600 chars).
+  - `kind: "note"` is the only kind emitted today — treat unknown kinds as ignorable. A
+    member's own round output is also recapped into its private memory, but that is NOT
+    emitted here: it is already on the wire as the `kind: "result"` `team_message` above.
+  - Only present when per-member memory is enabled (`config.team.memory`, default on).
 - `team_done` — the board persists (final states visible) until the next `team_plan`.
 
 Per-member telemetry (`toolUseCount`, `tokenCount`, `recentActivities`, `startedAt`,
