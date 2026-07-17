@@ -30,7 +30,11 @@ export default defineConfig(async ({ mode }) => ({
         settings: path.resolve(__dirname, "settings.html"),
       },
       output: {
-        manualChunks(id: string) {
+        // KNOWN BREAKAGE: this chunking kills the app at startup on WebKitGTK
+        // (react namespace lands undefined inside the radix chunk → the
+        // top-level await in main.tsx rejects → window never becomes visible).
+        // Disabled until re-architected and verified on WebKitGTK.
+        manualChunks_DISABLED_webkitgtk_startup_crash(id: string) {
           if (!id.includes("node_modules")) return;
 
           // Each AI provider SDK in its own chunk so unused providers
