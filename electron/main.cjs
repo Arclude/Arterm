@@ -40,11 +40,18 @@ let bridgeChild = null;
 
 function bridgeBinary() {
   if (process.env.ARTERM_BRIDGE_BIN) return process.env.ARTERM_BRIDGE_BIN;
-  const target = path.join(__dirname, "..", "src-tauri", "target");
+  const fs = require("node:fs");
+  // Paketli kurulumda extraResources ile resources/ altına konur; dev'de
+  // cargo target dizininden alınır.
+  const candidates = [path.join(process.resourcesPath ?? "", "arterm-bridge")];
   for (const profile of ["release", "debug"]) {
-    const p = path.join(target, profile, "arterm-bridge");
+    candidates.push(
+      path.join(__dirname, "..", "src-tauri", "target", profile, "arterm-bridge"),
+    );
+  }
+  for (const p of candidates) {
     try {
-      require("node:fs").accessSync(p);
+      fs.accessSync(p);
       return p;
     } catch {}
   }

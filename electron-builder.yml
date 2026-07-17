@@ -1,0 +1,25 @@
+# Linux (Electron kabuğu) paketleme. Windows/macOS Tauri ile paketlenir; bu
+# konfig yalnızca Linux dağıtımı içindir. Çalıştırma: scripts/package-linux.sh
+#
+# electron-builder --project release-app ile temiz staging dizininden koşulur:
+# orada pnpm-lock olmadığı için node-module-collector pnpm/corepack'e hiç
+# dokunmaz (Node 22'de corepack pnpm kırık). Yollar staging dizinine göredir;
+# bridge binary'si ve ikon build/ altına script tarafından kopyalanır
+# (buildResources dizini uygulama dosyalarına dahil edilmez).
+appId: app.arclude.arterm
+productName: Arterm
+electronVersion: 43.1.0
+directories:
+  output: ../release-electron
+extraResources:
+  - from: build/arterm-bridge
+    to: arterm-bridge
+npmRebuild: false
+linux:
+  target:
+    - AppImage
+    - deb
+  category: TerminalEmulator
+  icon: build/icon.png
+  maintainer: Arclude <info@arclude.com>
+  synopsis: AI-native terminal and editor
