@@ -21,6 +21,10 @@ use tauri::{AppHandle, Manager};
 
 use crate::modules::net;
 
+/// Shell-agnostic progress sink; send failures are ignored (progress is
+/// best-effort), so no return value.
+pub(crate) type ProgressSink = Box<dyn Fn(DownloadProgress) + Send>;
+
 const MANIFEST_FILE: &str = "arterm-server.json";
 
 /// Hard cap on a downloaded artifact (compressed). rust-analyzer is ~30-60MB;
@@ -45,7 +49,13 @@ pub struct InstalledServer {
 
 fn servers_root(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    let root = dir.join("language-servers");
+    servers_root_in(&dir)
+}
+
+/// Shell-agnostic root resolver: `base` is the app-local data dir (Tauri's
+/// `app_local_data_dir` or the bridge's reproduction of it).
+pub(crate) fn servers_root_in(base: &Path) -> Result<PathBuf, String> {
+    let root = base.join("language-servers");
     fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     Ok(root)
 }
@@ -79,9 +89,18 @@ pub fn lsp_install_dir(app: AppHandle) -> Result<String, String> {
     Ok(servers_root(&app)?.to_string_lossy().to_string())
 }
 
+pub(crate) fn lsp_install_dir_impl(base: &Path) -> Result<String, String> {
+    Ok(servers_root_in(base)?.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub fn lsp_install_list(app: AppHandle) -> Result<Vec<InstalledServer>, String> {
-    let root = servers_root(&app)?;
+    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    lsp_install_list_impl(&dir)
+}
+
+pub(crate) fn lsp_install_list_impl(base: &Path) -> Result<Vec<InstalledServer>, String> {
+    let root = servers_root_in(base)?;
     let mut out = Vec::new();
     for entry in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
@@ -124,8 +143,13 @@ pub fn lsp_install_list(app: AppHandle) -> Result<Vec<InstalledServer>, String> 
 
 #[tauri::command]
 pub fn lsp_install_uninstall(app: AppHandle, server_id: String) -> Result<(), String> {
+    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    lsp_install_uninstall_impl(&dir, server_id)
+}
+
+pub(crate) fn lsp_install_uninstall_impl(base: &Path, server_id: String) -> Result<(), String> {
     let id = safe_segment(&server_id, "server id")?;
-    let root = servers_root(&app)?;
+    let root = servers_root_in(base)?;
     let dir = root.join(&id);
     if dir.exists() {
         assert_within(&root, &dir)?;
@@ -145,6 +169,23 @@ pub async fn lsp_install_download(
     bin_name: String,
     version: String,
     on_progress: Channel<DownloadProgress>,
+) -> Result<String, String> {
+    let base = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let sink: ProgressSink = Box::new(move |p| {
+        let _ = on_progress.send(p);
+    });
+    lsp_install_download_impl(&base, server_id, url, archive, bin_name, version, sink).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn lsp_install_download_impl(
+    base: &Path,
+    server_id: String,
+    url: String,
+    archive: String,
+    bin_name: String,
+    version: String,
+    on_progress: ProgressSink,
 ) -> Result<String, String> {
     let id = safe_segment(&server_id, "server id")?;
     let bin = safe_segment(&bin_name, "binary name")?;
@@ -174,12 +215,12 @@ pub async fn lsp_install_download(
                 return Err("server artifact too large".to_string());
             }
             file.write_all(&chunk).map_err(|e| e.to_string())?;
-            let _ = on_progress.send(DownloadProgress { downloaded, total });
+            on_progress(DownloadProgress { downloaded, total });
         }
         file.flush().map_err(|e| e.to_string())?;
     }
 
-    let root = servers_root(&app)?;
+    let root = servers_root_in(base)?;
     let dir = root.join(&id);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let bin_path = dir.join(&bin);
@@ -187,7 +228,7 @@ pub async fn lsp_install_download(
     // Decompress/place off the async runtime (blocking fs + inflate).
     let tmp_path = tmp.path().to_path_buf();
     let bin_path_for_blocking = bin_path.clone();
-    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
         match archive.as_str() {
             "gz" => {
                 let src = fs::File::open(&tmp_path).map_err(|e| e.to_string())?;

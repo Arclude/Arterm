@@ -63,6 +63,7 @@ notify = "8.2.0"
 base64 = "0.22"
 flate2 = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+tokio-tungstenite = "0.30.0"
 
 [dev-dependencies]
 proptest = "1"

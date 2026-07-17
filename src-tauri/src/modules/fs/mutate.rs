@@ -10,7 +10,7 @@ pub fn fs_create_file(
     create_file_inner(&path, workspace, &registry)
 }
 
-fn create_file_inner(
+pub(crate) fn create_file_inner(
     path: &str,
     workspace: Option<WorkspaceEnv>,
     registry: &WorkspaceRegistry,
@@ -38,7 +38,7 @@ pub fn fs_create_dir(
     create_dir_inner(&path, workspace, &registry)
 }
 
-fn create_dir_inner(
+pub(crate) fn create_dir_inner(
     path: &str,
     workspace: Option<WorkspaceEnv>,
     registry: &WorkspaceRegistry,
@@ -65,7 +65,7 @@ pub fn fs_rename(
     rename_inner(&from, &to, workspace, &registry)
 }
 
-fn rename_inner(
+pub(crate) fn rename_inner(
     from: &str,
     to: &str,
     workspace: Option<WorkspaceEnv>,
@@ -101,7 +101,7 @@ pub fn fs_delete(
     delete_inner(&path, workspace, &registry)
 }
 
-fn delete_inner(
+pub(crate) fn delete_inner(
     path: &str,
     workspace: Option<WorkspaceEnv>,
     registry: &WorkspaceRegistry,

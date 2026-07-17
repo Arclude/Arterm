@@ -45,9 +45,13 @@ pub struct RawExtension {
     error: Option<String>,
 }
 
-fn extensions_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    let root = dir.join("extensions");
+/// Base data dir (Tauri's `app_local_data_dir`) resolved from the app handle.
+fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_local_data_dir().map_err(|e| e.to_string())
+}
+
+fn extensions_root_at(data_dir: &Path) -> Result<PathBuf, String> {
+    let root = data_dir.join("extensions");
     fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     Ok(root)
 }
@@ -110,12 +114,20 @@ fn assert_within(root: &Path, child: &Path) -> Result<(), String> {
 
 #[tauri::command]
 pub fn extensions_dir_path(app: AppHandle) -> Result<String, String> {
-    Ok(extensions_root(&app)?.to_string_lossy().to_string())
+    extensions_dir_path_impl(&resolve_data_dir(&app)?)
+}
+
+pub(crate) fn extensions_dir_path_impl(data_dir: &Path) -> Result<String, String> {
+    Ok(extensions_root_at(data_dir)?.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 pub fn extensions_list(app: AppHandle) -> Result<Vec<RawExtension>, String> {
-    let root = extensions_root(&app)?;
+    extensions_list_impl(&resolve_data_dir(&app)?)
+}
+
+pub(crate) fn extensions_list_impl(data_dir: &Path) -> Result<Vec<RawExtension>, String> {
+    let root = extensions_root_at(data_dir)?;
     let mut out = Vec::new();
     for entry in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
@@ -153,6 +165,15 @@ pub fn extensions_write(
     manifest: String,
     files: Option<HashMap<String, String>>,
 ) -> Result<(), String> {
+    extensions_write_impl(&resolve_data_dir(&app)?, id, manifest, files)
+}
+
+pub(crate) fn extensions_write_impl(
+    data_dir: &Path,
+    id: String,
+    manifest: String,
+    files: Option<HashMap<String, String>>,
+) -> Result<(), String> {
     serde_json::from_str::<serde_json::Value>(&manifest)
         .map_err(|e| format!("invalid manifest JSON: {e}"))?;
 
@@ -170,7 +191,7 @@ pub fn extensions_write(
     }
 
     let folder = safe_folder(&folder_from_id(&id))?;
-    let dir = extensions_root(&app)?.join(&folder);
+    let dir = extensions_root_at(data_dir)?.join(&folder);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     fs::write(dir.join(MANIFEST_FILE), manifest).map_err(|e| e.to_string())?;
     for (name, contents) in validated {
@@ -188,9 +209,17 @@ pub fn extensions_read_file(
     folder: String,
     file: String,
 ) -> Result<String, String> {
+    extensions_read_file_impl(&resolve_data_dir(&app)?, folder, file)
+}
+
+pub(crate) fn extensions_read_file_impl(
+    data_dir: &Path,
+    folder: String,
+    file: String,
+) -> Result<String, String> {
     let folder = safe_folder(&folder)?;
     let file = safe_file_name(&file)?;
-    let root = extensions_root(&app)?;
+    let root = extensions_root_at(data_dir)?;
     let dir = root.join(&folder);
     let path = dir.join(&file);
     assert_within(&dir, &path)?;
@@ -247,8 +276,12 @@ pub async fn extensions_fetch_text(url: String) -> Result<String, String> {
 /// Remove an installed extension folder by its on-disk folder name.
 #[tauri::command]
 pub fn extensions_uninstall(app: AppHandle, folder: String) -> Result<(), String> {
+    extensions_uninstall_impl(&resolve_data_dir(&app)?, folder)
+}
+
+pub(crate) fn extensions_uninstall_impl(data_dir: &Path, folder: String) -> Result<(), String> {
     let folder = safe_folder(&folder)?;
-    let root = extensions_root(&app)?;
+    let root = extensions_root_at(data_dir)?;
     let dir = root.join(&folder);
     if dir.exists() {
         assert_within(&root, &dir)?;

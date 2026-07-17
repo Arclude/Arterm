@@ -14,6 +14,7 @@ use std::sync::{Arc, RwLock};
 
 use tauri::ipc::Channel;
 
+use crate::modules::proto::MessageSink;
 use crate::modules::workspace::{authorize_user_spawn_cwd, WorkspaceEnv, WorkspaceRegistry};
 use process::DebugAdapter;
 
@@ -31,24 +32,23 @@ impl Default for DapState {
     }
 }
 
-#[tauri::command]
-pub async fn dap_start(
-    state: tauri::State<'_, DapState>,
-    registry: tauri::State<'_, WorkspaceRegistry>,
+pub(crate) async fn dap_start_impl(
+    state: &DapState,
+    registry: &WorkspaceRegistry,
     command: String,
     args: Vec<String>,
     cwd: Option<String>,
-    on_message: Channel<String>,
+    on_message: MessageSink,
 ) -> Result<u32, String> {
     if command.trim().is_empty() {
         return Err("empty debug adapter command".into());
     }
     // Debug adapters launch the debuggee against on-disk paths; like LSP, WSL
     // roots aren't supported yet.
-    let root = authorize_user_spawn_cwd(&registry, cwd.as_deref(), &WorkspaceEnv::Local)?;
+    let root = authorize_user_spawn_cwd(registry, cwd.as_deref(), &WorkspaceEnv::Local)?;
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-    let adapter = tauri::async_runtime::spawn_blocking(move || {
+    let adapter = tokio::task::spawn_blocking(move || {
         process::spawn(&command, &args, root, on_message)
     })
     .await
@@ -66,8 +66,7 @@ pub async fn dap_start(
     Ok(id)
 }
 
-#[tauri::command]
-pub fn dap_send(state: tauri::State<DapState>, id: u32, message: String) -> Result<(), String> {
+pub(crate) fn dap_send_impl(state: &DapState, id: u32, message: String) -> Result<(), String> {
     let adapter = state
         .adapters
         .read()
@@ -81,8 +80,7 @@ pub fn dap_send(state: tauri::State<DapState>, id: u32, message: String) -> Resu
     adapter.send(&message)
 }
 
-#[tauri::command]
-pub fn dap_stop(state: tauri::State<DapState>, id: u32) -> Result<(), String> {
+pub(crate) fn dap_stop_impl(state: &DapState, id: u32) -> Result<(), String> {
     if let Some(adapter) = state.adapters.write().unwrap().remove(&id) {
         adapter.kill();
         log::info!("dap_stop id={id} pid={}", adapter.pid);
@@ -94,8 +92,7 @@ pub fn dap_stop(state: tauri::State<DapState>, id: u32) -> Result<(), String> {
 
 // A fresh webview load orphans the previous frontend's adapters; reap them on
 // boot the same way `lsp_stop_all` / `pty_close_all` do.
-#[tauri::command]
-pub fn dap_stop_all(state: tauri::State<DapState>) -> Result<usize, String> {
+pub(crate) fn dap_stop_all_impl(state: &DapState) -> Result<usize, String> {
     let drained: Vec<Arc<DebugAdapter>> = {
         let mut adapters = state.adapters.write().unwrap();
         adapters.drain().map(|(_, a)| a).collect()
@@ -108,4 +105,32 @@ pub fn dap_stop_all(state: tauri::State<DapState>) -> Result<usize, String> {
         log::info!("dap_stop_all: reaped {count} orphaned adapter(s)");
     }
     Ok(count)
+}
+
+#[tauri::command]
+pub async fn dap_start(
+    state: tauri::State<'_, DapState>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+    command: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    on_message: Channel<String>,
+) -> Result<u32, String> {
+    let sink: MessageSink = Box::new(move |msg| on_message.send(msg).is_ok());
+    dap_start_impl(&state, &registry, command, args, cwd, sink).await
+}
+
+#[tauri::command]
+pub fn dap_send(state: tauri::State<DapState>, id: u32, message: String) -> Result<(), String> {
+    dap_send_impl(&state, id, message)
+}
+
+#[tauri::command]
+pub fn dap_stop(state: tauri::State<DapState>, id: u32) -> Result<(), String> {
+    dap_stop_impl(&state, id)
+}
+
+#[tauri::command]
+pub fn dap_stop_all(state: tauri::State<DapState>) -> Result<usize, String> {
+    dap_stop_all_impl(&state)
 }

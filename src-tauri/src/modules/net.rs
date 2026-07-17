@@ -355,20 +355,23 @@ pub enum AiStreamEvent {
     },
 }
 
-#[tauri::command]
-pub async fn ai_http_stream(
+/// Shell-agnostic event sink for `ai_http_stream`. Returns `false` when the
+/// receiver is gone (frontend aborted) so streaming stops early.
+pub(crate) type AiStreamSink = Box<dyn Fn(AiStreamEvent) -> bool + Send>;
+
+pub(crate) async fn ai_http_stream_impl(
     url: String,
     method: String,
     headers: Option<HashMap<String, String>>,
     body: Option<Vec<u8>>,
     allow_private_network: Option<bool>,
-    on_event: Channel<AiStreamEvent>,
+    on_event: AiStreamSink,
 ) -> Result<(), String> {
     let allow_private = allow_private_network.unwrap_or(false);
     let parsed = match validate_url(&url, allow_private) {
         Ok(p) => p,
         Err(e) => {
-            let _ = on_event.send(AiStreamEvent::Error { message: e.clone() });
+            on_event(AiStreamEvent::Error { message: e.clone() });
             return Err(e);
         }
     };
@@ -376,14 +379,14 @@ pub async fn ai_http_stream(
         Some(h) => h.to_string(),
         None => {
             let e = "missing host".to_string();
-            let _ = on_event.send(AiStreamEvent::Error { message: e.clone() });
+            on_event(AiStreamEvent::Error { message: e.clone() });
             return Err(e);
         }
     };
     let safe_ips = match classify_and_collect_safe_ips(&host, allow_private).await {
         Ok(v) => v,
         Err(e) => {
-            let _ = on_event.send(AiStreamEvent::Error { message: e.clone() });
+            on_event(AiStreamEvent::Error { message: e.clone() });
             return Err(e);
         }
     };
@@ -394,7 +397,7 @@ pub async fn ai_http_stream(
     let resp = match req.send().await {
         Ok(r) => r,
         Err(e) => {
-            let _ = on_event.send(AiStreamEvent::Error {
+            on_event(AiStreamEvent::Error {
                 message: e.to_string(),
             });
             return Err(e.to_string());
@@ -403,25 +406,22 @@ pub async fn ai_http_stream(
 
     let status = resp.status().as_u16();
     let headers = header_map_to_strings(resp.headers());
-    let _ = on_event.send(AiStreamEvent::Headers { status, headers });
+    on_event(AiStreamEvent::Headers { status, headers });
 
     let mut stream = resp.bytes_stream();
     while let Some(item) = stream.next().await {
         match item {
             Ok(chunk) => {
                 let bytes: Bytes = chunk;
-                if on_event
-                    .send(AiStreamEvent::Chunk {
-                        bytes: bytes.to_vec(),
-                    })
-                    .is_err()
-                {
-                    // Channel dropped (frontend aborted) — stop streaming.
+                if !on_event(AiStreamEvent::Chunk {
+                    bytes: bytes.to_vec(),
+                }) {
+                    // Sink dropped (frontend aborted) — stop streaming.
                     return Ok(());
                 }
             }
             Err(e) => {
-                let _ = on_event.send(AiStreamEvent::Error {
+                on_event(AiStreamEvent::Error {
                     message: e.to_string(),
                 });
                 return Err(e.to_string());
@@ -429,8 +429,21 @@ pub async fn ai_http_stream(
         }
     }
 
-    let _ = on_event.send(AiStreamEvent::End);
+    on_event(AiStreamEvent::End);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn ai_http_stream(
+    url: String,
+    method: String,
+    headers: Option<HashMap<String, String>>,
+    body: Option<Vec<u8>>,
+    allow_private_network: Option<bool>,
+    on_event: Channel<AiStreamEvent>,
+) -> Result<(), String> {
+    let sink: AiStreamSink = Box::new(move |ev| on_event.send(ev).is_ok());
+    ai_http_stream_impl(url, method, headers, body, allow_private_network, sink).await
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@
 //! All commands take `&AppHandle` so we can resolve the data directory
 //! once via Tauri's path API.
 
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use tauri::AppHandle;
@@ -26,9 +27,18 @@ use std::collections::HashMap;
 #[cfg(target_os = "linux")]
 use std::fs;
 #[cfg(target_os = "linux")]
-use std::path::PathBuf;
-#[cfg(target_os = "linux")]
 use tauri::Manager;
+
+/// Resolves the base data directory secrets live under. On Linux that's Tauri's
+/// `app_local_data_dir`; other platforms use the OS keyring and ignore it.
+#[cfg(target_os = "linux")]
+fn resolve_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_local_data_dir().map_err(|e| e.to_string())
+}
+#[cfg(not(target_os = "linux"))]
+fn resolve_data_dir(_app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(PathBuf::new())
+}
 
 #[derive(Default)]
 pub struct SecretsState {
@@ -44,15 +54,9 @@ pub(crate) fn key(service: &str, account: &str) -> String {
 }
 
 #[cfg(target_os = "linux")]
-fn store_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("secrets.json"))
-}
-
-#[cfg(target_os = "linux")]
-fn read_store(app: &AppHandle) -> Result<HashMap<String, String>, String> {
-    read_store_at(&store_path(app)?)
+fn store_path_at(data_dir: &Path) -> Result<PathBuf, String> {
+    fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+    Ok(data_dir.join("secrets.json"))
 }
 
 #[cfg(target_os = "linux")]
@@ -65,8 +69,8 @@ pub(crate) fn read_store_at(path: &std::path::Path) -> Result<HashMap<String, St
 }
 
 #[cfg(target_os = "linux")]
-fn write_store(app: &AppHandle, map: &HashMap<String, String>) -> Result<(), String> {
-    write_store_at(&store_path(app)?, map)
+fn write_store_via(data_dir: &Path, map: &HashMap<String, String>) -> Result<(), String> {
+    write_store_at(&store_path_at(data_dir)?, map)
 }
 
 #[cfg(target_os = "linux")]
@@ -95,13 +99,13 @@ pub(crate) fn write_store_at(
 }
 
 #[cfg(target_os = "linux")]
-fn with_store<F, R>(app: &AppHandle, state: &SecretsState, f: F) -> Result<R, String>
+fn with_store_at<F, R>(data_dir: &Path, state: &SecretsState, f: F) -> Result<R, String>
 where
     F: FnOnce(&mut HashMap<String, String>) -> R,
 {
     let mut guard = state.cache.lock().map_err(|e| e.to_string())?;
     if guard.is_none() {
-        *guard = Some(read_store(app)?);
+        *guard = Some(read_store_at(&store_path_at(data_dir)?)?);
     }
     let map = guard.as_mut().expect("cache initialized above");
     Ok(f(map))
@@ -119,16 +123,25 @@ pub async fn secrets_get(
     service: String,
     account: String,
 ) -> Result<Option<String>, String> {
+    let data_dir = resolve_data_dir(&app)?;
+    secrets_get_impl(&state, &data_dir, &service, &account)
+}
+
+pub(crate) fn secrets_get_impl(
+    state: &SecretsState,
+    data_dir: &Path,
+    service: &str,
+    account: &str,
+) -> Result<Option<String>, String> {
     #[cfg(target_os = "linux")]
     {
-        let _ = state; // capture
-        let key = key(&service, &account);
-        with_store(&app, &state, |m| m.get(&key).cloned())
+        let key = key(service, account);
+        with_store_at(data_dir, state, |m| m.get(&key).cloned())
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (app, state);
-        let e = entry(&service, &account)?;
+        let _ = (state, data_dir);
+        let e = entry(service, account)?;
         match e.get_password() {
             Ok(v) => Ok(Some(v)),
             Err(keyring::Error::NoEntry) => Ok(None),
@@ -145,22 +158,33 @@ pub async fn secrets_set(
     account: String,
     password: String,
 ) -> Result<(), String> {
+    let data_dir = resolve_data_dir(&app)?;
+    secrets_set_impl(&state, &data_dir, &service, &account, password)
+}
+
+pub(crate) fn secrets_set_impl(
+    state: &SecretsState,
+    data_dir: &Path,
+    service: &str,
+    account: &str,
+    password: String,
+) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        let key = key(&service, &account);
-        with_store(&app, &state, |m| {
+        let key = key(service, account);
+        with_store_at(data_dir, state, |m| {
             m.insert(key, password);
         })?;
         let snapshot = {
             let guard = state.cache.lock().map_err(|e| e.to_string())?;
             guard.as_ref().cloned().unwrap_or_default()
         };
-        write_store(&app, &snapshot)
+        write_store_via(data_dir, &snapshot)
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (app, state);
-        let e = entry(&service, &account)?;
+        let _ = (state, data_dir);
+        let e = entry(service, account)?;
         e.set_password(&password).map_err(|e| e.to_string())
     }
 }
@@ -172,22 +196,32 @@ pub async fn secrets_delete(
     service: String,
     account: String,
 ) -> Result<(), String> {
+    let data_dir = resolve_data_dir(&app)?;
+    secrets_delete_impl(&state, &data_dir, &service, &account)
+}
+
+pub(crate) fn secrets_delete_impl(
+    state: &SecretsState,
+    data_dir: &Path,
+    service: &str,
+    account: &str,
+) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        let key = key(&service, &account);
-        with_store(&app, &state, |m| {
+        let key = key(service, account);
+        with_store_at(data_dir, state, |m| {
             m.remove(&key);
         })?;
         let snapshot = {
             let guard = state.cache.lock().map_err(|e| e.to_string())?;
             guard.as_ref().cloned().unwrap_or_default()
         };
-        write_store(&app, &snapshot)
+        write_store_via(data_dir, &snapshot)
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (app, state);
-        let e = entry(&service, &account)?;
+        let _ = (state, data_dir);
+        let e = entry(service, account)?;
         match e.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(err) => Err(err.to_string()),
@@ -286,22 +320,32 @@ pub async fn secrets_get_all(
     service: String,
     accounts: Vec<String>,
 ) -> Result<Vec<Option<String>>, String> {
+    let data_dir = resolve_data_dir(&app)?;
+    secrets_get_all_impl(&state, &data_dir, &service, accounts)
+}
+
+pub(crate) fn secrets_get_all_impl(
+    state: &SecretsState,
+    data_dir: &Path,
+    service: &str,
+    accounts: Vec<String>,
+) -> Result<Vec<Option<String>>, String> {
     #[cfg(target_os = "linux")]
     {
-        with_store(&app, &state, |m| {
+        with_store_at(data_dir, state, |m| {
             accounts
                 .iter()
-                .map(|a| m.get(&key(&service, a)).cloned())
+                .map(|a| m.get(&key(service, a)).cloned())
                 .collect()
         })
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (app, state);
+        let _ = (state, data_dir);
         Ok(accounts
             .into_iter()
             .map(|a| {
-                keyring::Entry::new(&service, &a)
+                keyring::Entry::new(service, &a)
                     .ok()
                     .and_then(|e| e.get_password().ok())
             })

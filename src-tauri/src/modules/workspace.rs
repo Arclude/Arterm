@@ -159,15 +159,31 @@ pub fn bootstrap_registry(registry: &WorkspaceRegistry) {
     }
 }
 
+// Shared by the Tauri command below and the Electron bridge dispatcher.
+pub(crate) fn authorize_workspace_path(
+    registry: &WorkspaceRegistry,
+    path: &str,
+    workspace: Option<WorkspaceEnv>,
+) -> Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    let resolved = resolve_path(path, &workspace);
+    let canonical = registry.authorize(&resolved).map_err(|e| e.to_string())?;
+    Ok(crate::modules::fs::to_canon(&canonical))
+}
+
 #[tauri::command]
 pub async fn workspace_authorize(
     path: String,
     workspace: Option<WorkspaceEnv>,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let resolved = resolve_path(&path, &workspace);
-    let canonical = registry.authorize(&resolved).map_err(|e| e.to_string())?;
+    authorize_workspace_path(&registry, &path, workspace)
+}
+
+// Shared by the Tauri command below and the Electron bridge dispatcher.
+pub(crate) fn workspace_current_dir_impl(registry: &WorkspaceRegistry) -> Result<String, String> {
+    let launch = resolve_launch_dir();
+    let canonical = registry.authorize(&launch).map_err(|e| e.to_string())?;
     Ok(crate::modules::fs::to_canon(&canonical))
 }
 
@@ -175,9 +191,7 @@ pub async fn workspace_authorize(
 pub async fn workspace_current_dir(
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
-    let launch = resolve_launch_dir();
-    let canonical = registry.authorize(&launch).map_err(|e| e.to_string())?;
-    Ok(crate::modules::fs::to_canon(&canonical))
+    workspace_current_dir_impl(&registry)
 }
 
 // Snapshotted once at app startup so the live `current_dir()` drifting later

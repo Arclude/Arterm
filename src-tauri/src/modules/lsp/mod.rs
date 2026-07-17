@@ -18,6 +18,7 @@ use std::sync::{Arc, RwLock};
 
 use tauri::ipc::Channel;
 
+use crate::modules::proto::MessageSink;
 use crate::modules::workspace::{authorize_user_spawn_cwd, WorkspaceEnv, WorkspaceRegistry};
 use process::LspServer;
 
@@ -35,26 +36,24 @@ impl Default for LspState {
     }
 }
 
-#[tauri::command]
-#[allow(clippy::too_many_arguments)]
-pub async fn lsp_start(
-    state: tauri::State<'_, LspState>,
-    registry: tauri::State<'_, WorkspaceRegistry>,
+pub(crate) async fn lsp_start_impl(
+    state: &LspState,
+    registry: &WorkspaceRegistry,
     language_id: String,
     command: String,
     args: Vec<String>,
     cwd: Option<String>,
-    on_message: Channel<String>,
+    on_message: MessageSink,
 ) -> Result<u32, String> {
     if command.trim().is_empty() {
         return Err("empty language server command".into());
     }
     // Language servers run locally against on-disk paths; WSL roots aren't
     // supported yet (the server would resolve paths inside the distro).
-    let root = authorize_user_spawn_cwd(&registry, cwd.as_deref(), &WorkspaceEnv::Local)?;
+    let root = authorize_user_spawn_cwd(registry, cwd.as_deref(), &WorkspaceEnv::Local)?;
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-    let server = tauri::async_runtime::spawn_blocking(move || {
+    let server = tokio::task::spawn_blocking(move || {
         process::spawn(&command, &args, root, on_message)
     })
     .await
@@ -68,8 +67,7 @@ pub async fn lsp_start(
     Ok(id)
 }
 
-#[tauri::command]
-pub fn lsp_send(state: tauri::State<LspState>, id: u32, message: String) -> Result<(), String> {
+pub(crate) fn lsp_send_impl(state: &LspState, id: u32, message: String) -> Result<(), String> {
     let server = state
         .servers
         .read()
@@ -83,8 +81,7 @@ pub fn lsp_send(state: tauri::State<LspState>, id: u32, message: String) -> Resu
     server.send(&message)
 }
 
-#[tauri::command]
-pub fn lsp_stop(state: tauri::State<LspState>, id: u32) -> Result<(), String> {
+pub(crate) fn lsp_stop_impl(state: &LspState, id: u32) -> Result<(), String> {
     if let Some(server) = state.servers.write().unwrap().remove(&id) {
         server.kill();
         log::info!("lsp_stop id={id} pid={}", server.pid);
@@ -96,8 +93,7 @@ pub fn lsp_stop(state: tauri::State<LspState>, id: u32) -> Result<(), String> {
 
 // A fresh webview load orphans the previous frontend's servers; reap them on
 // boot the same way `pty_close_all` does.
-#[tauri::command]
-pub fn lsp_stop_all(state: tauri::State<LspState>) -> Result<usize, String> {
+pub(crate) fn lsp_stop_all_impl(state: &LspState) -> Result<usize, String> {
     let drained: Vec<Arc<LspServer>> = {
         let mut servers = state.servers.write().unwrap();
         servers.drain().map(|(_, s)| s).collect()
@@ -110,4 +106,34 @@ pub fn lsp_stop_all(state: tauri::State<LspState>) -> Result<usize, String> {
         log::info!("lsp_stop_all: reaped {count} orphaned server(s)");
     }
     Ok(count)
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn lsp_start(
+    state: tauri::State<'_, LspState>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+    language_id: String,
+    command: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    on_message: Channel<String>,
+) -> Result<u32, String> {
+    let sink: MessageSink = Box::new(move |msg| on_message.send(msg).is_ok());
+    lsp_start_impl(&state, &registry, language_id, command, args, cwd, sink).await
+}
+
+#[tauri::command]
+pub fn lsp_send(state: tauri::State<LspState>, id: u32, message: String) -> Result<(), String> {
+    lsp_send_impl(&state, id, message)
+}
+
+#[tauri::command]
+pub fn lsp_stop(state: tauri::State<LspState>, id: u32) -> Result<(), String> {
+    lsp_stop_impl(&state, id)
+}
+
+#[tauri::command]
+pub fn lsp_stop_all(state: tauri::State<LspState>) -> Result<usize, String> {
+    lsp_stop_all_impl(&state)
 }

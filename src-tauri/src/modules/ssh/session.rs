@@ -10,9 +10,9 @@ use russh::client::{self, Handle};
 use russh::keys::*;
 use russh::ChannelMsg;
 use serde::Deserialize;
-use tauri::ipc::{Channel as IpcChannel, Response};
-use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, oneshot, Mutex};
+
+use crate::modules::pty::session::{DataSink, EventSink, ExitSink};
 
 /// How to authenticate against the server. Secrets (password / passphrase) are
 /// resolved from the platform keychain on the frontend and passed in here; the
@@ -49,7 +49,7 @@ pub enum ShellCmd {
 }
 
 pub struct Client {
-    app: AppHandle,
+    emit: EventSink,
     conn_id: u32,
     expected_host_key: Option<String>,
     /// One-shot the host-key prompt awaits when the host is unknown. Taken on
@@ -91,7 +91,7 @@ impl client::Handler for Client {
                 }
                 // Known but changed — refuse and warn. The user must delete the
                 // saved profile key to re-trust (prevents silent MITM acceptance).
-                let _ = self.app.emit(
+                (self.emit)(
                     "ssh-hostkey-mismatch",
                     serde_json::json!({
                         "connId": self.conn_id,
@@ -104,7 +104,7 @@ impl client::Handler for Client {
             // First time seeing this host — ask the user (TOFU). The frontend
             // persists the accepted key into the profile.
             None => {
-                let _ = self.app.emit(
+                (self.emit)(
                     "ssh-hostkey-unknown",
                     serde_json::json!({
                         "connId": self.conn_id,
@@ -126,14 +126,14 @@ impl client::Handler for Client {
 /// success. `decision_rx` is fulfilled by `ssh_known_host_decision` when the
 /// host key is unknown.
 pub async fn connect(
-    app: AppHandle,
+    emit: EventSink,
     conn_id: u32,
     cfg: ConnectConfig,
     decision_rx: oneshot::Receiver<bool>,
 ) -> Result<Handle<Client>, String> {
     let config = Arc::new(client::Config::default());
     let handler = Client {
-        app,
+        emit,
         conn_id,
         expected_host_key: cfg.known_host_key.clone(),
         decision: Mutex::new(Some(decision_rx)),
@@ -229,8 +229,8 @@ pub async fn open_shell(
     handle: &Handle<Client>,
     cols: u16,
     rows: u16,
-    on_data: IpcChannel<Response>,
-    on_exit: IpcChannel<i32>,
+    on_data: DataSink,
+    on_exit: ExitSink,
 ) -> Result<mpsc::UnboundedSender<ShellCmd>, String> {
     let channel = handle
         .channel_open_session()
@@ -247,7 +247,7 @@ pub async fn open_shell(
 
     let (tx, mut rx) = mpsc::unbounded_channel::<ShellCmd>();
 
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         let mut channel = channel;
         let mut exit_code: i32 = 0;
         // Coalesce server output the way the local PTY does: buffer bursts and
@@ -264,9 +264,7 @@ pub async fn open_shell(
                     Some(ChannelMsg::Data { data }) => {
                         pending.extend_from_slice(&data);
                         if pending.len() >= FLUSH_MAX_BYTES
-                            && on_data
-                                .send(Response::new(std::mem::take(&mut pending)))
-                                .is_err()
+                            && !on_data(std::mem::take(&mut pending))
                         {
                             break;
                         }
@@ -274,9 +272,7 @@ pub async fn open_shell(
                     Some(ChannelMsg::ExtendedData { data, .. }) => {
                         pending.extend_from_slice(&data);
                         if pending.len() >= FLUSH_MAX_BYTES
-                            && on_data
-                                .send(Response::new(std::mem::take(&mut pending)))
-                                .is_err()
+                            && !on_data(std::mem::take(&mut pending))
                         {
                             break;
                         }
@@ -303,10 +299,7 @@ pub async fn open_shell(
                 },
                 // Idle flush: emit buffered output once the burst pauses.
                 _ = tokio::time::sleep(FLUSH_COALESCE), if !pending.is_empty() => {
-                    if on_data
-                        .send(Response::new(std::mem::take(&mut pending)))
-                        .is_err()
-                    {
+                    if !on_data(std::mem::take(&mut pending)) {
                         break;
                     }
                 }
@@ -314,9 +307,9 @@ pub async fn open_shell(
         }
         // Flush whatever is still buffered before signalling exit.
         if !pending.is_empty() {
-            let _ = on_data.send(Response::new(std::mem::take(&mut pending)));
+            let _ = on_data(std::mem::take(&mut pending));
         }
-        let _ = on_exit.send(exit_code);
+        on_exit(exit_code);
     });
 
     Ok(tx)

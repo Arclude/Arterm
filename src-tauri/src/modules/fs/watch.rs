@@ -4,10 +4,13 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use std::sync::Arc;
+
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::modules::fs::to_canon;
+use crate::modules::pty::session::EventSink;
 use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
 
 // Quiet-gap before a batch flushes; MAX_WINDOW caps latency under a long stream.
@@ -106,7 +109,7 @@ struct ChangedPayload {
     paths: Vec<String>,
 }
 
-fn ensure_started(state: &FsWatchState, app: &AppHandle) -> Result<(), String> {
+fn ensure_started(state: &FsWatchState, emit: &EventSink) -> Result<(), String> {
     let mut guard = state.inner.lock().expect("fs watch state poisoned");
     if guard.is_some() {
         return Ok(());
@@ -121,10 +124,10 @@ fn ensure_started(state: &FsWatchState, app: &AppHandle) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
-    let app = app.clone();
+    let emit = emit.clone();
     std::thread::Builder::new()
         .name("arterm-fs-watch".into())
-        .spawn(move || drain_loop(rx, app))
+        .spawn(move || drain_loop(rx, emit))
         .map_err(|e| e.to_string())?;
 
     *guard = Some(WatchInner {
@@ -134,7 +137,7 @@ fn ensure_started(state: &FsWatchState, app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn drain_loop(rx: mpsc::Receiver<notify::Result<Event>>, app: AppHandle) {
+fn drain_loop(rx: mpsc::Receiver<notify::Result<Event>>, emit: EventSink) {
     loop {
         let first = match rx.recv() {
             Ok(ev) => ev,
@@ -160,12 +163,11 @@ fn drain_loop(rx: mpsc::Receiver<notify::Result<Event>>, app: AppHandle) {
         if paths.is_empty() {
             continue;
         }
-        let _ = app.emit(
-            "fs:changed",
-            ChangedPayload {
-                paths: paths.into_iter().collect(),
-            },
-        );
+        let payload = serde_json::to_value(ChangedPayload {
+            paths: paths.into_iter().collect(),
+        })
+        .unwrap_or(serde_json::Value::Null);
+        emit("fs:changed", payload);
     }
 }
 
@@ -235,12 +237,25 @@ pub fn fs_watch_add(
     state: State<'_, FsWatchState>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
+    let emit: EventSink = Arc::new(move |event: &str, payload: serde_json::Value| {
+        let _ = app.emit(event, payload);
+    });
+    watch_add_impl(paths, workspace, &emit, &state, &registry)
+}
+
+pub(crate) fn watch_add_impl(
+    paths: Vec<String>,
+    workspace: Option<WorkspaceEnv>,
+    emit: &EventSink,
+    state: &FsWatchState,
+    registry: &WorkspaceRegistry,
+) -> Result<(), String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let prepared = prepare_add(&registry, &workspace, paths);
+    let prepared = prepare_add(registry, &workspace, paths);
     if prepared.is_empty() {
         return Ok(());
     }
-    ensure_started(&state, &app)?;
+    ensure_started(state, emit)?;
     let mut guard = state.inner.lock().expect("fs watch state poisoned");
     if let Some(inner) = guard.as_mut() {
         add_paths(inner, prepared);
@@ -253,6 +268,14 @@ pub fn fs_watch_remove(
     paths: Vec<String>,
     workspace: Option<WorkspaceEnv>,
     state: State<'_, FsWatchState>,
+) -> Result<(), String> {
+    watch_remove_impl(paths, workspace, &state)
+}
+
+pub(crate) fn watch_remove_impl(
+    paths: Vec<String>,
+    workspace: Option<WorkspaceEnv>,
+    state: &FsWatchState,
 ) -> Result<(), String> {
     let workspace = WorkspaceEnv::from_option(workspace);
     // A removed/renamed dir no longer canonicalizes; fall back so the refcount

@@ -11,9 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use shared_child::SharedChild;
-use tauri::ipc::Channel;
 
 use crate::modules::proto::framing::{self, FrameParser};
+use crate::modules::proto::MessageSink;
 
 const READ_BUF: usize = 16 * 1024;
 
@@ -57,7 +57,7 @@ pub fn spawn(
     program: &str,
     args: &[String],
     cwd: Option<PathBuf>,
-    on_message: Channel<String>,
+    on_message: MessageSink,
 ) -> Result<DebugAdapter, String> {
     let resolved = resolve_program(program)?;
     let mut cmd = Command::new(&resolved);
@@ -108,7 +108,7 @@ pub fn spawn(
                         loop {
                             match parser.next_message() {
                                 Some(Ok(msg)) => {
-                                    if on_message.send(msg).is_err() {
+                                    if !on_message(msg) {
                                         return; // frontend went away
                                     }
                                 }

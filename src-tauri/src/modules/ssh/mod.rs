@@ -13,9 +13,11 @@ use std::sync::Arc;
 use russh::client::Handle;
 use russh_sftp::client::SftpSession;
 use tauri::ipc::{Channel, Response};
+use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 pub use session::{ConnectConfig, ShellCmd};
+use crate::modules::pty::session::{DataSink, EventSink, ExitSink};
 use crate::modules::workspace::{authorize_fs_path, WorkspaceEnv, WorkspaceRegistry};
 use session::Client;
 use sftp::SftpEntry;
@@ -47,10 +49,9 @@ impl Default for SshState {
     }
 }
 
-#[tauri::command]
-pub async fn ssh_connect(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, SshState>,
+pub(crate) async fn ssh_connect_impl(
+    state: &SshState,
+    emit: EventSink,
     config: ConnectConfig,
 ) -> Result<u32, String> {
     let conn_id = state.next_id.fetch_add(1, Ordering::Relaxed);
@@ -59,7 +60,7 @@ pub async fn ssh_connect(
 
     // The await may block on the host-key prompt; the frontend resolves it
     // concurrently via `ssh_known_host_decision`.
-    let result = session::connect(app, conn_id, config, rx).await;
+    let result = session::connect(emit, conn_id, config, rx).await;
     state.pending_hostkey.lock().await.remove(&conn_id);
 
     let handle = result?;
@@ -68,14 +69,13 @@ pub async fn ssh_connect(
     Ok(conn_id)
 }
 
-#[tauri::command]
-pub async fn ssh_open_shell(
-    state: tauri::State<'_, SshState>,
+pub(crate) async fn ssh_open_shell_impl(
+    state: &SshState,
     conn_id: u32,
     cols: u16,
     rows: u16,
-    on_data: Channel<Response>,
-    on_exit: Channel<i32>,
+    on_data: DataSink,
+    on_exit: ExitSink,
 ) -> Result<u32, String> {
     let handle = state
         .conns
@@ -91,12 +91,7 @@ pub async fn ssh_open_shell(
     Ok(sid)
 }
 
-#[tauri::command]
-pub async fn ssh_write(
-    state: tauri::State<'_, SshState>,
-    id: u32,
-    data: String,
-) -> Result<(), String> {
+pub(crate) async fn ssh_write_impl(state: &SshState, id: u32, data: String) -> Result<(), String> {
     let tx = state
         .shells
         .lock()
@@ -108,9 +103,8 @@ pub async fn ssh_write(
         .map_err(|_| "ssh shell closed".to_string())
 }
 
-#[tauri::command]
-pub async fn ssh_resize(
-    state: tauri::State<'_, SshState>,
+pub(crate) async fn ssh_resize_impl(
+    state: &SshState,
     id: u32,
     cols: u16,
     rows: u16,
@@ -126,19 +120,14 @@ pub async fn ssh_resize(
         .map_err(|_| "ssh shell closed".to_string())
 }
 
-#[tauri::command]
-pub async fn ssh_close(state: tauri::State<'_, SshState>, id: u32) -> Result<(), String> {
+pub(crate) async fn ssh_close_impl(state: &SshState, id: u32) -> Result<(), String> {
     if let Some((_, tx)) = state.shells.lock().await.remove(&id) {
         let _ = tx.send(ShellCmd::Close);
     }
     Ok(())
 }
 
-#[tauri::command]
-pub async fn ssh_disconnect(
-    state: tauri::State<'_, SshState>,
-    conn_id: u32,
-) -> Result<(), String> {
+pub(crate) async fn ssh_disconnect_impl(state: &SshState, conn_id: u32) -> Result<(), String> {
     state.sftp.lock().await.remove(&conn_id);
     // Reap every shell task belonging to this connection so its sender entries
     // (and the spawned shell tasks they drive) don't linger in the map across
@@ -165,6 +154,17 @@ pub async fn ssh_disconnect(
     Ok(())
 }
 
+pub(crate) async fn ssh_known_host_decision_impl(
+    state: &SshState,
+    conn_id: u32,
+    accept: bool,
+) -> Result<(), String> {
+    if let Some(tx) = state.pending_hostkey.lock().await.remove(&conn_id) {
+        let _ = tx.send(accept);
+    }
+    Ok(())
+}
+
 /// Fetch (or lazily open) the SFTP subsystem for a connection.
 async fn get_sftp(state: &SshState, conn_id: u32) -> Result<Arc<SftpSession>, String> {
     if let Some(s) = state.sftp.lock().await.get(&conn_id).cloned() {
@@ -182,14 +182,189 @@ async fn get_sftp(state: &SshState, conn_id: u32) -> Result<Arc<SftpSession>, St
     Ok(session)
 }
 
+pub(crate) async fn ssh_sftp_list_impl(
+    state: &SshState,
+    conn_id: u32,
+    path: String,
+) -> Result<Vec<SftpEntry>, String> {
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::list(&sftp, &path).await
+}
+
+pub(crate) async fn ssh_sftp_read_impl(
+    state: &SshState,
+    conn_id: u32,
+    path: String,
+) -> Result<String, String> {
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::read_text(&sftp, &path).await
+}
+
+pub(crate) async fn ssh_sftp_write_impl(
+    state: &SshState,
+    conn_id: u32,
+    path: String,
+    contents: String,
+) -> Result<(), String> {
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::write_text(&sftp, &path, &contents).await
+}
+
+pub(crate) async fn ssh_sftp_download_impl(
+    state: &SshState,
+    registry: &WorkspaceRegistry,
+    conn_id: u32,
+    remote: String,
+    local: String,
+) -> Result<(), String> {
+    // The local destination is an arbitrary host path from the frontend; require
+    // it to live under an authorized workspace root so a compromised webview
+    // can't drop a remote file into e.g. an autostart dir.
+    let local = authorize_fs_path(registry, &local, &WorkspaceEnv::Local)?;
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::download(&sftp, &remote, &local.to_string_lossy()).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn ssh_sftp_download_dir_impl(
+    state: &SshState,
+    registry: &WorkspaceRegistry,
+    emit: EventSink,
+    conn_id: u32,
+    op_id: u32,
+    remote: String,
+    local: String,
+) -> Result<sftp::DownloadSummary, String> {
+    // Same gate as the single-file download: the destination must resolve under
+    // an authorized root (the home dir, which covers ~/Downloads).
+    let local = authorize_fs_path(registry, &local, &WorkspaceEnv::Local)?;
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::download_dir(&emit, op_id, &sftp, &remote, &local.to_string_lossy()).await
+}
+
+pub(crate) async fn ssh_sftp_upload_impl(
+    state: &SshState,
+    registry: &WorkspaceRegistry,
+    conn_id: u32,
+    local: String,
+    remote: String,
+) -> Result<(), String> {
+    // Same gate on the local source path — prevents a compromised webview from
+    // exfiltrating arbitrary local files up to a remote server.
+    let local = authorize_fs_path(registry, &local, &WorkspaceEnv::Local)?;
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::upload(&sftp, &local.to_string_lossy(), &remote).await
+}
+
+pub(crate) async fn ssh_sftp_mkdir_impl(
+    state: &SshState,
+    conn_id: u32,
+    path: String,
+) -> Result<(), String> {
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::mkdir(&sftp, &path).await
+}
+
+pub(crate) async fn ssh_sftp_rename_impl(
+    state: &SshState,
+    conn_id: u32,
+    from: String,
+    to: String,
+) -> Result<(), String> {
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::rename(&sftp, &from, &to).await
+}
+
+pub(crate) async fn ssh_sftp_delete_impl(
+    state: &SshState,
+    conn_id: u32,
+    path: String,
+    is_dir: bool,
+) -> Result<(), String> {
+    let sftp = get_sftp(state, conn_id).await?;
+    sftp::delete(&sftp, &path, is_dir).await
+}
+
+/// Wrap a Tauri `AppHandle` as the shell-agnostic event sink the impls expect.
+fn app_emit_sink(app: tauri::AppHandle) -> EventSink {
+    Arc::new(move |event: &str, payload: serde_json::Value| {
+        let _ = app.emit(event, payload);
+    })
+}
+
+#[tauri::command]
+pub async fn ssh_connect(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SshState>,
+    config: ConnectConfig,
+) -> Result<u32, String> {
+    ssh_connect_impl(&state, app_emit_sink(app), config).await
+}
+
+#[tauri::command]
+pub async fn ssh_open_shell(
+    state: tauri::State<'_, SshState>,
+    conn_id: u32,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<Response>,
+    on_exit: Channel<i32>,
+) -> Result<u32, String> {
+    let data_sink: DataSink = Arc::new(move |bytes| on_data.send(Response::new(bytes)).is_ok());
+    let exit_sink: ExitSink = Box::new(move |code| {
+        let _ = on_exit.send(code);
+    });
+    ssh_open_shell_impl(&state, conn_id, cols, rows, data_sink, exit_sink).await
+}
+
+#[tauri::command]
+pub async fn ssh_write(
+    state: tauri::State<'_, SshState>,
+    id: u32,
+    data: String,
+) -> Result<(), String> {
+    ssh_write_impl(&state, id, data).await
+}
+
+#[tauri::command]
+pub async fn ssh_resize(
+    state: tauri::State<'_, SshState>,
+    id: u32,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    ssh_resize_impl(&state, id, cols, rows).await
+}
+
+#[tauri::command]
+pub async fn ssh_close(state: tauri::State<'_, SshState>, id: u32) -> Result<(), String> {
+    ssh_close_impl(&state, id).await
+}
+
+#[tauri::command]
+pub async fn ssh_disconnect(
+    state: tauri::State<'_, SshState>,
+    conn_id: u32,
+) -> Result<(), String> {
+    ssh_disconnect_impl(&state, conn_id).await
+}
+
+#[tauri::command]
+pub async fn ssh_known_host_decision(
+    state: tauri::State<'_, SshState>,
+    conn_id: u32,
+    accept: bool,
+) -> Result<(), String> {
+    ssh_known_host_decision_impl(&state, conn_id, accept).await
+}
+
 #[tauri::command]
 pub async fn ssh_sftp_list(
     state: tauri::State<'_, SshState>,
     conn_id: u32,
     path: String,
 ) -> Result<Vec<SftpEntry>, String> {
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::list(&sftp, &path).await
+    ssh_sftp_list_impl(&state, conn_id, path).await
 }
 
 #[tauri::command]
@@ -198,8 +373,7 @@ pub async fn ssh_sftp_read(
     conn_id: u32,
     path: String,
 ) -> Result<String, String> {
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::read_text(&sftp, &path).await
+    ssh_sftp_read_impl(&state, conn_id, path).await
 }
 
 #[tauri::command]
@@ -209,8 +383,7 @@ pub async fn ssh_sftp_write(
     path: String,
     contents: String,
 ) -> Result<(), String> {
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::write_text(&sftp, &path, &contents).await
+    ssh_sftp_write_impl(&state, conn_id, path, contents).await
 }
 
 #[tauri::command]
@@ -221,12 +394,7 @@ pub async fn ssh_sftp_download(
     remote: String,
     local: String,
 ) -> Result<(), String> {
-    // The local destination is an arbitrary host path from the frontend; require
-    // it to live under an authorized workspace root so a compromised webview
-    // can't drop a remote file into e.g. an autostart dir.
-    let local = authorize_fs_path(&registry, &local, &WorkspaceEnv::Local)?;
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::download(&sftp, &remote, &local.to_string_lossy()).await
+    ssh_sftp_download_impl(&state, &registry, conn_id, remote, local).await
 }
 
 #[tauri::command]
@@ -239,11 +407,16 @@ pub async fn ssh_sftp_download_dir(
     remote: String,
     local: String,
 ) -> Result<sftp::DownloadSummary, String> {
-    // Same gate as the single-file download: the destination must resolve under
-    // an authorized root (the home dir, which covers ~/Downloads).
-    let local = authorize_fs_path(&registry, &local, &WorkspaceEnv::Local)?;
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::download_dir(&app, op_id, &sftp, &remote, &local.to_string_lossy()).await
+    ssh_sftp_download_dir_impl(
+        &state,
+        &registry,
+        app_emit_sink(app),
+        conn_id,
+        op_id,
+        remote,
+        local,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -254,11 +427,7 @@ pub async fn ssh_sftp_upload(
     local: String,
     remote: String,
 ) -> Result<(), String> {
-    // Same gate on the local source path — prevents a compromised webview from
-    // exfiltrating arbitrary local files up to a remote server.
-    let local = authorize_fs_path(&registry, &local, &WorkspaceEnv::Local)?;
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::upload(&sftp, &local.to_string_lossy(), &remote).await
+    ssh_sftp_upload_impl(&state, &registry, conn_id, local, remote).await
 }
 
 #[tauri::command]
@@ -267,8 +436,7 @@ pub async fn ssh_sftp_mkdir(
     conn_id: u32,
     path: String,
 ) -> Result<(), String> {
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::mkdir(&sftp, &path).await
+    ssh_sftp_mkdir_impl(&state, conn_id, path).await
 }
 
 #[tauri::command]
@@ -278,8 +446,7 @@ pub async fn ssh_sftp_rename(
     from: String,
     to: String,
 ) -> Result<(), String> {
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::rename(&sftp, &from, &to).await
+    ssh_sftp_rename_impl(&state, conn_id, from, to).await
 }
 
 #[tauri::command]
@@ -289,18 +456,5 @@ pub async fn ssh_sftp_delete(
     path: String,
     is_dir: bool,
 ) -> Result<(), String> {
-    let sftp = get_sftp(&state, conn_id).await?;
-    sftp::delete(&sftp, &path, is_dir).await
-}
-
-#[tauri::command]
-pub async fn ssh_known_host_decision(
-    state: tauri::State<'_, SshState>,
-    conn_id: u32,
-    accept: bool,
-) -> Result<(), String> {
-    if let Some(tx) = state.pending_hostkey.lock().await.remove(&conn_id) {
-        let _ = tx.send(accept);
-    }
-    Ok(())
+    ssh_sftp_delete_impl(&state, conn_id, path, is_dir).await
 }

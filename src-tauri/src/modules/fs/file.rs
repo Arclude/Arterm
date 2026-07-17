@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use std::{fs, io::Write};
 
@@ -6,6 +7,7 @@ use serde::Serialize;
 use tauri::Emitter;
 use tempfile::NamedTempFile;
 
+use crate::modules::pty::session::EventSink;
 use crate::modules::workspace::{authorize_fs_path, resolve_path, WorkspaceEnv, WorkspaceRegistry};
 
 const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
@@ -53,7 +55,7 @@ pub fn fs_read_file(
     read_file_inner(&path, workspace, &registry)
 }
 
-fn read_file_inner(
+pub(crate) fn read_file_inner(
     path: &str,
     workspace: Option<WorkspaceEnv>,
     registry: &WorkspaceRegistry,
@@ -127,7 +129,7 @@ pub fn fs_read_file_data_url(
     read_file_data_url_inner(&path, workspace, &registry)
 }
 
-fn read_file_data_url_inner(
+pub(crate) fn read_file_data_url_inner(
     path: &str,
     workspace: Option<WorkspaceEnv>,
     registry: &WorkspaceRegistry,
@@ -183,8 +185,22 @@ pub fn fs_write_file(
     app: tauri::AppHandle,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
+    let emit: EventSink = Arc::new(move |event: &str, payload: serde_json::Value| {
+        let _ = app.emit(event, payload);
+    });
+    write_file_impl(&path, &content, workspace, source, &emit, &registry)
+}
+
+pub(crate) fn write_file_impl(
+    path: &str,
+    content: &str,
+    workspace: Option<WorkspaceEnv>,
+    source: Option<String>,
+    emit: &EventSink,
+    registry: &WorkspaceRegistry,
+) -> Result<(), String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let target = authorize_fs_path(&registry, &path, &workspace)?;
+    let target = authorize_fs_path(registry, path, &workspace)?;
     let original_permissions = fs::metadata(&target).ok().map(|m| m.permissions());
     write_atomic(&target, content.as_bytes()).map_err(|e| {
         log::warn!("fs_write_file({}) failed: {e}", target.display());
@@ -194,21 +210,27 @@ pub fn fs_write_file(
     if let Some(perms) = original_permissions {
         let _ = fs::set_permissions(&target, perms);
     }
-    let _ = app.emit(
-        "fs:file-written",
-        FileWrittenEvent {
-            path: path.clone(),
-            source,
-        },
-    );
+    let payload = serde_json::to_value(FileWrittenEvent {
+        path: path.to_string(),
+        source,
+    })
+    .unwrap_or(serde_json::Value::Null);
+    emit("fs:file-written", payload);
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn fs_canonicalize(path: String, workspace: Option<WorkspaceEnv>) -> Result<String, String> {
+    canonicalize_impl(&path, workspace)
+}
+
+pub(crate) fn canonicalize_impl(
+    path: &str,
+    workspace: Option<WorkspaceEnv>,
+) -> Result<String, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = resolve_path(&path, &workspace);
+    let p = resolve_path(path, &workspace);
     let canon = std::fs::canonicalize(&p).map_err(|e| e.to_string())?;
     Ok(super::to_canon(&canon))
 }
@@ -219,8 +241,16 @@ pub fn fs_stat(
     workspace: Option<WorkspaceEnv>,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<FileStat, String> {
+    stat_impl(&path, workspace, &registry)
+}
+
+pub(crate) fn stat_impl(
+    path: &str,
+    workspace: Option<WorkspaceEnv>,
+    registry: &WorkspaceRegistry,
+) -> Result<FileStat, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = authorize_fs_path(&registry, &path, &workspace)?;
+    let p = authorize_fs_path(registry, path, &workspace)?;
     let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
     let kind = if meta.is_dir() {
         StatKind::Dir

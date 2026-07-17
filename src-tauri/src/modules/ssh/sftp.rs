@@ -7,10 +7,14 @@ use std::path::Path;
 use russh::client::Handle;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
 use super::session::Client;
+use crate::modules::pty::session::EventSink;
+
+fn to_json<T: Serialize>(value: T) -> serde_json::Value {
+    serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
+}
 
 /// Cap for opening a remote file into the editor. Matches the local fs read
 /// cap; without it a multi-GB (or hostile) remote file is slurped fully into
@@ -153,7 +157,7 @@ pub struct DownloadSummary {
 /// skipped rather than aborting the whole transfer — a remote file whose name is
 /// illegal on the host (e.g. `:` on Windows) shouldn't kill the rest.
 pub async fn download_dir(
-    app: &AppHandle,
+    emit: &EventSink,
     op_id: u32,
     sftp: &SftpSession,
     remote: &str,
@@ -161,16 +165,16 @@ pub async fn download_dir(
 ) -> Result<DownloadSummary, String> {
     let mut done: u64 = 0;
     let mut failed: u64 = 0;
-    download_dir_inner(app, op_id, sftp, remote, local, &mut done, &mut failed).await?;
-    let _ = app.emit(
+    download_dir_inner(emit, op_id, sftp, remote, local, &mut done, &mut failed).await?;
+    emit(
         "ssh-sftp-progress",
-        DownloadProgress {
+        to_json(DownloadProgress {
             op_id,
             done,
             failed,
             current: String::new(),
             finished: true,
-        },
+        }),
     );
     Ok(DownloadSummary {
         downloaded: done,
@@ -179,7 +183,7 @@ pub async fn download_dir(
 }
 
 async fn download_dir_inner(
-    app: &AppHandle,
+    emit: &EventSink,
     op_id: u32,
     sftp: &SftpSession,
     remote: &str,
@@ -201,7 +205,7 @@ async fn download_dir_inner(
         if entry.is_dir {
             // Box the recursive future: async fns can't recurse directly.
             if let Err(e) =
-                Box::pin(download_dir_inner(app, op_id, sftp, &remote_child, &local_child, done, failed))
+                Box::pin(download_dir_inner(emit, op_id, sftp, &remote_child, &local_child, done, failed))
                     .await
             {
                 eprintln!("[sftp] subdir failed {remote_child}: {e}");
@@ -215,15 +219,15 @@ async fn download_dir_inner(
                     *failed += 1;
                 }
             }
-            let _ = app.emit(
+            emit(
                 "ssh-sftp-progress",
-                DownloadProgress {
+                to_json(DownloadProgress {
                     op_id,
                     done: *done,
                     failed: *failed,
                     current: entry.name.clone(),
                     finished: false,
-                },
+                }),
             );
         }
     }
