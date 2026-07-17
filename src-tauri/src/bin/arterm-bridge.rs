@@ -16,7 +16,12 @@ impl log::Log for StderrLogger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            eprintln!("[{}] {}: {}", record.level(), record.target(), record.args());
+            eprintln!(
+                "[{}] {}: {}",
+                record.level(),
+                record.target(),
+                record.args()
+            );
         }
     }
 

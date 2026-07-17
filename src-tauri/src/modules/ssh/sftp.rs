@@ -119,8 +119,7 @@ pub async fn download(sftp: &SftpSession, remote: &str, local: &str) -> Result<(
         .await
         .map_err(|e| format!("download read failed: {e}"))?;
     if let Some(parent) = Path::new(local).parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("create local dir failed: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("create local dir failed: {e}"))?;
     }
     std::fs::write(local, bytes).map_err(|e| format!("download write failed: {e}"))
 }
@@ -191,8 +190,7 @@ async fn download_dir_inner(
     done: &mut u64,
     failed: &mut u64,
 ) -> Result<(), String> {
-    std::fs::create_dir_all(local)
-        .map_err(|e| format!("create local dir failed: {e}"))?;
+    std::fs::create_dir_all(local).map_err(|e| format!("create local dir failed: {e}"))?;
     for entry in list(sftp, remote).await? {
         if entry.is_symlink {
             continue;
@@ -204,9 +202,16 @@ async fn download_dir_inner(
             .into_owned();
         if entry.is_dir {
             // Box the recursive future: async fns can't recurse directly.
-            if let Err(e) =
-                Box::pin(download_dir_inner(emit, op_id, sftp, &remote_child, &local_child, done, failed))
-                    .await
+            if let Err(e) = Box::pin(download_dir_inner(
+                emit,
+                op_id,
+                sftp,
+                &remote_child,
+                &local_child,
+                done,
+                failed,
+            ))
+            .await
             {
                 eprintln!("[sftp] subdir failed {remote_child}: {e}");
                 *failed += 1;

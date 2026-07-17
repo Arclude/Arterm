@@ -53,14 +53,13 @@ pub(crate) async fn lsp_start_impl(
     let root = authorize_user_spawn_cwd(registry, cwd.as_deref(), &WorkspaceEnv::Local)?;
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-    let server = tokio::task::spawn_blocking(move || {
-        process::spawn(&command, &args, root, on_message)
-    })
-    .await
-    .map_err(|e| {
-        log::error!("lsp_start join failed: {e}");
-        e.to_string()
-    })??;
+    let server =
+        tokio::task::spawn_blocking(move || process::spawn(&command, &args, root, on_message))
+            .await
+            .map_err(|e| {
+                log::error!("lsp_start join failed: {e}");
+                e.to_string()
+            })??;
 
     state.servers.write().unwrap().insert(id, Arc::new(server));
     log::info!("lsp_start id={id} language={language_id}");

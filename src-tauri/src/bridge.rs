@@ -28,16 +28,16 @@ use tokio_tungstenite::tungstenite::handshake::server::{
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::modules::dap::DapState;
+use crate::modules::fs::watch::FsWatchState;
 use crate::modules::git::operations as git_ops;
 use crate::modules::git::types::DiscardEntry;
 use crate::modules::lsp::LspState;
 use crate::modules::proto::MessageSink;
 use crate::modules::pty::session::{self, EventSink};
 use crate::modules::pty::PtyState;
-use crate::modules::shell::ShellState;
 use crate::modules::secrets::SecretsState;
+use crate::modules::shell::ShellState;
 use crate::modules::ssh::SshState;
-use crate::modules::fs::watch::FsWatchState;
 use crate::modules::workspace::{
     authorize_user_spawn_cwd, authorize_workspace_path, bootstrap_registry, WorkspaceEnv,
     WorkspaceRegistry,
@@ -155,6 +155,9 @@ pub async fn run(launch_dir: Option<String>) {
     }
 }
 
+// tungstenite'ın handshake callback imzası `Result<_, ErrorResponse>` dayatır;
+// Err varyantının boyutu kütüphaneden gelir, kutulamak elimizde değil.
+#[allow(clippy::result_large_err)]
 async fn handle_conn(
     stream: TcpStream,
     state: Arc<BridgeState>,
@@ -231,7 +234,9 @@ async fn handle_conn(
                         tokio::spawn(async move {
                             let reply = match dispatch(&state, &tx, &cmd, args).await {
                                 Ok(value) => json!({"t":"result","id":id,"ok":true,"value":value}),
-                                Err(error) => json!({"t":"result","id":id,"ok":false,"error":error}),
+                                Err(error) => {
+                                    json!({"t":"result","id":id,"ok":false,"error":error})
+                                }
                             };
                             let _ = tx.send(Out::Text(reply.to_string()));
                         });
@@ -244,8 +249,7 @@ async fn handle_conn(
                 else if v["t"].as_str() == Some("emit") {
                     let event = v["event"].as_str().unwrap_or("").to_string();
                     let payload = v["payload"].clone();
-                    let text =
-                        json!({"t":"event","event":event,"payload":payload}).to_string();
+                    let text = json!({"t":"event","event":event,"payload":payload}).to_string();
                     for (cid, out) in state.conns.lock().unwrap().iter() {
                         if *cid != conn_id {
                             let _ = out.send(Out::Text(text.clone()));
@@ -335,9 +339,7 @@ async fn dispatch(
         "workspace_authorize" => {
             let workspace: Option<WorkspaceEnv> = match args.get("workspace") {
                 None | Some(Value::Null) => None,
-                Some(w) => {
-                    Some(serde_json::from_value(w.clone()).map_err(|e| e.to_string())?)
-                }
+                Some(w) => Some(serde_json::from_value(w.clone()).map_err(|e| e.to_string())?),
             };
             authorize_workspace_path(&state.registry, &str_arg(&args, "path")?, workspace)
                 .map(|s| json!(s))
@@ -372,12 +374,15 @@ async fn dispatch(
             )
             .map(|_| Value::Null)
         }
-        "fs_stat" => {
-            fs::file::stat_impl(&str_arg(&args, "path")?, workspace_arg(&args)?, &state.registry)
-                .map(to_value)
-        }
+        "fs_stat" => fs::file::stat_impl(
+            &str_arg(&args, "path")?,
+            workspace_arg(&args)?,
+            &state.registry,
+        )
+        .map(to_value),
         "fs_canonicalize" => {
-            fs::file::canonicalize_impl(&str_arg(&args, "path")?, workspace_arg(&args)?).map(to_value)
+            fs::file::canonicalize_impl(&str_arg(&args, "path")?, workspace_arg(&args)?)
+                .map(to_value)
         }
         "fs_read_dir" => fs::tree::fs_read_dir_inner(
             str_arg(&args, "path")?,
@@ -476,17 +481,26 @@ async fn dispatch(
         "git_resolve_repo" => {
             let cwd = str_arg(&args, "cwd")?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
-            git_op(state, move |r| git_ops::resolve_repo(r, &cwd, &ws).map_err(Into::into)).await
+            git_op(state, move |r| {
+                git_ops::resolve_repo(r, &cwd, &ws).map_err(Into::into)
+            })
+            .await
         }
         "git_panel_snapshot" => {
             let cwd = str_arg(&args, "cwd")?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
-            git_op(state, move |r| git_ops::panel_snapshot(r, &cwd, &ws).map_err(Into::into)).await
+            git_op(state, move |r| {
+                git_ops::panel_snapshot(r, &cwd, &ws).map_err(Into::into)
+            })
+            .await
         }
         "git_status" => {
             let repo_root = str_arg(&args, "repoRoot")?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
-            git_op(state, move |r| git_ops::status(r, &repo_root, &ws).map_err(Into::into)).await
+            git_op(state, move |r| {
+                git_ops::status(r, &repo_root, &ws).map_err(Into::into)
+            })
+            .await
         }
         "git_diff" => {
             let repo_root = str_arg(&args, "repoRoot")?;
@@ -501,7 +515,10 @@ async fn dispatch(
         "git_diff_stat" => {
             let repo_root = str_arg(&args, "repoRoot")?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
-            git_op(state, move |r| git_ops::diff_stat(r, &repo_root, &ws).map_err(Into::into)).await
+            git_op(state, move |r| {
+                git_ops::diff_stat(r, &repo_root, &ws).map_err(Into::into)
+            })
+            .await
         }
         "git_diff_content" => {
             let repo_root = str_arg(&args, "repoRoot")?;
@@ -535,10 +552,9 @@ async fn dispatch(
         }
         "git_discard" => {
             let repo_root = str_arg(&args, "repoRoot")?;
-            let entries: Vec<DiscardEntry> = serde_json::from_value(
-                args.get("entries").cloned().unwrap_or(Value::Null),
-            )
-            .map_err(|e| format!("bridge: bad arg entries: {e}"))?;
+            let entries: Vec<DiscardEntry> =
+                serde_json::from_value(args.get("entries").cloned().unwrap_or(Value::Null))
+                    .map_err(|e| format!("bridge: bad arg entries: {e}"))?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
             git_op(state, move |r| {
                 git_ops::discard(r, &repo_root, &entries, &ws).map_err(Into::into)
@@ -557,7 +573,10 @@ async fn dispatch(
         "git_fetch" => {
             let repo_root = str_arg(&args, "repoRoot")?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
-            git_op(state, move |r| git_ops::fetch(r, &repo_root, &ws).map_err(Into::into)).await
+            git_op(state, move |r| {
+                git_ops::fetch(r, &repo_root, &ws).map_err(Into::into)
+            })
+            .await
         }
         "git_pull_ff_only" => {
             let repo_root = str_arg(&args, "repoRoot")?;
@@ -570,7 +589,10 @@ async fn dispatch(
         "git_push" => {
             let repo_root = str_arg(&args, "repoRoot")?;
             let ws = WorkspaceEnv::from_option(workspace_arg(&args)?);
-            git_op(state, move |r| git_ops::push(r, &repo_root, &ws).map_err(Into::into)).await
+            git_op(state, move |r| {
+                git_ops::push(r, &repo_root, &ws).map_err(Into::into)
+            })
+            .await
         }
         "git_log" => {
             let repo_root = str_arg(&args, "repoRoot")?;
@@ -656,7 +678,11 @@ async fn dispatch(
         }
         "shell_session_open" => state
             .shell
-            .session_open(&state.registry, opt_str_arg(&args, "cwd"), workspace_arg(&args)?)
+            .session_open(
+                &state.registry,
+                opt_str_arg(&args, "cwd"),
+                workspace_arg(&args)?,
+            )
             .map(|id| json!(id)),
         "shell_session_run" => {
             let id = u32_arg(&args, "id")?;
@@ -729,9 +755,7 @@ async fn dispatch(
         .map(to_value),
 
         // ── extensions ─────────────────────────────────────────────────────
-        "extensions_list" => {
-            extensions::extensions_list_impl(&app_local_data_dir()?).map(to_value)
-        }
+        "extensions_list" => extensions::extensions_list_impl(&app_local_data_dir()?).map(to_value),
         "extensions_dir_path" => {
             extensions::extensions_dir_path_impl(&app_local_data_dir()?).map(|s| json!(s))
         }
@@ -819,16 +843,20 @@ async fn dispatch(
         )
         .await
         .map(|_| Value::Null),
-        "ssh_sftp_list" => {
-            ssh::ssh_sftp_list_impl(&state.ssh, u32_arg(&args, "connId")?, str_arg(&args, "path")?)
-                .await
-                .map(to_value)
-        }
-        "ssh_sftp_read" => {
-            ssh::ssh_sftp_read_impl(&state.ssh, u32_arg(&args, "connId")?, str_arg(&args, "path")?)
-                .await
-                .map(|s| json!(s))
-        }
+        "ssh_sftp_list" => ssh::ssh_sftp_list_impl(
+            &state.ssh,
+            u32_arg(&args, "connId")?,
+            str_arg(&args, "path")?,
+        )
+        .await
+        .map(to_value),
+        "ssh_sftp_read" => ssh::ssh_sftp_read_impl(
+            &state.ssh,
+            u32_arg(&args, "connId")?,
+            str_arg(&args, "path")?,
+        )
+        .await
+        .map(|s| json!(s)),
         "ssh_sftp_write" => ssh::ssh_sftp_write_impl(
             &state.ssh,
             u32_arg(&args, "connId")?,
@@ -866,11 +894,13 @@ async fn dispatch(
         )
         .await
         .map(|_| Value::Null),
-        "ssh_sftp_mkdir" => {
-            ssh::ssh_sftp_mkdir_impl(&state.ssh, u32_arg(&args, "connId")?, str_arg(&args, "path")?)
-                .await
-                .map(|_| Value::Null)
-        }
+        "ssh_sftp_mkdir" => ssh::ssh_sftp_mkdir_impl(
+            &state.ssh,
+            u32_arg(&args, "connId")?,
+            str_arg(&args, "path")?,
+        )
+        .await
+        .map(|_| Value::Null),
         "ssh_sftp_rename" => ssh::ssh_sftp_rename_impl(
             &state.ssh,
             u32_arg(&args, "connId")?,
@@ -903,10 +933,12 @@ async fn dispatch(
             .await
             .map(|id| json!(id))
         }
-        "lsp_send" => {
-            lsp::lsp_send_impl(&state.lsp, u32_arg(&args, "id")?, str_arg(&args, "message")?)
-                .map(|_| Value::Null)
-        }
+        "lsp_send" => lsp::lsp_send_impl(
+            &state.lsp,
+            u32_arg(&args, "id")?,
+            str_arg(&args, "message")?,
+        )
+        .map(|_| Value::Null),
         "lsp_stop" => lsp::lsp_stop_impl(&state.lsp, u32_arg(&args, "id")?).map(|_| Value::Null),
         "lsp_stop_all" => lsp::lsp_stop_all_impl(&state.lsp).map(|n| json!(n)),
         "lsp_install_dir" => lsp::lsp_install_dir_impl(&app_local_data_dir()?).map(|s| json!(s)),
@@ -951,10 +983,12 @@ async fn dispatch(
             .await
             .map(|id| json!(id))
         }
-        "dap_send" => {
-            dap::dap_send_impl(&state.dap, u32_arg(&args, "id")?, str_arg(&args, "message")?)
-                .map(|_| Value::Null)
-        }
+        "dap_send" => dap::dap_send_impl(
+            &state.dap,
+            u32_arg(&args, "id")?,
+            str_arg(&args, "message")?,
+        )
+        .map(|_| Value::Null),
         "dap_stop" => dap::dap_stop_impl(&state.dap, u32_arg(&args, "id")?).map(|_| Value::Null),
         "dap_stop_all" => dap::dap_stop_all_impl(&state.dap).map(|n| json!(n)),
 
@@ -962,13 +996,17 @@ async fn dispatch(
         "agent_enable_claude_hooks" => {
             crate::modules::agent::agent_enable_claude_hooks().map(|_| Value::Null)
         }
-        "agent_claude_hooks_status" => Ok(json!(crate::modules::agent::agent_claude_hooks_status())),
-        "arterm_cli_list_sessions" => {
-            Ok(to_value(crate::modules::arterm_cli::arterm_cli_list_sessions()))
+        "agent_claude_hooks_status" => {
+            Ok(json!(crate::modules::agent::agent_claude_hooks_status()))
         }
+        "arterm_cli_list_sessions" => Ok(to_value(
+            crate::modules::arterm_cli::arterm_cli_list_sessions(),
+        )),
 
         // ── wsl (Windows-only; Linux fallbacks live in workspace.rs) ───────
-        "wsl_list_distros" => crate::modules::workspace::wsl_list_distros().await.map(to_value),
+        "wsl_list_distros" => crate::modules::workspace::wsl_list_distros()
+            .await
+            .map(to_value),
         "wsl_default_distro" => crate::modules::workspace::wsl_default_distro()
             .await
             .map(to_value),
@@ -977,7 +1015,9 @@ async fn dispatch(
         }
 
         // ── net ────────────────────────────────────────────────────────────
-        "lm_ping" => net::lm_ping(str_arg(&args, "baseUrl")?).await.map(|s| json!(s)),
+        "lm_ping" => net::lm_ping(str_arg(&args, "baseUrl")?)
+            .await
+            .map(|s| json!(s)),
         "ai_http_request" => net::ai_http_request(
             str_arg(&args, "url")?,
             str_arg(&args, "method")?,

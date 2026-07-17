@@ -48,14 +48,13 @@ pub(crate) async fn dap_start_impl(
     let root = authorize_user_spawn_cwd(registry, cwd.as_deref(), &WorkspaceEnv::Local)?;
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-    let adapter = tokio::task::spawn_blocking(move || {
-        process::spawn(&command, &args, root, on_message)
-    })
-    .await
-    .map_err(|e| {
-        log::error!("dap_start join failed: {e}");
-        e.to_string()
-    })??;
+    let adapter =
+        tokio::task::spawn_blocking(move || process::spawn(&command, &args, root, on_message))
+            .await
+            .map_err(|e| {
+                log::error!("dap_start join failed: {e}");
+                e.to_string()
+            })??;
 
     state
         .adapters

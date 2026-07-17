@@ -199,7 +199,8 @@ pub async fn pty_open(
     let emit: session::EventSink = Arc::new(move |event, payload| {
         let _ = app.emit(event, payload);
     });
-    let on_data: session::DataSink = Arc::new(move |bytes| on_data.send(Response::new(bytes)).is_ok());
+    let on_data: session::DataSink =
+        Arc::new(move |bytes| on_data.send(Response::new(bytes)).is_ok());
     let on_exit: session::ExitSink = Box::new(move |code| {
         let _ = on_exit.send(code);
     });

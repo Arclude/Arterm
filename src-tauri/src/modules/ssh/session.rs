@@ -20,7 +20,9 @@ use crate::modules::pty::session::{DataSink, EventSink, ExitSink};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum AuthConfig {
-    Password { password: String },
+    Password {
+        password: String,
+    },
     Key {
         path: String,
         passphrase: Option<String>,
@@ -155,7 +157,12 @@ pub async fn connect(
         AuthConfig::Key { path, passphrase } => {
             let key = load_secret_key(&path, passphrase.as_deref())
                 .map_err(|e| format!("key load failed ({path}): {e}"))?;
-            let hash = handle.best_supported_rsa_hash().await.ok().flatten().flatten();
+            let hash = handle
+                .best_supported_rsa_hash()
+                .await
+                .ok()
+                .flatten()
+                .flatten();
             let res = handle
                 .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), hash))
                 .await
@@ -184,8 +191,7 @@ async fn authenticate_agent(handle: &mut Handle<Client>, user: &str) -> Result<b
     }
     #[cfg(windows)]
     {
-        match agent::client::AgentClient::connect_named_pipe(r"\\.\pipe\openssh-ssh-agent").await
-        {
+        match agent::client::AgentClient::connect_named_pipe(r"\\.\pipe\openssh-ssh-agent").await {
             Ok(agent) => try_agent_auth(handle, user, agent).await,
             Err(_) => {
                 let agent = agent::client::AgentClient::connect_pageant().await;
@@ -212,7 +218,12 @@ where
         return Err("ssh-agent has no identities".into());
     }
     for key in identities {
-        let hash = handle.best_supported_rsa_hash().await.ok().flatten().flatten();
+        let hash = handle
+            .best_supported_rsa_hash()
+            .await
+            .ok()
+            .flatten()
+            .flatten();
         if let Ok(client::AuthResult::Success) = handle
             .authenticate_publickey_with(user, key, hash, &mut agent)
             .await

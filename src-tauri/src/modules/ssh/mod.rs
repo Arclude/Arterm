@@ -16,10 +16,10 @@ use tauri::ipc::{Channel, Response};
 use tauri::Emitter;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-pub use session::{ConnectConfig, ShellCmd};
 use crate::modules::pty::session::{DataSink, EventSink, ExitSink};
 use crate::modules::workspace::{authorize_fs_path, WorkspaceEnv, WorkspaceRegistry};
 use session::Client;
+pub use session::{ConnectConfig, ShellCmd};
 use sftp::SftpEntry;
 
 pub struct SshState {
@@ -342,10 +342,7 @@ pub async fn ssh_close(state: tauri::State<'_, SshState>, id: u32) -> Result<(),
 }
 
 #[tauri::command]
-pub async fn ssh_disconnect(
-    state: tauri::State<'_, SshState>,
-    conn_id: u32,
-) -> Result<(), String> {
+pub async fn ssh_disconnect(state: tauri::State<'_, SshState>, conn_id: u32) -> Result<(), String> {
     ssh_disconnect_impl(&state, conn_id).await
 }
 

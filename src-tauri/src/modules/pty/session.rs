@@ -618,6 +618,10 @@ mod tests {
             expected.extend_from_slice(format!("{i}\n").as_bytes());
         }
         assert_eq!(out.len(), expected.len(), "delivered byte count mismatch");
-        assert_eq!(&out[..], &expected[..], "delivered stream corrupted or reordered");
+        assert_eq!(
+            &out[..],
+            &expected[..],
+            "delivered stream corrupted or reordered"
+        );
     }
 }
