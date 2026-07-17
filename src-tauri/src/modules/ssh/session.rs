@@ -268,23 +268,27 @@ pub async fn open_shell(
         // xterm.write, which is why SSH felt laggier than a local terminal.
         const FLUSH_COALESCE: Duration = Duration::from_millis(4);
         const FLUSH_MAX_BYTES: usize = 32 * 1024;
+        // Mirrors the local PTY flusher: a tiny pending buffer is an
+        // interactive echo — flush it immediately instead of waiting out the
+        // coalesce window, so remote typing stays as snappy as local.
+        const FLUSH_IMMEDIATE_MAX: usize = 2048;
         let mut pending: Vec<u8> = Vec::new();
         loop {
             tokio::select! {
                 msg = channel.wait() => match msg {
                     Some(ChannelMsg::Data { data }) => {
                         pending.extend_from_slice(&data);
-                        if pending.len() >= FLUSH_MAX_BYTES
-                            && !on_data(std::mem::take(&mut pending))
-                        {
+                        let flush_now = pending.len() >= FLUSH_MAX_BYTES
+                            || pending.len() < FLUSH_IMMEDIATE_MAX;
+                        if flush_now && !on_data(std::mem::take(&mut pending)) {
                             break;
                         }
                     }
                     Some(ChannelMsg::ExtendedData { data, .. }) => {
                         pending.extend_from_slice(&data);
-                        if pending.len() >= FLUSH_MAX_BYTES
-                            && !on_data(std::mem::take(&mut pending))
-                        {
+                        let flush_now = pending.len() >= FLUSH_MAX_BYTES
+                            || pending.len() < FLUSH_IMMEDIATE_MAX;
+                        if flush_now && !on_data(std::mem::take(&mut pending)) {
                             break;
                         }
                     }

@@ -17,6 +17,9 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       corsEnabled: true,
       stream: true,
+      // V8 derlenmiş kod önbelleği: ~3.4MB'lık JS bundle'ları ikinci
+      // açılıştan itibaren parse/derleme olmadan yüklenir.
+      codeCache: true,
     },
   },
 ]);
