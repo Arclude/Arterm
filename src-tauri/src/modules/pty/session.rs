@@ -29,6 +29,9 @@ fn to_event_payload<T: serde::Serialize>(value: T) -> serde_json::Value {
 // Flusher coalesces a short window after first-byte arrival so we send chunks,
 // not single bytes. MAX_IDLE is only a safety net for missed signals.
 const FLUSH_COALESCE: Duration = Duration::from_millis(4);
+/// Pending sizes below this flush without the coalesce sleep: interactive
+/// echoes stay sub-millisecond while real bursts still batch into one chunk.
+const FLUSH_IMMEDIATE_MAX: usize = 2048;
 const FLUSH_MAX_IDLE: Duration = Duration::from_millis(50);
 const READ_BUF: usize = 16 * 1024;
 // Cap on buffered-but-not-yet-flushed bytes. On overflow we discard the
@@ -357,8 +360,14 @@ pub fn spawn(
                         g = next;
                     }
                 }
-                // Coalesce a short window so a burst flushes as one chunk.
-                thread::sleep(FLUSH_COALESCE);
+                // Coalesce a short window so a burst flushes as one chunk —
+                // but only when a burst is clearly underway. A tiny pending
+                // buffer is an interactive echo (keystroke, prompt redraw);
+                // flushing it immediately keeps typing latency sub-frame.
+                let coalesce = lock.lock().unwrap().buf.len() >= FLUSH_IMMEDIATE_MAX;
+                if coalesce {
+                    thread::sleep(FLUSH_COALESCE);
+                }
                 // Drain in bounded chunks so a resume burst can't hand xterm one
                 // enormous write; re-check the pause flag between chunks.
                 loop {

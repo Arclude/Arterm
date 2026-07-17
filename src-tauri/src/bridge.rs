@@ -145,6 +145,10 @@ pub async fn run(launch_dir: Option<String>) {
         let Ok((stream, addr)) = listener.accept().await else {
             continue;
         };
+        // Interactive keystroke echoes are tiny frames; without TCP_NODELAY
+        // Nagle + delayed-ACK serializes them into ~40ms stalls even on
+        // loopback (measured p50 4.6ms → 41ms under rapid typing).
+        let _ = stream.set_nodelay(true);
         let state = state.clone();
         let token = token.clone();
         tokio::spawn(async move {
