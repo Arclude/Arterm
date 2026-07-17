@@ -1,4 +1,4 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@/platform/core";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { setLspServers } from "@/modules/settings/store";
 import { assetFor, type InstallEntry } from "./installRegistry";

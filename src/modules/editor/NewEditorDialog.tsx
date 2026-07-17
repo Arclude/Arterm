@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { File02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { useEffect, useRef, useState } from "react";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 

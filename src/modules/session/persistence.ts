@@ -1,4 +1,4 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { LazyStore } from "@/platform/store";
 import { wasLaunchDirExplicit } from "@/lib/launchDir";
 import { readRestoreSessionPref } from "@/modules/settings/store";
 import { parseSnapshot, type SessionSnapshotV1 } from "./session";

@@ -1,4 +1,4 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { LazyStore } from "@/platform/store";
 import { create } from "zustand";
 import type { Theme } from "@/modules/theme/types";
 import type { LoadedExtension } from "./types";

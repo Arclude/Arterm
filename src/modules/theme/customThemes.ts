@@ -1,5 +1,5 @@
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { emit, listen, type UnlistenFn } from "@/platform/event";
+import { LazyStore } from "@/platform/store";
 import type { Theme } from "./types";
 
 const STORE_PATH = "arterm-custom-themes.json";

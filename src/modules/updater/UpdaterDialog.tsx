@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "@/platform/opener";
 import { useState } from "react";
 import { useUpdater } from "./useUpdater";
 

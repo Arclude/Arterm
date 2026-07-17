@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { toast } from "sonner";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 import type { HostToWorker, WorkerToHost } from "./protocol";

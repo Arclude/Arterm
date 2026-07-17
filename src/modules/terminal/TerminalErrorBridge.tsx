@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "@/platform/event";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {

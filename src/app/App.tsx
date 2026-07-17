@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
-import { homeDir } from "@tauri-apps/api/path";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { invoke } from "@/platform/core";
+import { homeDir } from "@/platform/path";
+import { getCurrentWebviewWindow } from "@/platform/webviewWindow";
 import type { SearchAddon } from "@xterm/addon-search";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1919,6 +1919,7 @@ export default function App() {
                     cliAgentsActive={isCliAgentsTab}
                     cliBusy={cliBusy}
                     cliOnline={cliOnline}
+                    subdued={isTerminalTab}
                     cliFlyout={
                       <CliRailFlyout
                         onOpenDashboard={openCliAgents}

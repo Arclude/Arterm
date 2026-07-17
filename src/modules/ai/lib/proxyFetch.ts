@@ -1,4 +1,4 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@/platform/core";
 
 /** Streaming events emitted by the Rust `ai_http_stream` command. */
 type AiStreamEvent =

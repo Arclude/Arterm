@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { LspClient } from "./client";
 import { type LanguageInfo, resolveServerConfig } from "./config";

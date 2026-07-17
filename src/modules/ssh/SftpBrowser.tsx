@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { downloadDir, join } from "@tauri-apps/api/path";
-import { listen } from "@tauri-apps/api/event";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { invoke } from "@/platform/core";
+import { getCurrentWebview } from "@/platform/webview";
+import { downloadDir, join } from "@/platform/path";
+import { listen } from "@/platform/event";
+import { revealItemInDir } from "@/platform/opener";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type SftpEntry,

@@ -1,4 +1,4 @@
-import { arch, platform } from "@tauri-apps/plugin-os";
+import { arch, platform } from "@/platform/os";
 
 // Registry of one-click-installable language servers, keyed by the same
 // serverId used in DEFAULT_LSP_SERVERS. Phase 1 covers binary servers only

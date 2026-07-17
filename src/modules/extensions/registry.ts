@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { parseManifest, reloadAfterInstall } from "./loader";
 import { getRegistryUrl } from "./store";
 import type { ExtensionManifest } from "./types";

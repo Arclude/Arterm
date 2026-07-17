@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { invoke } from "@/platform/core";
+import { openPath } from "@/platform/opener";
 import type { Snippet } from "@/modules/ai/lib/snippets";
 import { useSnippetsStore } from "@/modules/ai/store/snippetsStore";
 import type { Theme } from "@/modules/theme/types";

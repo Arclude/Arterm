@@ -9,6 +9,7 @@ import {
   sparkPath,
 } from "../lib/dashboard";
 import { buildGlobalFeed } from "../lib/feed";
+import type { CliSessionEntry } from "../store/cliStatusStore";
 import { useCliStatusStore } from "../store/cliStatusStore";
 import { AgentDrilldown } from "./AgentDrilldown";
 import { BlackboardPanel } from "./BlackboardPanel";
@@ -45,6 +46,11 @@ const SPARK_CAP = 48;
 const SPARK_W = 168;
 const SPARK_H = 26;
 
+// Reference-stable empty map handed to the store selector while the dashboard
+// tab is hidden, so the sessions SSE fan-out can't re-render (or re-run the
+// derived memos) for a tab the user isn't looking at.
+const EMPTY_SESSIONS: Record<string, CliSessionEntry> = Object.freeze({});
+
 function Kpi({
   label,
   children,
@@ -73,7 +79,9 @@ export function CliAgentsDashboard({
   resolveTerminalFocus,
   visible,
 }: CliAgentsDashboardProps) {
-  const sessions = useCliStatusStore((s) => s.sessions);
+  const sessions = useCliStatusStore((s) =>
+    visible ? s.sessions : EMPTY_SESSIONS,
+  );
   // Session focus is shared with the sidebar panel (both drive one selection).
   const selSession = useCliStatusStore((s) => s.selectedSessionId);
   const setSelSession = useCliStatusStore((s) => s.selectSession);
@@ -121,15 +129,17 @@ export function CliAgentsDashboard({
   // Shared 1s clock so every elapsed counter + the timeline advance together.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
+    if (!visible) return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [visible]);
 
   // Local token-over-time samples for the header sparkline (real data or none).
   const tokensRef = useRef(0);
   tokensRef.current = kpis.tokens;
   const [spark, setSpark] = useState<number[]>([]);
   useEffect(() => {
+    if (!visible) return;
     const push = () =>
       setSpark((prev) => {
         const next = [...prev, tokensRef.current];
@@ -140,7 +150,7 @@ export function CliAgentsDashboard({
     push();
     const t = window.setInterval(push, 2000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [visible]);
   const sp = sparkPath(spark, SPARK_W, SPARK_H);
 
   if (entries.length === 0) {

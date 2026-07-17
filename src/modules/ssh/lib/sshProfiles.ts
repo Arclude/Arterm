@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { invoke } from "@/platform/core";
+import { LazyStore } from "@/platform/store";
 import type { SshConnectConfig } from "./ssh-bridge";
 
 export type SshAuthMethod = "key" | "password" | "agent";

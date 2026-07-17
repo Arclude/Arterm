@@ -1,4 +1,4 @@
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen, type UnlistenFn } from "@/platform/event";
 
 /**
  * Cross-window signal that the installed-extension set changed (install,

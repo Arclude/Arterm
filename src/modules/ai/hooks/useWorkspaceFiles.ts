@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { useEffect, useState } from "react";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 

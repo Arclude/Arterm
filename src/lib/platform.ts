@@ -1,4 +1,4 @@
-import { platform } from "@tauri-apps/plugin-os";
+import { platform } from "@/platform/os";
 
 const PLATFORM = (() => {
   try {
@@ -11,6 +11,11 @@ const PLATFORM = (() => {
 export const IS_MAC = PLATFORM === "macos";
 export const IS_LINUX = PLATFORM === "linux";
 export const IS_WINDOWS = PLATFORM === "windows";
+
+/** Electron kabuğu (Chromium motoru). Yalnızca render-motoru workaround'ları
+ * bunu okumalı; uygulama mantığı kabuk-bağımsız kalır. */
+export const IS_ELECTRON_SHELL =
+  typeof window !== "undefined" && window.artermBridge?.shell === "electron";
 
 /** Custom window controls (min/max/close) are rendered by us only on
  * non-macOS platforms — macOS keeps the native traffic lights via the

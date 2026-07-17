@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "@/platform/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SftpBrowser } from "./SftpBrowser";
 import { SshProfileDialog } from "./SshProfileDialog";

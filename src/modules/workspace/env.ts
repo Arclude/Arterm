@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { create } from "zustand";
 import { setLastWslDistro } from "@/modules/settings/store";
 

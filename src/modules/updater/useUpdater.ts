@@ -1,6 +1,6 @@
-import { getVersion } from "@tauri-apps/api/app";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import { getVersion } from "@/platform/app";
+import { relaunch } from "@/platform/process";
+import { check, type Update } from "@/platform/updater";
 import { useCallback, useEffect, useState } from "react";
 import { IS_LINUX } from "@/lib/platform";
 

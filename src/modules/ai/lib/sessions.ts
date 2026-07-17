@@ -1,5 +1,5 @@
 import type { UIMessage } from "@ai-sdk/react";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { LazyStore } from "@/platform/store";
 
 export type SessionMeta = {
   id: string;

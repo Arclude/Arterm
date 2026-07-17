@@ -1,4 +1,4 @@
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen, type UnlistenFn } from "@/platform/event";
 import {
   type AutocompleteProviderId,
   type CustomEndpoint,
@@ -17,7 +17,7 @@ import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 
 export type { LspServerConfig };
 
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { LazyStore } from "@/platform/store";
 
 export type ThemePref = "system" | "light" | "dark";
 

@@ -52,6 +52,9 @@ type Props = {
   cliBusy?: boolean;
   /** Reachable CLI sessions ⇒ a static presence dot when idle. */
   cliOnline?: number;
+  /** Drop the animated ping (keep the static busy dot) — e.g. while a terminal
+   *  tab is active, so the rail doesn't drive a per-frame animation. */
+  subdued?: boolean;
 };
 
 export function SidebarRail({
@@ -65,6 +68,7 @@ export function SidebarRail({
   cliFlyout,
   cliBusy = false,
   cliOnline = 0,
+  subdued = false,
 }: Props) {
   const items: RailItem[] = [
     { id: "explorer", label: "Files", icon: FolderTreeIcon },
@@ -129,7 +133,9 @@ export function SidebarRail({
             />
             {showPulse ? (
               <span className="pointer-events-none absolute left-1 top-1 flex size-1.5">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
+                {subdued ? null : (
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
+                )}
                 <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
               </span>
             ) : showPresence ? (

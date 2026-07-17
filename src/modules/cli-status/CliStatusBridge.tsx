@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { useEffect } from "react";
 import { createProxyFetch } from "@/modules/ai/lib/proxyFetch";
 import { type CliSessionClient, createCliSessionClient } from "./client";

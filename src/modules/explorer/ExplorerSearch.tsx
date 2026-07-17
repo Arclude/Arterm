@@ -13,7 +13,7 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 import { motion } from "motion/react";
 import {

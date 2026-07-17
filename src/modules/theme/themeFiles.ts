@@ -1,7 +1,7 @@
 import { currentWorkspaceEnv } from "@/modules/workspace";
-import { invoke } from "@tauri-apps/api/core";
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { appConfigDir, join } from "@tauri-apps/api/path";
+import { invoke } from "@/platform/core";
+import { emit, listen, type UnlistenFn } from "@/platform/event";
+import { appConfigDir, join } from "@/platform/path";
 import type { Theme } from "./types";
 import { validateTheme, type ValidationResult } from "./validateTheme";
 

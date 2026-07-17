@@ -1,4 +1,4 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@/platform/opener";
 
 export async function copyToClipboard(text: string): Promise<void> {
   try {

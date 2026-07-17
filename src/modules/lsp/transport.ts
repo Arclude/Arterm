@@ -1,4 +1,4 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@/platform/core";
 
 // Thin bridge over the Rust lsp_* commands. The backend handles process
 // lifecycle and Content-Length framing; here we only shuttle whole JSON

@@ -1,4 +1,4 @@
-import { invoke, Channel } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@/platform/core";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 
 export type PtyHandlers = {
@@ -11,6 +11,10 @@ export type PtySession = {
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
   close: () => Promise<void>;
+  // Flow control. Local ptys wire these to the backend flusher; the SSH bridge
+  // leaves them undefined (callers treat them as optional).
+  pause?: () => Promise<void>;
+  resume?: () => Promise<void>;
 };
 
 /** Shell kind label ("pwsh", "bash", …) for an open pty, or null if gone. */
@@ -61,6 +65,8 @@ export async function openPty(
   return {
     id,
     write: (data) => invoke("pty_write", { id, data }),
+    pause: () => invoke("pty_pause", { id }),
+    resume: () => invoke("pty_resume", { id }),
     resize: (c, r) => invoke("pty_resize", { id, cols: c, rows: r }),
     close: async () => {
       if (closed) return;

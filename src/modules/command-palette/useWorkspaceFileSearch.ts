@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export const COMMAND_PALETTE_FILE_SEARCH_MIN_QUERY_LENGTH = 2;
