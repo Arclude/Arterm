@@ -1,10 +1,12 @@
 import { detectMonoFontFamily } from "@/lib/fonts";
+import { IS_ELECTRON_SHELL } from "@/lib/platform";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "@/platform/opener";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
@@ -16,7 +18,11 @@ import {
 
 export const POOL_MAX_SIZE = 5;
 const FIT_DEBOUNCE_MS = 8;
-const PTY_RESIZE_DEBOUNCE_MS = 256;
+// SIGWINCH gecikmesi: xterm boyutu değişip PTY hâlâ eski boyuttayken TUI'ler
+// (ink/Claude Code) diff-render'larını yanlış genişliğe karşı çalıştırır ve
+// normal buffer'a kalıcı çöp bırakabilir. Chromium'da canlı resize akıcı
+// olduğundan pencereyi kısa tut; WebKitGTK'da resize fırtınasına karşı geniş.
+const PTY_RESIZE_DEBOUNCE_MS = IS_ELECTRON_SHELL ? 64 : 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
 
 export type SlotAdapter = {
@@ -44,11 +50,16 @@ export type Slot = {
   readonly host: HTMLDivElement;
   webglAddon: WebglAddon | null;
   webglCanvases: HTMLCanvasElement[];
+  glLossCount: number;
+  glFirstLossAt: number;
+  glDisabled: boolean;
   currentLeafId: number | null;
   oscDisposers: (() => void)[];
   observer: ResizeObserver | null;
   fitTimer: ReturnType<typeof setTimeout> | null;
   ptyTimer: ReturnType<typeof setTimeout> | null;
+  repaintTimer: ReturnType<typeof setTimeout> | null;
+  lastRepaintAt: number;
   unhideRaf: number | null;
   lastCols: number;
   lastRows: number;
@@ -134,6 +145,8 @@ function createSlot(): Slot {
   term.loadAddon(fitAddon);
   term.loadAddon(searchAddon);
   term.loadAddon(serializeAddon);
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
   term.loadAddon(
     new WebLinksAddon((_e, uri) => openUrl(uri).catch(console.error)),
   );
@@ -153,11 +166,16 @@ function createSlot(): Slot {
     host,
     webglAddon: null,
     webglCanvases: [],
+    glLossCount: 0,
+    glFirstLossAt: 0,
+    glDisabled: false,
     currentLeafId: null,
     oscDisposers: [],
     observer: null,
     fitTimer: null,
     ptyTimer: null,
+    repaintTimer: null,
+    lastRepaintAt: 0,
     unhideRaf: null,
     lastCols: term.cols,
     lastRows: term.rows,
@@ -408,7 +426,7 @@ function bindSlot(slot: Slot, p: AcquireParams): void {
   slot.oscDisposers = p.registerOsc(slot.term);
 
   setupResizeObserver(slot, p);
-  slot.fitAddon.fit();
+  fitAndRepaint(slot);
   slot.lastCols = slot.term.cols;
   slot.lastRows = slot.term.rows;
   slot.lastW = p.container.clientWidth;
@@ -466,8 +484,13 @@ function rewireSlot(slot: Slot, p: AcquireParams): void {
   if (slot.host.parentNode !== p.container) {
     p.container.appendChild(slot.host);
   }
+  // A slot re-bound without a reparent (same-leaf rewire) skips bindSlot's
+  // dispose+re-attach, so a parked-then-restored slot could land here with no
+  // live context after detachSlotFromLeaf dropped it. Re-attach a fresh one
+  // (no-op when webgl is disabled or the slot fell back to DOM).
+  if (!slot.webglAddon) attachWebgl(slot);
   setupResizeObserver(slot, p);
-  slot.fitAddon.fit();
+  fitAndRepaint(slot);
   slot.lastW = p.container.clientWidth;
   slot.lastH = p.container.clientHeight;
   if (slot.term.cols !== p.cols || slot.term.rows !== p.rows) {
@@ -478,12 +501,62 @@ function rewireSlot(slot: Slot, p: AcquireParams): void {
   p.onSearchReady(slot.searchAddon);
 }
 
+// WebKitGTK clears a canvas's backing store whenever its size changes, and
+// the WebGL renderer's glyph atlas can go stale across that clear — glyph
+// draws after a fit() then produce an empty canvas until some later write
+// forces a repaint (text "disappears" while resizing). clearTextureAtlas()
+// rebuilds the atlas and routes through xterm's RenderService full-refresh,
+// the path a bare fitAddon.fit() never triggers.
+//
+// Chromium (Electron kabuğu) bu workaround'a muhtaç değil: backing store
+// resize'da temizlenmez ve yazım sürerken tekrarlanan atlas rebuild'leri
+// yanlış-glif artefaktları üretebiliyor. Orada düz full-refresh yeterli.
+function repaintWebgl(slot: Slot): void {
+  if (!slot.webglAddon) return;
+  slot.lastRepaintAt = performance.now();
+  if (IS_ELECTRON_SHELL) {
+    try {
+      slot.term.refresh(0, slot.term.rows - 1);
+    } catch {}
+    return;
+  }
+  try {
+    slot.term.clearTextureAtlas();
+  } catch {}
+}
+
+// For one-shot fits (bind, rewire, preference changes). The resize-drag path
+// must NOT use this: an atlas rebuild per 8ms fit tick re-rasterizes every
+// glyph ~100×/s and tanks the whole terminal — see scheduleRepaint instead.
+function fitAndRepaint(slot: Slot): void {
+  slot.fitAddon.fit();
+  repaintWebgl(slot);
+}
+
+// Continuous-resize repaint policy: at most one atlas rebuild per
+// REPAINT_THROTTLE_MS while the drag is live (keeps text visible), plus a
+// trailing rebuild once the resize settles (guarantees a clean final paint).
+const REPAINT_THROTTLE_MS = 100;
+const REPAINT_SETTLE_MS = 150;
+function scheduleRepaint(slot: Slot): void {
+  if (performance.now() - slot.lastRepaintAt > REPAINT_THROTTLE_MS) {
+    repaintWebgl(slot);
+  }
+  if (slot.repaintTimer) clearTimeout(slot.repaintTimer);
+  slot.repaintTimer = setTimeout(() => {
+    slot.repaintTimer = null;
+    repaintWebgl(slot);
+  }, REPAINT_SETTLE_MS);
+}
+
 function setupResizeObserver(slot: Slot, p: AcquireParams): void {
   slot.observer?.disconnect();
   if (slot.fitTimer) clearTimeout(slot.fitTimer);
   if (slot.ptyTimer) clearTimeout(slot.ptyTimer);
+  if (slot.repaintTimer) clearTimeout(slot.repaintTimer);
   slot.fitTimer = null;
   slot.ptyTimer = null;
+  slot.repaintTimer = null;
 
   const container = p.container;
   const flushPty = () => {
@@ -507,6 +580,7 @@ function setupResizeObserver(slot: Slot, p: AcquireParams): void {
       slot.lastW = w;
       slot.lastH = h;
       slot.fitAddon.fit();
+      scheduleRepaint(slot);
       if (slot.ptyTimer) clearTimeout(slot.ptyTimer);
       slot.ptyTimer = setTimeout(flushPty, PTY_RESIZE_DEBOUNCE_MS);
     }, FIT_DEBOUNCE_MS);
@@ -560,8 +634,10 @@ function detachSlotFromLeaf(slot: Slot): void {
   slot.observer = null;
   if (slot.fitTimer) clearTimeout(slot.fitTimer);
   if (slot.ptyTimer) clearTimeout(slot.ptyTimer);
+  if (slot.repaintTimer) clearTimeout(slot.repaintTimer);
   slot.fitTimer = null;
   slot.ptyTimer = null;
+  slot.repaintTimer = null;
 
   cancelPendingUnhide(slot);
   slot.host.style.visibility = "";
@@ -572,6 +648,12 @@ function detachSlotFromLeaf(slot: Slot): void {
 
   slot.currentLeafId = null;
   slot.lastUsedAt = performance.now();
+
+  // WebKit only frees a lost GL context at GC, so parked slots that keep a
+  // live context accumulate zombies → context-loss storms on NVIDIA. Drop the
+  // context now; the next bind re-attaches a fresh one (bindSlot reparent
+  // branch, or the rewireSlot / scheduleUnhide guards when webglAddon is null).
+  disposeSlotWebgl(slot);
 }
 
 const WEBGL_RECOVERY_DELAY_MS = 250;
@@ -588,6 +670,7 @@ const SLOT_STALE_MS = 10_000;
 // (styles/fonts.css) remains a DOM-renderer fallback when WebGL is unavailable.
 function attachWebgl(slot: Slot): void {
   if (slot.webglAddon || !slot.term.element) return;
+  if (slot.glDisabled) return;
   if (!usePreferencesStore.getState().terminalWebglEnabled) return;
   const elem = slot.term.element;
   const before = new Set<HTMLCanvasElement>(
@@ -604,6 +687,24 @@ function attachWebgl(slot: Slot): void {
       try {
         webgl.dispose();
       } catch {}
+      // Storm guard: count losses in a rolling 60s window. A slot that keeps
+      // losing its context (>=3 times) is on a GPU that can't sustain WebGL —
+      // stop re-attaching and let xterm fall back to the DOM renderer (the
+      // bundled ArtermBlocks font covers block glyphs). applyWebglPreference
+      // clears this so toggling the setting recovers without a restart.
+      const now = performance.now();
+      if (now - slot.glFirstLossAt > 60_000) {
+        slot.glFirstLossAt = now;
+        slot.glLossCount = 0;
+      }
+      slot.glLossCount += 1;
+      if (slot.glLossCount >= 3) {
+        slot.glDisabled = true;
+        console.warn(
+          "[arterm-webgl] context-loss storm — slot falling back to DOM renderer",
+        );
+        return;
+      }
       // Recovery: WebKit may transiently lose contexts on sleep/wake or GPU
       // reset; without re-attach the slot would silently fall back to DOM
       // forever. Defer past WebKit's reset window before retrying.
@@ -683,6 +784,12 @@ function releaseCanvasContext(canvas: HTMLCanvasElement): void {
 
 export function applyWebglPreference(enabled: boolean): void {
   for (const slot of slots) {
+    // Clear any storm fallback first so re-enabling (or toggling off/on)
+    // recovers a DOM-fallback slot without a restart; reset before attachWebgl,
+    // which bails out while glDisabled is set.
+    slot.glLossCount = 0;
+    slot.glFirstLossAt = 0;
+    slot.glDisabled = false;
     if (enabled && !slot.webglAddon) attachWebgl(slot);
     else if (!enabled && slot.webglAddon) disposeSlotWebgl(slot);
   }
@@ -692,7 +799,7 @@ export function applyFontSize(size: number): void {
   for (const slot of slots) {
     if (slot.term.options.fontSize === size) continue;
     slot.term.options.fontSize = size;
-    slot.fitAddon.fit();
+    fitAndRepaint(slot);
     if (slot.currentLeafId !== null) {
       slot.lastCols = slot.term.cols;
       slot.lastRows = slot.term.rows;
@@ -706,7 +813,7 @@ export function applyLetterSpacing(spacing: number): void {
   for (const slot of slots) {
     if (slot.term.options.letterSpacing === spacing) continue;
     slot.term.options.letterSpacing = spacing;
-    slot.fitAddon.fit();
+    fitAndRepaint(slot);
   }
 }
 
@@ -715,7 +822,7 @@ export function applyFontFamily(family: string): void {
   for (const slot of slots) {
     if (slot.term.options.fontFamily === resolved) continue;
     slot.term.options.fontFamily = resolved;
-    slot.fitAddon.fit();
+    fitAndRepaint(slot);
     if (slot.currentLeafId !== null) {
       slot.lastCols = slot.term.cols;
       slot.lastRows = slot.term.rows;

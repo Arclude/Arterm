@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/core";
 import { ensureMonoFontsLoaded } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -42,6 +42,17 @@ type Callbacks = {
  */
 const UNBIND_GRACE_MS = 45_000;
 
+/**
+ * Flow control. As xterm's async write queue backs up we track the not-yet-
+ * rendered byte count; crossing the high watermark pauses the backend pty (it
+ * then backpressures the child), and dropping back under the low watermark
+ * resumes it. The failsafe force-resumes if a write callback is ever lost (e.g.
+ * the renderer slot is rebound mid-stream) so a backend pty can't stay paused.
+ */
+const FLOW_HIGH_WATERMARK = 100_000;
+const FLOW_LOW_WATERMARK = 10_000;
+const FLOW_PAUSE_FAILSAFE_MS = 2000;
+
 /** Where a terminal's bytes come from: the local machine, or an already-
  *  authenticated remote SSH connection (identified by its connection id). */
 export type TerminalSource =
@@ -82,6 +93,12 @@ type Session = {
   // at the most recent release. Read once on the next bind to trigger a
   // SIGWINCH-driven repaint instead of replaying dormant bytes.
   altScreenAtRelease: boolean;
+  // Flow control. Bytes handed to xterm.write but not yet rendered (its write
+  // callback hasn't fired). Only tracked while a slot is bound — dormant output
+  // goes to the ring, which never applies backpressure.
+  pendingWriteBytes: number;
+  flowPaused: boolean;
+  flowFailsafeTimer: ReturnType<typeof setTimeout> | null;
 };
 
 const sessions = new Map<number, Session>();
@@ -224,6 +241,9 @@ function ensureSession(
     hasSlot: false,
     unbindTimer: null,
     altScreenAtRelease: false,
+    pendingWriteBytes: 0,
+    flowPaused: false,
+    flowFailsafeTimer: null,
   };
   sessions.set(leafId, session);
 
@@ -246,8 +266,69 @@ function deliverPtyBytes(leafId: number, bytes: Uint8Array): void {
   const s = sessions.get(leafId);
   if (!s) return;
   const slot = getSlotForLeaf(leafId);
-  if (slot) slot.term.write(bytes);
-  else s.dormantRing.push(bytes);
+  if (slot) {
+    const n = bytes.byteLength;
+    s.pendingWriteBytes += n;
+    slot.term.write(bytes, () => {
+      // Clamp: a callback can fire after the counter was zeroed on unbind.
+      s.pendingWriteBytes = Math.max(0, s.pendingWriteBytes - n);
+      maybeResumeFlow(s);
+    });
+    if (s.pendingWriteBytes > FLOW_HIGH_WATERMARK && !s.flowPaused) {
+      s.flowPaused = true;
+      void s.pty?.pause?.();
+      armFlowFailsafe(s);
+    }
+  } else {
+    // Hibernated: bytes go to the ring, which has no backpressure. Never pause.
+    s.dormantRing.push(bytes);
+  }
+}
+
+function maybeResumeFlow(s: Session): void {
+  if (!s.flowPaused) return;
+  if (s.pendingWriteBytes >= FLOW_LOW_WATERMARK) return;
+  s.flowPaused = false;
+  clearFlowFailsafe(s);
+  void s.pty?.resume?.();
+}
+
+function armFlowFailsafe(s: Session): void {
+  clearFlowFailsafe(s);
+  s.flowFailsafeTimer = setTimeout(() => {
+    s.flowFailsafeTimer = null;
+    if (!s.flowPaused) return;
+    // Paused > FLOW_PAUSE_FAILSAFE_MS without dropping below the low watermark:
+    // a write callback was lost (e.g. the slot was rebound mid-stream), so the
+    // counter will never drain. Force-resume so the backend pty can't stay
+    // paused forever.
+    console.warn("[arterm] flow-control failsafe fired: forcing pty resume");
+    s.pendingWriteBytes = 0;
+    s.flowPaused = false;
+    void s.pty?.resume?.();
+  }, FLOW_PAUSE_FAILSAFE_MS);
+}
+
+function clearFlowFailsafe(s: Session): void {
+  if (s.flowFailsafeTimer !== null) {
+    clearTimeout(s.flowFailsafeTimer);
+    s.flowFailsafeTimer = null;
+  }
+}
+
+/**
+ * Reset flow-control state at a lifecycle boundary (unbind, respawn, exit,
+ * dispose). Zeroes the counter, clears the failsafe timer, and if we were
+ * paused, resumes the backend — a pty must never stay paused once its bytes
+ * stop flowing through a bound slot.
+ */
+function resetFlowControl(s: Session): void {
+  clearFlowFailsafe(s);
+  s.pendingWriteBytes = 0;
+  if (s.flowPaused) {
+    s.flowPaused = false;
+    void s.pty?.resume?.();
+  }
 }
 
 async function openPtyForSession(
@@ -261,6 +342,7 @@ async function openPtyForSession(
     onData: (bytes: Uint8Array) => deliverPtyBytes(leafId, bytes),
     onExit: (code: number) => {
       s.shellExited = true;
+      resetFlowControl(s);
       s.pty = null;
       const slot = getSlotForLeaf(leafId);
       if (slot) slot.term.options.disableStdin = true;
@@ -348,12 +430,46 @@ function bindLeafToSlot(leafId: number, s: Session): void {
   }
 }
 
-function unbindLeafFromSlot(leafId: number, s: Session): void {
+const UNBIND_DRAIN_RETRY_MS = 50;
+const UNBIND_DRAIN_MAX_WAIT_MS = 2_000;
+
+function unbindLeafFromSlot(
+  leafId: number,
+  s: Session,
+  drainDeadline?: number,
+): void {
   if (s.unbindTimer !== null) {
     clearTimeout(s.unbindTimer);
     s.unbindTimer = null;
   }
-  if (!s.hasSlot) return;
+  if (!s.hasSlot) {
+    resetFlowControl(s);
+    return;
+  }
+  // xterm parses write() girdisini asenkron işler. Kuyrukta parse edilmemiş
+  // bayt varken serialize etmek snapshot'a kalıcı bir boşluk gömer: o baytlar
+  // ne serialize edilen buffer'da ne dormant ring'dedir (slot bağlıyken
+  // teslim edildiler). Kuyruk boşalana dek bekle; sürekli akan bir çıktı
+  // slot'u sonsuza dek rehin alamasın diye bekleme üst sınırlı.
+  if (!s.disposed && s.pendingWriteBytes > 0) {
+    const deadline =
+      drainDeadline ?? performance.now() + UNBIND_DRAIN_MAX_WAIT_MS;
+    if (performance.now() < deadline) {
+      s.unbindTimer = setTimeout(() => {
+        s.unbindTimer = null;
+        if (!s.visibleNow && s.hasSlot) {
+          unbindLeafFromSlot(leafId, s, deadline);
+        }
+      }, UNBIND_DRAIN_RETRY_MS);
+      return;
+    }
+    console.warn(
+      "[arterm] unbind drain timed out; serializing with bytes in flight",
+    );
+  }
+  // Output now flows to the dormant ring (no backpressure); drop any pause and
+  // reset accounting so the backend pty resumes and no stale counter lingers.
+  resetFlowControl(s);
   const out = releaseSlot(leafId);
   if (out) {
     s.snapshot = out.snapshot;
@@ -410,6 +526,7 @@ export async function respawnSession(
 ): Promise<void> {
   const s = sessions.get(leafId);
   if (!s || s.disposed) return;
+  resetFlowControl(s);
   s.pty?.close();
   s.pty = null;
   s.snapshot = null;
