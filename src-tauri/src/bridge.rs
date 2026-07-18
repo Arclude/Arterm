@@ -168,12 +168,17 @@ async fn handle_conn(
     token: String,
 ) -> Result<(), String> {
     let ws = tokio_tungstenite::accept_hdr_async(stream, |req: &Request, res: HsResponse| {
+        let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
         let expected = format!("token={token}");
-        let ok = req
-            .uri()
-            .query()
-            .map(|q| q.split('&').any(|kv| kv == expected))
-            .unwrap_or(false);
+        let ok = origin_allowed(origin)
+            && req
+                .uri()
+                .query()
+                .map(|q| {
+                    q.split('&')
+                        .any(|kv| ct_eq(kv.as_bytes(), expected.as_bytes()))
+                })
+                .unwrap_or(false);
         if ok {
             Ok(res)
         } else {
@@ -1250,16 +1255,36 @@ fn to_value<T: serde::Serialize>(value: T) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
-/// Localhost-only auth token. Not cryptographic-grade randomness, but each
-/// `RandomState` carries a fresh per-process random key, which is enough to
-/// keep other local users from guessing the URL of a loopback socket.
+/// Loopback auth token. This single value gates every bridge command —
+/// including PTY spawn — so it is drawn straight from the OS CSPRNG rather
+/// than derived from hasher state. 256 bits, hex-encoded.
 fn gen_token() -> String {
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
-    let mut h1 = RandomState::new().build_hasher();
-    h1.write_u64(std::process::id() as u64);
-    let a = h1.finish();
-    let mut h2 = RandomState::new().build_hasher();
-    h2.write_u64(a);
-    format!("{a:016x}{:016x}", h2.finish())
+    let mut buf = [0u8; 32];
+    getrandom::fill(&mut buf).expect("bridge: OS randomness unavailable");
+    buf.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Length-independent, non-short-circuiting comparison, so a network peer
+/// cannot recover the token one byte at a time from response timing.
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Origins the renderer can legitimately connect from: the packaged `app://`
+/// scheme and the Vite dev server. A browser cannot forge `Origin`, so this
+/// blocks a drive-by page that guessed the port from reaching the bridge.
+/// Native clients (smoke tests) send no `Origin` at all and are unaffected —
+/// they still have to present the token.
+fn origin_allowed(origin: Option<&str>) -> bool {
+    match origin {
+        None => true,
+        Some(o) => {
+            o == "app://local"
+                || o.starts_with("http://localhost:")
+                || o.starts_with("http://127.0.0.1:")
+        }
+    }
 }
