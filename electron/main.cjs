@@ -4,9 +4,86 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { spawn } = require("node:child_process");
 const readline = require("node:readline");
-const { app, BrowserWindow, protocol, net, ipcMain, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  protocol,
+  net,
+  ipcMain,
+  shell,
+} = require("electron");
+const updater = require("./updater.cjs");
 
 const DIST = path.join(__dirname, "..", "dist");
+
+// Tauri kabuğunun tauri.conf.json'daki CSP'siyle eşlenik. Electron'da webview'a
+// CSP enjekte eden bir katman yok, o yüzden app:// yanıtlarına biz koyuyoruz;
+// aksi halde renderer'daki bir XSS (AI çıktısı, markdown, terminal) doğrudan
+// preload yüzeyine ve oradan bridge token'ına ulaşır.
+// connect-src'de ws://127.0.0.1:* bridge bağlantısı içindir.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https: ws://127.0.0.1:* http://127.0.0.1:* http://localhost:*",
+  "frame-src 'self' http: https:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+// shell.openExternal Linux'ta xdg-open'a devreder; file:// verilirse .desktop
+// dosyası veya script çalıştırılabilir. Renderer'dan gelen her URL bu süzgeçten
+// geçer (terminal OSC 8 linkleri, git remote URL'leri kullanıcı içeriğidir).
+const EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
+
+function isSafeExternal(url) {
+  try {
+    return (
+      typeof url === "string" && EXTERNAL_SCHEMES.has(new URL(url).protocol)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Uygulamanın kendi içeriği mi: paketlide app://local, dev'de Vite sunucusu. */
+function isInternalUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol === "app:") return u.hostname === "local";
+    const dev = process.env.ELECTRON_START_URL;
+    return Boolean(dev) && u.origin === new URL(dev).origin;
+  } catch {
+    return false;
+  }
+}
+
+// Preload `artermBridge`'i yüklendiği HER origin'e verir ve bridgeInfo tam
+// komut yürütme yetkisi taşır; dolayısıyla uzak bir origin'in bu pencerelerde
+// yüklenmesi = uzaktan kod çalıştırma. İki kaçış yolunu da kapatıyoruz.
+function hardenWindow(win) {
+  const wc = win.webContents;
+  // window.open / target=_blank: Electron yeni pencereye parent'ın
+  // webPreferences'ını (preload dahil) miras ettirir. PreviewPane iframe'i
+  // `allow-popups-to-escape-sandbox` taşıdığı için önizlenen sayfa bu yolla
+  // sandbox'tan çıkıp preload'a ulaşabiliyordu.
+  wc.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternal(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  // Top-level navigasyon uygulama origin'i dışına çıkamaz.
+  wc.on("will-navigate", (e, url) => {
+    if (isInternalUrl(url)) return;
+    e.preventDefault();
+    if (isSafeExternal(url)) void shell.openExternal(url);
+  });
+  // <webview> hiç kullanılmıyor; kullanılsa preload'u miras alırdı.
+  wc.on("will-attach-webview", (e) => e.preventDefault());
+}
 // vite base "/" ile üretilen mutlak asset yolları için dist'i app:// altında servis et
 protocol.registerSchemesAsPrivileged([
   {
@@ -25,7 +102,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function serveDist() {
-  protocol.handle("app", (req) => {
+  protocol.handle("app", async (req) => {
     const { pathname } = new URL(req.url);
     let rel = decodeURIComponent(pathname);
     if (rel === "/" || rel === "") rel = "/index.html";
@@ -33,7 +110,16 @@ function serveDist() {
     if (!file.startsWith(DIST)) {
       return new Response("forbidden", { status: 403 });
     }
-    return net.fetch(pathToFileURL(file).toString());
+    const res = await net.fetch(pathToFileURL(file).toString());
+    // Gövde stream olarak geçirilir; codeCache ayrıcalığı app:// şemasına bağlı
+    // olduğu için sarmalama V8 önbelleğini etkilemez.
+    const headers = new Headers(res.headers);
+    headers.set("Content-Security-Policy", CSP);
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
   });
 }
 
@@ -49,7 +135,14 @@ function bridgeBinary() {
   const candidates = [path.join(process.resourcesPath ?? "", "arterm-bridge")];
   for (const profile of ["release", "debug"]) {
     candidates.push(
-      path.join(__dirname, "..", "src-tauri", "target", profile, "arterm-bridge"),
+      path.join(
+        __dirname,
+        "..",
+        "src-tauri",
+        "target",
+        profile,
+        "arterm-bridge",
+      ),
     );
   }
   for (const p of candidates) {
@@ -58,12 +151,16 @@ function bridgeBinary() {
       return p;
     } catch {}
   }
-  throw new Error("arterm-bridge binary not found; build it with cargo or set ARTERM_BRIDGE_BIN");
+  throw new Error(
+    "arterm-bridge binary not found; build it with cargo or set ARTERM_BRIDGE_BIN",
+  );
 }
 
 function startBridge() {
   return new Promise((resolve, reject) => {
-    bridgeChild = spawn(bridgeBinary(), [], { stdio: ["ignore", "pipe", "pipe"] });
+    bridgeChild = spawn(bridgeBinary(), [], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     bridgeChild.on("error", reject);
     bridgeChild.on("exit", (code) => {
       console.error(`arterm-bridge exited (code ${code})`);
@@ -109,6 +206,7 @@ function openSettingsWindow(tab) {
       spellcheck: false,
     },
   });
+  hardenWindow(settingsWin);
   settingsWin.once("ready-to-show", () => settingsWin.show());
   settingsWin.on("closed", () => {
     settingsWin = null;
@@ -143,15 +241,26 @@ function createWindow() {
     },
   });
 
+  hardenWindow(win);
+
   // Tauri akışında pencereyi ilk paint sonrası frontend show() eder;
   // Electron'da köprü hazır olana dek ready-to-show yeterli.
   win.once("ready-to-show", () => win.show());
 
-  win.webContents.on("console-message", ({ level, message, lineNumber, sourceId }) => {
-    if (level === "error" || level === "warning" || process.env.ARTERM_LOG_CONSOLE) {
-      console.error(`[renderer:${level}] ${message} (${sourceId}:${lineNumber})`);
-    }
-  });
+  win.webContents.on(
+    "console-message",
+    ({ level, message, lineNumber, sourceId }) => {
+      if (
+        level === "error" ||
+        level === "warning" ||
+        process.env.ARTERM_LOG_CONSOLE
+      ) {
+        console.error(
+          `[renderer:${level}] ${message} (${sourceId}:${lineNumber})`,
+        );
+      }
+    },
+  );
   win.webContents.on("render-process-gone", (_e, details) => {
     console.error(`renderer gone: ${details.reason}`);
   });
@@ -271,12 +380,14 @@ app.whenReady().then(async () => {
   // yazarız ki ayarlar iki kabuk arasında ortak kalsın.
   const fs = require("node:fs");
   const dataDir = path.join(
-    process.env.XDG_DATA_HOME || path.join(app.getPath("home"), ".local", "share"),
+    process.env.XDG_DATA_HOME ||
+      path.join(app.getPath("home"), ".local", "share"),
     "app.arclude.arterm",
   );
   const storeFile = (rel) => {
     const file = path.normalize(path.join(dataDir, rel));
-    if (!file.startsWith(dataDir)) throw new Error("store path escapes data dir");
+    if (!file.startsWith(dataDir))
+      throw new Error("store path escapes data dir");
     return file;
   };
   ipcMain.handle("arterm:store-read", (_e, rel) => {
@@ -294,9 +405,50 @@ app.whenReady().then(async () => {
     fs.renameSync(tmp, file);
     return null;
   });
+  // Güncelleme. Kurulacak asset'in URL'i renderer'dan ALINMAZ: son check'in
+  // sonucu burada tutulur, install yalnızca onu kurar. Aksi halde ele geçmiş
+  // bir renderer pkexec'e kendi seçtiği paketi kurdurabilirdi.
+  let pendingUpdate = null;
+  ipcMain.handle("arterm:update-check", async () => {
+    pendingUpdate = await updater.checkUpdate();
+    if (!pendingUpdate) return null;
+    const { version, currentVersion, body, kind } = pendingUpdate;
+    return { version, currentVersion, body, kind };
+  });
+  ipcMain.handle("arterm:update-install", async (event) => {
+    if (!pendingUpdate) throw new Error("no update pending");
+    await updater.downloadAndInstall(pendingUpdate, (p) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("arterm:update-progress", p);
+      }
+    });
+    pendingUpdate = null;
+    return null;
+  });
+  ipcMain.handle("arterm:relaunch", () => updater.relaunch());
+
   ipcMain.handle("arterm:open-settings", (_e, tab) => openSettingsWindow(tab));
-  ipcMain.handle("arterm:open-external", (_e, url) => shell.openExternal(url));
-  ipcMain.handle("arterm:open-path", (_e, p) => shell.openPath(p));
+  ipcMain.handle("arterm:open-external", (_e, url) => {
+    if (!isSafeExternal(url)) {
+      console.error(`refused openExternal for non-web URL: ${url}`);
+      return null;
+    }
+    return shell.openExternal(url);
+  });
+  // Tek çağıran eklenti dizinini açıyor (src/modules/extensions/loader.ts).
+  // Dizinle sınırlamak, xdg-open'ın bir .desktop dosyasını veya scripti
+  // yürütmesine yol açacak dosya yollarını kapatır.
+  ipcMain.handle("arterm:open-path", (_e, p) => {
+    try {
+      if (!fs.statSync(p).isDirectory()) {
+        console.error(`refused openPath for non-directory: ${p}`);
+        return null;
+      }
+    } catch {
+      return null;
+    }
+    return shell.openPath(p);
+  });
   ipcMain.handle("arterm:reveal", (_e, p) => shell.showItemInFolder(p));
   serveDist();
   createWindow();
