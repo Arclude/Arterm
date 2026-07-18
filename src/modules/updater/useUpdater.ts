@@ -91,23 +91,23 @@ export function useUpdater({ autoCheck = true }: HookOptions = {}) {
     }
     setStatus({ kind: "checking" });
     try {
+      const update = await check();
+      if (update) {
+        setStatus({ kind: "available", update });
+        return;
+      }
+      // Linux'ta `check()` yalnızca kurulum biçimi yerinde güncellenemiyorsa
+      // (dev checkout, salt-okunur AppImage) boş döner — o durumda kullanıcı
+      // hâlâ yeni sürümden haberdar olsun diye elle indirme akışına düşüyoruz.
       if (IS_LINUX) {
         const info = await checkLinuxRelease();
         if (info) {
           setStatus({ kind: "manual-available", info });
-        } else {
-          localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
-          setStatus({ kind: "uptodate" });
+          return;
         }
-        return;
       }
-      const update = await check();
-      if (update) {
-        setStatus({ kind: "available", update });
-      } else {
-        localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
-        setStatus({ kind: "uptodate" });
-      }
+      localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
+      setStatus({ kind: "uptodate" });
     } catch (err) {
       setStatus({ kind: "error", message: String(err) });
     }

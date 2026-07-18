@@ -24,6 +24,20 @@ declare global {
       openSettings: (tab: string | null) => Promise<{ created: boolean }>;
       storeRead: (rel: string) => Promise<string | null>;
       storeWrite: (rel: string, contents: string) => Promise<void>;
+      updateCheck?: () => Promise<{
+        version: string;
+        currentVersion: string;
+        body: string;
+        kind: "appimage" | "deb";
+      } | null>;
+      updateInstall?: () => Promise<void>;
+      onUpdateProgress?: (
+        cb: (e: {
+          event: "Started" | "Progress" | "Finished";
+          data?: { contentLength?: number | null; chunkLength?: number };
+        }) => void,
+      ) => () => void;
+      relaunch?: () => Promise<void>;
       openExternal: (url: string) => Promise<void>;
       openPath: (path: string) => Promise<void>;
       revealItemInDir: (path: string) => Promise<void>;

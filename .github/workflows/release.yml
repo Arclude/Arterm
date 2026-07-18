@@ -208,6 +208,9 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title "Arterm $TAG" --notes "$RELEASE_BODY"
           fi
+          # linux-checksums.json'u uygulama içi güncelleyici okur: asset
+          # adlarını ve sha256'larını oradan alır (bkz. electron/updater.cjs).
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             release-electron/*.AppImage \
-            release-electron/*.deb
+            release-electron/*.deb \
+            release-electron/linux-checksums.json
