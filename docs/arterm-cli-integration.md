@@ -12,16 +12,22 @@ and its mirror in the desktop repo (`docs/arterm-cli-integration.md`) in the sam
 
 ## 1. Discovery
 
-Every CLI process with the status server enabled writes a discovery file:
+Every CLI **session** with the status server enabled writes a discovery file:
 
 ```
-~/.arterm/status/<pid>.json
+~/.arterm/status/<pid>-<sessionId>.json
 ```
 
+- One interactive CLI process may host **several sessions**; each session runs its own
+  status server (own port + token) and writes its own discovery file, so multiple files
+  per `pid` are legal. Consumers treat each file as one independent session.
 - Written **atomically** (write to a temp file in the same directory, then rename).
 - Removed on clean exit (`close()` and a best-effort `process.on("exit")` unlink).
 - On every status-server start, the CLI **sweeps** the directory: any file whose `pid` is
-  not alive (`process.kill(pid, 0)` → `ESRCH`) is deleted.
+  not alive (`process.kill(pid, 0)` → `ESRCH`) is deleted. The pid parses from the leading
+  digits of the filename; consumers/sweepers MUST fall back to the `pid` field in the JSON
+  body for filenames that don't start with digits (e.g. legacy `<pid>.json` files parse
+  either way).
 - File mode `0o600` best-effort. On Windows `chmod` is a no-op; the real boundary is the
   home-directory ACL. Same-user processes can read the token — they are inside the trust
   boundary (see §4).
@@ -41,9 +47,11 @@ Every CLI process with the status server enabled writes a discovery file:
 }
 ```
 
-- `sessionId` — UUID v4, stable for the process lifetime. The desktop keys sessions by it.
+- `sessionId` — UUID v4, stable for the session lifetime (= the process lifetime for a
+  single-session process). The desktop keys sessions by it.
 - `port` — the real listening port (the server binds port `0` by default; the OS assigns).
-- `token` — 32 hex chars (128-bit), regenerated every process start.
+  Each session in a process has its own port.
+- `token` — 32 hex chars (128-bit), generated per session at session start.
 - `terminalId` — present **only** when the env var `ARTERM_TERMINAL_ID` is set (the desktop
   sets it to the PTY id for every terminal it spawns). Used for terminal-tab association.
 - `model` / `provider` — informational; may be stale after a mid-session `/model` switch
@@ -164,11 +172,11 @@ type StatusSnapshot = {
   fleet: { active: number; round: number };
   workers: { task: string; role?: string; state: "running" | "done"; output?: string }[];
   team: TeamMemberStatus[];        // accumulated live board (§6)
-  main: {                          // live telemetry for the primary (non-member) agent (§6)
-    toolUseCount: number;          // count of the main agent's tool_call events
-    recentActivities: string[];    // rolling window (max 5), newest last — same format as a member's
-  };
   activeAgents: number;            // server-computed (§7) — rail badge = sum over sessions
+  main: {                          // the primary agent as a first-class node (§6)
+    toolUseCount: number;          // main's own tool_call count this session
+    recentActivities: string[];    // rolling window (max 5), newest last — member format
+  };
   seq: number;                     // seq of the last stamped event folded into this snapshot
 };
 ```
@@ -220,13 +228,12 @@ Per-member telemetry (`toolUseCount`, `tokenCount`, `recentActivities`, `started
 consumer that renders from snapshots needs no client-side event accumulation. `startedAt` is
 stamped on the member's first `running` transition.
 
-The **main (coordinator) agent** gets the same treatment via the top-level `main` field:
-its `toolUseCount` and `recentActivities` are accumulated server-side from the primary
-(non-member) `tool_call` (`"⚙ <tool>"`) and `assistant_message` (`"✎ writing"`) bus events,
-using the identical 5-entry rolling-window format as a member's `recentActivities`. This lets
-the desktop render main as a first-class node (the parent in the 2-level topology) rather than
-a second-class card. Additive field — an older `v: 1` CLI omits it, so consumers default it to
-`{ toolUseCount: 0, recentActivities: [] }`.
+The **main agent** is exposed symmetrically as `main: { toolUseCount, recentActivities }`,
+accumulated from the top-level (non-member) `tool_call` (`"⚙ <tool>"`) and `assistant_message`
+(`"✎ writing"`) events, same 5-entry cap. This lets a consumer render main as a first-class
+node alongside `team[]`, which are its implicit children. **Agent topology is one level deep**
+— one main agent → a flat set of `team[]` members / `workers[]`; members do not nest, so the
+snapshot carries no `parentId` (a consumer synthesizes the single main parent).
 
 ## 7. `activeAgents`
 
