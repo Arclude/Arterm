@@ -5,8 +5,26 @@ description = "Arterm — an open-source AI-native terminal emulator"
 authors = ["Arclude"]
 license = "Apache-2.0"
 edition = "2021"
+# İki bin hedefi varken tauri-cli'ın get_binaries'i hiçbirini "main"
+# işaretlemiyor ve Windows installer'a ana uygulama hiç girmiyordu
+# (v0.11.0-0.11.2 exe'leri yalnızca arterm-bridge içeriyordu). default-run,
+# tauri bundle'ının ana binary'sini açıkça sabitler.
+default-run = "arterm"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+# arterm-bridge yalnızca Linux Electron kabuğunun sidecar'ı: tauri build bu
+# feature'ı açmadığı için köprü Windows/macOS bundle'larına hiç girmez.
+# Derlemek için: cargo build --release --features bridge-bin --bin arterm-bridge
+bridge-bin = []
+
+[[bin]]
+# src/bin/ altında durursa tauri-cli dizin taramasıyla bundle'a geri girer;
+# bu yüzden kaynak src/bridge_bin.rs'te ve hedef feature arkasında.
+name = "arterm-bridge"
+path = "src/bridge_bin.rs"
+required-features = ["bridge-bin"]
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary

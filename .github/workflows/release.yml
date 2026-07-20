@@ -190,7 +190,7 @@ jobs:
 
       - name: Build arterm-bridge
         working-directory: src-tauri
-        run: cargo build --release --bin arterm-bridge
+        run: cargo build --release --features bridge-bin --bin arterm-bridge
 
       - name: Package AppImage + deb
         run: bash scripts/package-linux.sh

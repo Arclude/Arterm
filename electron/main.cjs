@@ -123,7 +123,7 @@ function serveDist() {
   });
 }
 
-// Rust backend sidecar (src-tauri/src/bin/arterm-bridge.rs). Prints one
+// Rust backend sidecar (src-tauri/src/bridge_bin.rs). Prints one
 // "ARTERM_BRIDGE_READY <ws-url> <token>" line on stdout once listening.
 let bridgeChild = null;
 

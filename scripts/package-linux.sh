@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 
 [ -d dist ] || { echo "dist/ yok — önce 'vite build' çalıştır"; exit 1; }
 [ -f src-tauri/target/release/arterm-bridge ] || {
-  echo "release arterm-bridge yok — önce 'cargo build --release --bin arterm-bridge'"; exit 1; }
+  echo "release arterm-bridge yok — önce 'cargo build --release --features bridge-bin --bin arterm-bridge'"; exit 1; }
 
 rm -rf release-app
 mkdir -p release-app/build

@@ -27,7 +27,7 @@ function bridgeBinary() {
   }
   if (best) return best.p;
   throw new Error(
-    "arterm-bridge bulunamadı; `cargo build --bin arterm-bridge` ile derle veya ARTERM_BRIDGE_BIN ver",
+    "arterm-bridge bulunamadı; `cargo build --features bridge-bin --bin arterm-bridge` ile derle veya ARTERM_BRIDGE_BIN ver",
   );
 }
 
