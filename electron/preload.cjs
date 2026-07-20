@@ -1,6 +1,6 @@
 // Electron ucu: src/platform/electron/transport.ts bu yüzeyi okur ve Rust
 // backend'ine (arterm-bridge sidecar) WebSocket ile bağlanır.
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const bridgeInfo = ipcRenderer.sendSync("arterm:bridge-info");
 const appInfo = ipcRenderer.sendSync("arterm:app-info");
@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld("artermBridge", {
     return () => ipcRenderer.off("arterm:update-progress", listener);
   },
   relaunch: () => ipcRenderer.invoke("arterm:relaunch"),
+  /** Sürüklenip bırakılan File nesnesinin mutlak yolu (File.path Electron 32'de kalktı). */
+  pathForFile: (file) => webUtils.getPathForFile(file),
   openExternal: (url) => ipcRenderer.invoke("arterm:open-external", url),
   openPath: (p) => ipcRenderer.invoke("arterm:open-path", p),
   revealItemInDir: (p) => ipcRenderer.invoke("arterm:reveal", p),

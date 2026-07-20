@@ -38,6 +38,7 @@ declare global {
         }) => void,
       ) => () => void;
       relaunch?: () => Promise<void>;
+      pathForFile?: (file: File) => string;
       openExternal: (url: string) => Promise<void>;
       openPath: (path: string) => Promise<void>;
       revealItemInDir: (path: string) => Promise<void>;

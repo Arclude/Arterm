@@ -93,6 +93,30 @@ export function pasteIntoLeaf(leafId: number, text: string): boolean {
   return true;
 }
 
+// The webview clipboard API only exposes text; TUI agents (Claude Code) read
+// images from the OS clipboard themselves when they receive a literal Ctrl+V
+// (0x16). Paste text when the clipboard has any; for an image-only clipboard
+// forward the keystroke so the paste reaches the app instead of being dropped.
+function pasteClipboard(slot: Slot, bridge: LeafBridge): void {
+  void (async () => {
+    let hasImage = false;
+    try {
+      const items = await navigator.clipboard.read();
+      hasImage = items.some((item) =>
+        item.types.some((t) => t.startsWith("image/")),
+      );
+    } catch {
+      // read() can be unavailable or denied where readText() still works.
+    }
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {}
+    if (text) slot.term.paste(text);
+    else if (hasImage) bridge.writeToPty("\x16");
+  })();
+}
+
 function getRecycler(): HTMLDivElement {
   if (recyclerEl && recyclerEl.isConnected) return recyclerEl;
   const el = document.createElement("div");
@@ -234,14 +258,7 @@ function createSlot(): Slot {
       return false;
     }
     if (isTerminalPaste(event)) {
-      if (event.type === "keydown") {
-        void navigator.clipboard
-          .readText()
-          .then((text) => {
-            if (text) slot.term.paste(text);
-          })
-          .catch(() => {});
-      }
+      if (event.type === "keydown") pasteClipboard(slot, bridge);
       event.preventDefault();
       return false;
     }
@@ -262,14 +279,7 @@ function createSlot(): Slot {
     }
     // Plain Ctrl+V: paste from the clipboard.
     if (isPlainCtrlV(event)) {
-      if (event.type === "keydown") {
-        void navigator.clipboard
-          .readText()
-          .then((text) => {
-            if (text) slot.term.paste(text);
-          })
-          .catch(() => {});
-      }
+      if (event.type === "keydown") pasteClipboard(slot, bridge);
       event.preventDefault();
       return false;
     }
