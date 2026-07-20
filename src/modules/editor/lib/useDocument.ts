@@ -86,7 +86,10 @@ function parseRemotePath(path: string): { connId: number; remote: string } {
   const rest = path.slice("ssh://".length);
   const slash = rest.indexOf("/");
   if (slash < 0) return { connId: Number(rest), remote: "/" };
-  return { connId: Number(rest.slice(0, slash)), remote: rest.slice(slash + 1) };
+  return {
+    connId: Number(rest.slice(0, slash)),
+    remote: rest.slice(slash + 1),
+  };
 }
 
 /** Read a document as text — routes remote paths through SFTP. */

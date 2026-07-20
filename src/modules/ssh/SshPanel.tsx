@@ -116,7 +116,8 @@ export function SshPanel({ onOpenTerminal, onOpenFile }: Props) {
   }
 
   async function rejectHostKey() {
-    if (prompt?.kind === "unknown") await sshKnownHostDecision(prompt.connId, false);
+    if (prompt?.kind === "unknown")
+      await sshKnownHostDecision(prompt.connId, false);
     setPrompt(null);
   }
 
@@ -180,7 +181,9 @@ export function SshPanel({ onOpenTerminal, onOpenFile }: Props) {
                 onClick={() => openTerminal(p)}
                 disabled={connectingId === p.id}
               >
-                <span className="truncate text-sm text-foreground">{p.name}</span>
+                <span className="truncate text-sm text-foreground">
+                  {p.name}
+                </span>
                 <span className="truncate text-[11px] text-muted-foreground">
                   {p.username}@{p.host}
                   {p.port !== 22 ? `:${p.port}` : ""}
@@ -251,7 +254,9 @@ export function SshPanel({ onOpenTerminal, onOpenFile }: Props) {
               Cancel
             </Button>
             <Button onClick={acceptHostKey}>
-              {prompt?.kind === "mismatch" ? "Trust new key" : "Trust & connect"}
+              {prompt?.kind === "mismatch"
+                ? "Trust new key"
+                : "Trust & connect"}
             </Button>
           </DialogFooter>
         </DialogContent>

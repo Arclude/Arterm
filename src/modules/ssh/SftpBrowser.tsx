@@ -209,12 +209,18 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
         </div>
       </div>
 
-      <div className="truncate px-3 pb-1 text-[11px] text-muted-foreground" title={path}>
+      <div
+        className="truncate px-3 pb-1 text-[11px] text-muted-foreground"
+        title={path}
+      >
         {path === "." ? "~" : path}
       </div>
 
       {progress && (
-        <div className="truncate px-3 pb-1 text-[11px] text-primary" title={progress.current}>
+        <div
+          className="truncate px-3 pb-1 text-[11px] text-primary"
+          title={progress.current}
+        >
           Downloading… {progress.done} file{progress.done === 1 ? "" : "s"}
           {progress.failed > 0 ? `, ${progress.failed} skipped` : ""}
           {progress.current ? ` · ${progress.current}` : ""}
@@ -254,7 +260,9 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
         </button>
 
         {loading ? (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">Loading…</p>
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            Loading…
+          </p>
         ) : (
           entries.map((entry) => (
             <div
@@ -273,7 +281,9 @@ export function SftpBrowser({ connId, title, onClose, onOpenFile }: Props) {
                 }
               >
                 <span className="text-sm">{entry.isDir ? "📁" : "📄"}</span>
-                <span className="truncate text-sm text-foreground">{entry.name}</span>
+                <span className="truncate text-sm text-foreground">
+                  {entry.name}
+                </span>
                 {!entry.isDir && (
                   <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">
                     {formatSize(entry.size)}

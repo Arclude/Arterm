@@ -51,7 +51,9 @@ export function getCurrentWindow() {
       cb: (event: { payload: { width: number; height: number } }) => void,
     ): Promise<UnlistenFn> {
       const onResize = () =>
-        cb({ payload: { width: window.innerWidth, height: window.innerHeight } });
+        cb({
+          payload: { width: window.innerWidth, height: window.innerHeight },
+        });
       window.addEventListener("resize", onResize);
       return () => window.removeEventListener("resize", onResize);
     },

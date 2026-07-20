@@ -16,7 +16,10 @@ const edit = (
   ec: number,
   newText: string,
 ) => ({
-  range: { start: { line: sl, character: sc }, end: { line: el, character: ec } },
+  range: {
+    start: { line: sl, character: sc },
+    end: { line: el, character: ec },
+  },
   newText,
 });
 

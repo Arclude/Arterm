@@ -21,13 +21,10 @@ export async function formatDocument(
 
   let edits: TextEdit[] | null;
   try {
-    edits = await client.request<TextEdit[] | null>(
-      "textDocument/formatting",
-      {
-        textDocument: { uri },
-        options: { tabSize: 2, insertSpaces: true },
-      },
-    );
+    edits = await client.request<TextEdit[] | null>("textDocument/formatting", {
+      textDocument: { uri },
+      options: { tabSize: 2, insertSpaces: true },
+    });
   } catch (e) {
     console.warn("[lsp] formatting failed:", e);
     return false;

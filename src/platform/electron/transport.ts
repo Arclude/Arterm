@@ -144,7 +144,9 @@ class BridgeTransport {
     }
     const info = window.artermBridge?.bridgeInfo;
     if (!info) {
-      throw new Error("artermBridge is unavailable; not running under Electron");
+      throw new Error(
+        "artermBridge is unavailable; not running under Electron",
+      );
     }
     const ws = new WebSocket(`${info.url}/bridge?token=${info.token}`);
     ws.binaryType = "arraybuffer";

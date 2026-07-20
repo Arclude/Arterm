@@ -1,5 +1,8 @@
 import { invoke, Channel } from "@/platform/core";
-import type { PtyHandlers, PtySession } from "@/modules/terminal/lib/pty-bridge";
+import type {
+  PtyHandlers,
+  PtySession,
+} from "@/modules/terminal/lib/pty-bridge";
 
 /** Auth payload sent to the backend. Secrets are resolved from the keychain on
  *  the frontend before this is built (see {@link buildConnectConfig}). */

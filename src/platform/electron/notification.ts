@@ -1,5 +1,7 @@
 export async function isPermissionGranted(): Promise<boolean> {
-  return typeof Notification !== "undefined" && Notification.permission === "granted";
+  return (
+    typeof Notification !== "undefined" && Notification.permission === "granted"
+  );
 }
 
 export async function requestPermission(): Promise<NotificationPermission> {

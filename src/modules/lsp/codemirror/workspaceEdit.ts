@@ -47,7 +47,10 @@ function toChanges(doc: Text, edits: TextEdit[]) {
 }
 
 // Applies edits to a live editor (preserving undo history and dirty state).
-export function applyTextEditsToView(view: EditorView, edits: TextEdit[]): void {
+export function applyTextEditsToView(
+  view: EditorView,
+  edits: TextEdit[],
+): void {
   if (!edits.length) return;
   view.dispatch({
     changes: toChanges(view.state.doc, edits),

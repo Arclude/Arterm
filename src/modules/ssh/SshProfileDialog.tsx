@@ -34,7 +34,12 @@ type Props = {
   onSaved: () => void;
 };
 
-export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props) {
+export function SshProfileDialog({
+  open,
+  onOpenChange,
+  initial,
+  onSaved,
+}: Props) {
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("22");
@@ -69,8 +74,12 @@ export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props
         port: Number(port) || 22,
         username: username.trim(),
         auth,
-        ...(auth === "key" && keyPath.trim() ? { keyPath: keyPath.trim() } : {}),
-        ...(initial?.knownHostKey ? { knownHostKey: initial.knownHostKey } : {}),
+        ...(auth === "key" && keyPath.trim()
+          ? { keyPath: keyPath.trim() }
+          : {}),
+        ...(initial?.knownHostKey
+          ? { knownHostKey: initial.knownHostKey }
+          : {}),
       };
 
       const profiles = await loadProfiles();
@@ -80,7 +89,8 @@ export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props
       await saveProfiles(profiles);
 
       // Stash the secret in the platform keychain, never in the profile JSON.
-      if (auth === "password" && secret) await setSecret(id, "password", secret);
+      if (auth === "password" && secret)
+        await setSecret(id, "password", secret);
       if (auth === "key" && secret) await setSecret(id, "passphrase", secret);
 
       onSaved();
@@ -94,7 +104,9 @@ export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit connection" : "New SSH connection"}</DialogTitle>
+          <DialogTitle>
+            {initial ? "Edit connection" : "New SSH connection"}
+          </DialogTitle>
           <DialogDescription>
             Secrets are stored in your OS keychain, not in the profile file.
           </DialogDescription>
@@ -102,25 +114,44 @@ export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props
 
         <div className="flex flex-col gap-3 py-1">
           <Field label="Name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My server" />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="My server"
+            />
           </Field>
           <div className="flex gap-2">
             <div className="flex-1">
               <Field label="Host">
-                <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="example.com" />
+                <Input
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder="example.com"
+                />
               </Field>
             </div>
             <div className="w-20">
               <Field label="Port">
-                <Input value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" />
+                <Input
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  inputMode="numeric"
+                />
               </Field>
             </div>
           </div>
           <Field label="Username">
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="root" />
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="root"
+            />
           </Field>
           <Field label="Authentication">
-            <Select value={auth} onValueChange={(v) => setAuth(v as SshAuthMethod)}>
+            <Select
+              value={auth}
+              onValueChange={(v) => setAuth(v as SshAuthMethod)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -163,7 +194,8 @@ export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props
           )}
           {auth === "agent" && (
             <p className="text-xs text-muted-foreground">
-              Uses your running ssh-agent (or Pageant / OpenSSH agent on Windows).
+              Uses your running ssh-agent (or Pageant / OpenSSH agent on
+              Windows).
             </p>
           )}
         </div>
@@ -181,7 +213,13 @@ export function SshProfileDialog({ open, onOpenChange, initial, onSaved }: Props
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>

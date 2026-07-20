@@ -437,7 +437,11 @@ export function checkShellCommand(cmd: string): SafetyResult {
   }
   // Decode-then-execute: `… | base64 -d | sh`, `… | xxd -r | bash` — a common
   // obfuscation that hides the real payload from the approval card.
-  if (/\b(base64|xxd|openssl\s+(base64|enc))\b[^|]*\|\s*(ba|z|k|d|fi|c)?sh\b/.test(c)) {
+  if (
+    /\b(base64|xxd|openssl\s+(base64|enc))\b[^|]*\|\s*(ba|z|k|d|fi|c)?sh\b/.test(
+      c,
+    )
+  ) {
     return {
       ok: false,
       reason:

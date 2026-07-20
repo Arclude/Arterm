@@ -33,7 +33,9 @@ export async function installServer(
 ): Promise<string> {
   const asset = assetFor(entry);
   if (!asset) {
-    throw new Error(`No prebuilt ${entry.label} is available for this platform`);
+    throw new Error(
+      `No prebuilt ${entry.label} is available for this platform`,
+    );
   }
 
   const channel = new Channel<DownloadProgress>();

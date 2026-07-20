@@ -1,9 +1,6 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import type {
-  CodeAction,
-  Command,
-} from "vscode-languageserver-protocol";
+import type { CodeAction, Command } from "vscode-languageserver-protocol";
 import type { LspClient } from "../client";
 import { getLspDiagnostics } from "./diagnostics";
 import { offsetToPosition, positionToOffset } from "./position";
@@ -213,10 +210,13 @@ export function lspCodeAction(client: LspClient, uri: string): Extension {
           try {
             const items = await fetchActions(client, uri, view);
             if (items.length === 0) return;
-            showActionMenu(view, items, (item) =>
-              void runAction(client, item).catch((e) =>
-                console.warn("[lsp] code action failed:", e),
-              ),
+            showActionMenu(
+              view,
+              items,
+              (item) =>
+                void runAction(client, item).catch((e) =>
+                  console.warn("[lsp] code action failed:", e),
+                ),
             );
           } catch (e) {
             console.warn("[lsp] codeAction request failed:", e);

@@ -23,7 +23,9 @@ function applyResolution(
   kind: ResolutionKind,
 ): void {
   // Re-parse at click time so offsets are always fresh against the live doc.
-  const region = parseConflicts(view.state.doc).find((r) => r.from === headerFrom);
+  const region = parseConflicts(view.state.doc).find(
+    (r) => r.from === headerFrom,
+  );
   if (!region) return;
 
   const insert = resolutionText(view.state.doc, region, kind);
@@ -66,7 +68,12 @@ class ActionBarWidget extends WidgetType {
     const bar = document.createElement("div");
     bar.className = "cm-merge-actionbar";
 
-    const make = (label: string, title: string, kind: ResolutionKind, cls: string) => {
+    const make = (
+      label: string,
+      title: string,
+      kind: ResolutionKind,
+      cls: string,
+    ) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `cm-merge-btn ${cls}`;
@@ -92,17 +99,29 @@ class ActionBarWidget extends WidgetType {
     bar.appendChild(
       make(
         "Accept Incoming Change",
-        this.incomingLabel ? `Keep ${this.incomingLabel}` : "Keep incoming change",
+        this.incomingLabel
+          ? `Keep ${this.incomingLabel}`
+          : "Keep incoming change",
         "incoming",
         "cm-merge-btn-incoming",
       ),
     );
     bar.appendChild(
-      make("Accept Both Changes", "Keep both changes", "both", "cm-merge-btn-both"),
+      make(
+        "Accept Both Changes",
+        "Keep both changes",
+        "both",
+        "cm-merge-btn-both",
+      ),
     );
     if (this.hasBase) {
       bar.appendChild(
-        make("Accept Base", "Keep the common ancestor", "base", "cm-merge-btn-base"),
+        make(
+          "Accept Base",
+          "Keep the common ancestor",
+          "base",
+          "cm-merge-btn-base",
+        ),
       );
     }
     return bar;
@@ -110,15 +129,19 @@ class ActionBarWidget extends WidgetType {
 }
 
 function classifyLine(region: ConflictRegion, line: number): string | null {
-  if (line === region.headerLine) return "cm-merge-marker cm-merge-marker-current";
-  if (line === region.footerLine) return "cm-merge-marker cm-merge-marker-incoming";
+  if (line === region.headerLine)
+    return "cm-merge-marker cm-merge-marker-current";
+  if (line === region.footerLine)
+    return "cm-merge-marker cm-merge-marker-incoming";
   if (line === region.sepLine) return "cm-merge-marker cm-merge-marker-sep";
   if (region.baseMarkerLine !== -1 && line === region.baseMarkerLine) {
     return "cm-merge-marker cm-merge-marker-base";
   }
-  const currentEnd = region.baseMarkerLine !== -1 ? region.baseMarkerLine : region.sepLine;
+  const currentEnd =
+    region.baseMarkerLine !== -1 ? region.baseMarkerLine : region.sepLine;
   if (line < currentEnd) return "cm-merge-line-current";
-  if (region.baseMarkerLine !== -1 && line < region.sepLine) return "cm-merge-line-base";
+  if (region.baseMarkerLine !== -1 && line < region.sepLine)
+    return "cm-merge-line-base";
   return "cm-merge-line-incoming";
 }
 
@@ -142,7 +165,8 @@ function buildDecorations(doc: EditorView["state"]["doc"]): DecorationSet {
     );
     for (let line = region.headerLine; line <= region.footerLine; line++) {
       const cls = classifyLine(region, line);
-      if (cls) marks.push(Decoration.line({ class: cls }).range(doc.line(line).from));
+      if (cls)
+        marks.push(Decoration.line({ class: cls }).range(doc.line(line).from));
     }
   }
   return Decoration.set(marks, true);

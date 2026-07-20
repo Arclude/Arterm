@@ -8,7 +8,10 @@ import type { TerminalSource } from "./useTerminalSession";
  */
 const sources = new Map<number, TerminalSource>();
 
-export function setTerminalSource(leafId: number, source: TerminalSource): void {
+export function setTerminalSource(
+  leafId: number,
+  source: TerminalSource,
+): void {
   sources.set(leafId, source);
 }
 

@@ -108,7 +108,8 @@ export async function buildConnectConfig(
       return { ...base, auth: { kind: "password", password } };
     }
     case "key": {
-      const passphrase = (await getSecret(profile.id, "passphrase")) ?? undefined;
+      const passphrase =
+        (await getSecret(profile.id, "passphrase")) ?? undefined;
       return {
         ...base,
         auth: { kind: "key", path: profile.keyPath ?? "", passphrase },

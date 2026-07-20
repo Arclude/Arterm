@@ -19,9 +19,9 @@ describe("isExecutable", () => {
   });
 
   it("is true when inline mainSource is present", () => {
-    expect(isExecutable({ ...base, mainSource: "exports.activate=()=>{}" })).toBe(
-      true,
-    );
+    expect(
+      isExecutable({ ...base, mainSource: "exports.activate=()=>{}" }),
+    ).toBe(true);
   });
 });
 
