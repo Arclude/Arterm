@@ -1,8 +1,3 @@
-import { detectMonoFontFamily } from "@/lib/fonts";
-import { IS_ELECTRON_SHELL } from "@/lib/platform";
-import { usePreferencesStore } from "@/modules/settings/preferences";
-import { buildTerminalTheme } from "@/styles/terminalTheme";
-import { openUrl } from "@/platform/opener";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
@@ -10,6 +5,11 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
+import { detectMonoFontFamily } from "@/lib/fonts";
+import { IS_ELECTRON_SHELL } from "@/lib/platform";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { openUrl } from "@/platform/opener";
+import { buildTerminalTheme } from "@/styles/terminalTheme";
 import {
   terminalDeleteSequence,
   terminalLineNavigationSequence,
@@ -613,6 +613,32 @@ export function releaseSlot(leafId: number): SerializeOutput | null {
   return out;
 }
 
+// xterm's serialize addon restores the mouse TRACKING mode (?1000h family) but
+// never the ENCODING (?1006h / ?1016h): a replayed snapshot leaves a TUI that
+// asked for SGR wheel reports receiving legacy X10 bytes it can't parse — the
+// wheel goes dead after a pane rebind (bindSlot's term.reset() + replay). Read
+// the active encoding off the core service and append the missing DECSET.
+export function mouseEncodingSequence(term: Terminal): string {
+  try {
+    if (term.modes.mouseTrackingMode === "none") return "";
+    const core = (
+      term as unknown as {
+        _core?: { coreMouseService?: { activeEncoding?: string } };
+      }
+    )._core;
+    switch (core?.coreMouseService?.activeEncoding) {
+      case "SGR":
+        return "\x1b[?1006h";
+      case "SGR_PIXELS":
+        return "\x1b[?1016h";
+      default:
+        return "";
+    }
+  } catch {
+    return "";
+  }
+}
+
 function serializeSlot(slot: Slot): SerializeOutput {
   let snapshot: string | null = null;
   try {
@@ -620,7 +646,9 @@ function serializeSlot(slot: Slot): SerializeOutput {
       SNAPSHOT_SCROLLBACK_CAP,
       usePreferencesStore.getState().terminalScrollback,
     );
-    snapshot = slot.serializeAddon.serialize({ scrollback: cap });
+    snapshot =
+      slot.serializeAddon.serialize({ scrollback: cap }) +
+      mouseEncodingSequence(slot.term);
   } catch (e) {
     console.warn("[arterm] serialize failed:", e);
   }
