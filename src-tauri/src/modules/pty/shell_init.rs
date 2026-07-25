@@ -89,11 +89,45 @@ fn ensure_utf8_locale(cmd: &mut CommandBuilder) {
     cmd.env("LANG", fallback);
 }
 
+/// Per-session markers Claude Code injects into every process it spawns, which a
+/// terminal tab must NOT inherit.
+///
+/// A tab is a fresh interactive session, never a child of whatever happened to
+/// launch the app — but the PTY inherits our environment, so launching Arterm
+/// from inside an agent session (a dev build started from a Claude Code shell,
+/// say) leaked these all the way down. The visible damage: a `claude` started in
+/// such a tab sees `CLAUDE_CODE_CHILD_SESSION`, concludes it is a nested run and
+/// turns transcript saving off — no `/resume`, no history, and hooks that read the
+/// transcript get nothing. `CLAUDECODE` likewise flips other tools into their
+/// "running inside an agent" behaviour.
+///
+/// Deliberately NOT scrubbed: user-exported *configuration* (`CLAUDE_CONFIG_DIR`,
+/// `ANTHROPIC_*`, `CLAUDE_CODE_EXPERIMENTAL_*`). Those are preferences that belong
+/// to the user's shell, not the identity of the launching session.
+const INHERITED_SESSION_MARKERS: [&str; 6] = [
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_PID",
+];
+
+/// Drops {@link INHERITED_SESSION_MARKERS} from the child environment. The
+/// builder starts from a copy of our own environment, so `env_remove` genuinely
+/// unsets an inherited variable rather than just dropping an override.
+fn scrub_session_markers(cmd: &mut CommandBuilder) {
+    for key in INHERITED_SESSION_MARKERS {
+        cmd.env_remove(key);
+    }
+}
+
 fn apply_common(cmd: &mut CommandBuilder, id: u32, cwd: Option<String>) {
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("ARTERM_TERMINAL", "1");
     cmd.env("ARTERM_TERMINAL_ID", id.to_string());
+    scrub_session_markers(cmd);
     ensure_utf8_locale(cmd);
 
     let resolved_cwd = cwd
@@ -447,6 +481,9 @@ mod windows {
         cmd.env("COLORTERM", "truecolor");
         cmd.env("ARTERM_TERMINAL", "1");
         cmd.env("ARTERM_TERMINAL_ID", id.to_string());
+        // This path builds its own command instead of going through apply_common,
+        // so the scrub has to be repeated here.
+        super::scrub_session_markers(&mut cmd);
         super::ensure_utf8_locale(&mut cmd);
         log::info!("spawning WSL shell: {distro} ({shell_path})");
         Ok((cmd, shell_kind.label()))
@@ -801,4 +838,54 @@ fn which_in_path(name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod session_marker_tests {
+    use super::*;
+
+    fn env_of(cmd: &CommandBuilder, key: &str) -> Option<String> {
+        cmd.get_env(key).map(|v| v.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn scrubs_every_inherited_claude_session_marker() {
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        for key in INHERITED_SESSION_MARKERS {
+            cmd.env(key, "inherited");
+        }
+        scrub_session_markers(&mut cmd);
+        for key in INHERITED_SESSION_MARKERS {
+            assert_eq!(env_of(&cmd, key), None, "{key} survived the scrub");
+        }
+    }
+
+    #[test]
+    fn keeps_user_configuration_and_our_own_markers() {
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        cmd.env("CLAUDE_CODE_CHILD_SESSION", "1");
+        // Preferences the user exports themselves must survive — only session
+        // identity is dropped.
+        cmd.env("CLAUDE_CONFIG_DIR", "/home/u/.claude");
+        cmd.env("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1");
+        cmd.env("ANTHROPIC_API_KEY", "sk-test");
+        apply_common(&mut cmd, 7, None);
+
+        assert_eq!(env_of(&cmd, "CLAUDE_CODE_CHILD_SESSION"), None);
+        assert_eq!(
+            env_of(&cmd, "CLAUDE_CONFIG_DIR"),
+            Some("/home/u/.claude".to_string())
+        );
+        assert_eq!(
+            env_of(&cmd, "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"),
+            Some("1".to_string())
+        );
+        assert_eq!(
+            env_of(&cmd, "ANTHROPIC_API_KEY"),
+            Some("sk-test".to_string())
+        );
+        // The tab still identifies itself as an Arterm terminal.
+        assert_eq!(env_of(&cmd, "ARTERM_TERMINAL"), Some("1".to_string()));
+        assert_eq!(env_of(&cmd, "ARTERM_TERMINAL_ID"), Some("7".to_string()));
+    }
 }
