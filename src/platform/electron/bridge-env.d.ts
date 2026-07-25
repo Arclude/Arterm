@@ -39,6 +39,8 @@ declare global {
       ) => () => void;
       relaunch?: () => Promise<void>;
       pathForFile?: (file: File) => string;
+      /** Main-process clipboard probe — see preload.cjs. Absent on older shells. */
+      clipboardHasImage?: () => Promise<boolean>;
       openExternal: (url: string) => Promise<void>;
       openPath: (path: string) => Promise<void>;
       revealItemInDir: (path: string) => Promise<void>;

@@ -35,6 +35,11 @@ contextBridge.exposeInMainWorld("artermBridge", {
   relaunch: () => ipcRenderer.invoke("arterm:relaunch"),
   /** Sürüklenip bırakılan File nesnesinin mutlak yolu (File.path Electron 32'de kalktı). */
   pathForFile: (file) => webUtils.getPathForFile(file),
+  /**
+   * Panoda görsel var mı? navigator.clipboard.read() renderer'da izne/gesture'a
+   * takılıp sessizce reddedilebiliyor; bu ana süreçten okur ve hep cevap verir.
+   */
+  clipboardHasImage: () => ipcRenderer.invoke("arterm:clipboard-has-image"),
   openExternal: (url) => ipcRenderer.invoke("arterm:open-external", url),
   openPath: (p) => ipcRenderer.invoke("arterm:open-path", p),
   revealItemInDir: (p) => ipcRenderer.invoke("arterm:reveal", p),

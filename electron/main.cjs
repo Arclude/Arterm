@@ -11,6 +11,7 @@ const {
   net,
   ipcMain,
   shell,
+  clipboard,
 } = require("electron");
 const updater = require("./updater.cjs");
 
@@ -450,6 +451,16 @@ app.whenReady().then(async () => {
     return shell.openPath(p);
   });
   ipcMain.handle("arterm:reveal", (_e, p) => shell.showItemInFolder(p));
+  // Panoda görsel var mı? Renderer'ın navigator.clipboard.read()'i izin/gesture
+  // gerektirdiği ve sessizce reddedilebildiği için tespiti ana sürece aldık:
+  // Electron'un clipboard modülü izinsiz ve senkron okur.
+  ipcMain.handle("arterm:clipboard-has-image", () => {
+    try {
+      return !clipboard.readImage().isEmpty();
+    } catch {
+      return false;
+    }
+  });
   serveDist();
   createWindow();
 });

@@ -93,27 +93,58 @@ export function pasteIntoLeaf(leafId: number, text: string): boolean {
   return true;
 }
 
-// The webview clipboard API only exposes text; TUI agents (Claude Code) read
-// images from the OS clipboard themselves when they receive a literal Ctrl+V
-// (0x16). Paste text when the clipboard has any; for an image-only clipboard
-// forward the keystroke so the paste reaches the app instead of being dropped.
+/**
+ * Is there an image on the OS clipboard? Asks the Electron main process first:
+ * `navigator.clipboard.read()` needs the clipboard-read permission and a user
+ * gesture, and when it is denied it throws — indistinguishable from "no image",
+ * which silently swallowed every image paste. The main-process probe has no
+ * such gate. The webview path keeps the old best-effort read.
+ */
+export async function clipboardHasImage(): Promise<boolean> {
+  const probe = window.artermBridge?.clipboardHasImage;
+  if (probe) {
+    try {
+      return await probe();
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const items = await navigator.clipboard.read();
+    return items.some((item) => item.types.some((t) => t.startsWith("image/")));
+  } catch {
+    // read() can be unavailable or denied where readText() still works.
+    return false;
+  }
+}
+
+/**
+ * What a Ctrl+V should do, given what the clipboard holds.
+ *
+ * The webview clipboard API only exposes text; TUI agents (Claude Code) read
+ * images from the OS clipboard themselves when they receive a literal Ctrl+V
+ * (0x16), so an image is forwarded as the keystroke rather than pasted here.
+ * An image wins over text: a clipboard carrying a screenshot AND incidental
+ * text (a filename, a URL) is a paste-the-image intent, and pasting the text
+ * would drop the image with no way to ask for it back.
+ */
+export function pasteAction(hasImage: boolean, text: string): "image" | "text" | "none" {
+  if (hasImage) return "image";
+  return text ? "text" : "none";
+}
+
 function pasteClipboard(slot: Slot, bridge: LeafBridge): void {
   void (async () => {
-    let hasImage = false;
-    try {
-      const items = await navigator.clipboard.read();
-      hasImage = items.some((item) =>
-        item.types.some((t) => t.startsWith("image/")),
-      );
-    } catch {
-      // read() can be unavailable or denied where readText() still works.
-    }
+    const hasImage = await clipboardHasImage();
     let text = "";
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {}
-    if (text) slot.term.paste(text);
-    else if (hasImage) bridge.writeToPty("\x16");
+    if (!hasImage) {
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {}
+    }
+    const action = pasteAction(hasImage, text);
+    if (action === "image") bridge.writeToPty("\x16");
+    else if (action === "text") slot.term.paste(text);
   })();
 }
 
