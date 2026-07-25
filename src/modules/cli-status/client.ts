@@ -3,6 +3,7 @@ import type {
   CliSessionInfo,
   ControlAction,
   ControlResult,
+  PermissionAnswer,
   StampedEvent,
   StatusSnapshot,
 } from "./types";
@@ -26,11 +27,22 @@ export type CliSessionHandlers = {
   onConnection: (state: ConnectionState) => void;
 };
 
+/** Optional fields of the control body (contract §2); omitted keys are not sent. */
+export type ControlParams = {
+  /** Steer text / new goal. */
+  note?: string;
+  /** Target autonomy mode for `action: "mode"`. */
+  mode?: string;
+  /** `pendingPermission.id` for `action: "permission"`. */
+  id?: string;
+  /** The answer for `action: "permission"`. */
+  answer?: PermissionAnswer;
+};
+
 export type CliSessionClient = {
   control: (
     action: ControlAction,
-    note?: string,
-    mode?: string,
+    params?: ControlParams,
   ) => Promise<ControlResult>;
   close: () => void;
 };
@@ -174,12 +186,12 @@ export function createCliSessionClient(
 
   const control = async (
     action: ControlAction,
-    note?: string,
-    mode?: string,
+    params: ControlParams = {},
   ): Promise<ControlResult> => {
     const body: Record<string, unknown> = { action };
-    if (note !== undefined) body.note = note;
-    if (mode !== undefined) body.mode = mode;
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined) body[key] = value;
+    }
     try {
       const res = await proxyFetch(`${base}/api/control`, {
         method: "POST",

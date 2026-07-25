@@ -83,13 +83,16 @@ controls are safe no-ops when no run is active.
 
 ```ts
 {
-  action: "pause" | "resume" | "stop" | "steer" | "goal" | "mode";
+  action: "pause" | "resume" | "stop" | "steer" | "goal" | "mode" | "permission";
   note?: string;   // REQUIRED for "steer" (steer text) and "goal" (the new goal)
   mode?: string;   // REQUIRED for "mode": an AutonomyMode ("once"|"eternal"|"parallel"|"phased"|"team")
+  id?: string;     // REQUIRED for "permission": the pendingPermission.id being answered
+  answer?: "allow" | "allow_always" | "deny";  // REQUIRED for "permission"
 }
 ```
 
 `mode` returns `ok:false` when a run is in progress (mode cannot change mid-run).
+`permission` answers the prompt currently blocking the agent — see §8.
 
 ## 3. SSE frames (`content-type: text/event-stream`)
 
@@ -177,7 +180,21 @@ type StatusSnapshot = {
     toolUseCount: number;          // main's own tool_call count this session
     recentActivities: string[];    // rolling window (max 5), newest last — member format
   };
+  pendingPermission: PendingPermission | null;  // the prompt blocking the agent (§8)
+  pendingPermissionQueue: number;               // further requests waiting behind it
   seq: number;                     // seq of the last stamped event folded into this snapshot
+};
+
+/** A permission prompt awaiting an answer (§8). */
+type PendingPermission = {
+  id: string;              // quote this in the control call; a fresh id per request
+  tool: string;            // tool name, e.g. "write_file"
+  preview: string;         // the tool's own prompt preview — line 1 is the summary, the
+                           // rest (if any) a diff body; capped at ~4000 chars
+  args: Record<string, unknown>;  // tool args; string values over 500 chars are clipped
+  category: string;        // "read" | "edit" | "execute"
+  riskTier?: string;       // e.g. "destructive" — worth a stronger confirmation in the UI
+  requestedAt: number;     // epoch ms
 };
 ```
 
@@ -249,7 +266,36 @@ activeAgents =
 
 The desktop's rail badge is `sum(activeAgents)` over all live (health-checked) sessions.
 
-## 8. CLI server lifecycle
+## 8. Remote permission answering
+
+A permission prompt normally blocks the agent until someone answers it **in the terminal**.
+That is useless when the CLI is running in a background tab, so the prompt has two possible
+answerers and the first one wins:
+
+- The CLI publishes the waiting request as `pendingPermission` in every snapshot, and emits
+  `permission_request { id, tool, preview, category, riskTier? }` on the stream when it goes
+  up. A consumer can render from either (the snapshot covers a late subscriber).
+- The desktop answers with `POST /api/control {action:"permission", id, answer}`. `answer` is
+  `"allow"` (once), `"allow_always"` (also persists a per-tool override, same as the TUI's
+  `[a]`), or `"deny"`.
+- Whoever answers first wins. A remote answer tears the TUI prompt down; a local answer makes
+  the next remote call fail with `ok:false`.
+- `id` MUST match the current `pendingPermission.id`. A stale id is rejected
+  (`ok:false, error:"stale permission id …"`) so a click on a prompt that just resolved in the
+  terminal can never approve the *next* tool call. `ok:false, error:"no permission request is
+  pending"` means nothing is waiting.
+- When the answer lands, `permission_resolved { id, tool, answer, via }` is emitted;
+  `via` is `"local"` (the terminal) or `"remote"` (this endpoint).
+- Sub-agents share one prompt queue: only the head is published as `pendingPermission`, and
+  `pendingPermissionQueue` counts the rest. Answering the head promotes the next one.
+- Modes that never prompt (`yolo`, `plan`) simply never produce a `pendingPermission`.
+
+**Security**: this lets a token holder approve a tool call — including a destructive one. That
+is the same trust boundary as §4: a same-user process holding the token could already steer the
+run (`goal`/`steer`) or edit the repo directly. It does NOT widen the boundary to other users,
+web pages, or the network.
+
+## 9. CLI server lifecycle
 
 - Config block (`~/.arterm/config.json`): `statusServer: { enabled: boolean | "auto", port: number }`,
   default `{ enabled: "auto", port: 0 }`.

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import type { ControlParams } from "../client";
 import { getCliClient } from "../clientRegistry";
 import type { AutonomyMode, AutonomyState, ControlAction } from "../types";
 
@@ -48,7 +49,7 @@ export function SessionControls({
   const canSteer = autonomyState === "running";
 
   const run = useCallback(
-    async (action: ControlAction, note?: string, modeArg?: string) => {
+    async (action: ControlAction, params?: ControlParams) => {
       const client = getCliClient(sessionId);
       if (!client) {
         toast.error("Session is not connected");
@@ -56,7 +57,7 @@ export function SessionControls({
       }
       setPending(action);
       try {
-        const res = await client.control(action, note, modeArg);
+        const res = await client.control(action, params);
         if (!res.ok) {
           toast.error(
             res.error ? `${action}: ${res.error}` : `${action} failed`,
@@ -73,16 +74,16 @@ export function SessionControls({
   const submitSteer = async () => {
     const text = steer.trim();
     if (!text) return;
-    if (await run("steer", text)) setSteer("");
+    if (await run("steer", { note: text })) setSteer("");
   };
   const submitGoal = async () => {
     const text = goal.trim();
     if (!text) return;
-    if (await run("goal", text)) setGoal("");
+    if (await run("goal", { note: text })) setGoal("");
   };
   const changeMode = (next: string) => {
     if (next === mode) return;
-    void run("mode", undefined, next);
+    void run("mode", { mode: next });
   };
 
   return (

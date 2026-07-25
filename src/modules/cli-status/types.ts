@@ -148,8 +148,39 @@ export type StatusSnapshot = {
    */
   main?: { toolUseCount: number; recentActivities: string[] };
   activeAgents: number;
+  /**
+   * The permission prompt currently blocking the agent, answerable from here via
+   * the `permission` control action (contract §8). Additive field: an older v1
+   * CLI omits it entirely, so readers must treat `undefined` like `null`.
+   */
+  pendingPermission?: PendingPermission | null;
+  /** Requests queued behind {@link pendingPermission} (sub-agents share one prompt). */
+  pendingPermissionQueue?: number;
   seq: number;
 };
+
+/**
+ * A permission prompt the CLI is blocked on (contract §8). Normally it can only
+ * be answered by typing in the terminal; the `permission` control action lets
+ * the desktop answer it instead — which is the point, since a prompt raised in a
+ * background tab otherwise stalls the agent unseen.
+ */
+export type PendingPermission = {
+  /** Must be quoted back when answering; a stale id is rejected by the CLI. */
+  id: string;
+  tool: string;
+  /** First line is the summary; the rest (if any) is a diff body. */
+  preview: string;
+  args: Record<string, unknown>;
+  /** "read" | "edit" | "execute". */
+  category: string;
+  /** e.g. "destructive" — warrants a heavier confirmation. */
+  riskTier?: string;
+  requestedAt: number;
+};
+
+/** The three answers a permission prompt accepts (mirrors the TUI's y/a/n). */
+export type PermissionAnswer = "allow" | "allow_always" | "deny";
 
 export type ControlAction =
   | "pause"
@@ -157,7 +188,8 @@ export type ControlAction =
   | "stop"
   | "steer"
   | "goal"
-  | "mode";
+  | "mode"
+  | "permission";
 
 /** Autonomy modes accepted by the `mode` control action. */
 export type AutonomyMode = "once" | "eternal" | "parallel" | "phased" | "team";

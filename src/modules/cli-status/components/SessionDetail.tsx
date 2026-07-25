@@ -11,6 +11,7 @@ import {
 import type { CliSessionEntry } from "../store/cliStatusStore";
 import { AgentTimeline } from "./AgentTimeline";
 import { AgentStatePill } from "./CliAtoms";
+import { PermissionRequest } from "./PermissionRequest";
 import { SessionControls } from "./SessionControls";
 import { TopologyGraph, type TopologyMode } from "./TopologyGraph";
 
@@ -159,6 +160,19 @@ export function SessionDetail({
           </span>
         </div>
       </div>
+
+      {/* a blocked prompt outranks everything below it — the agent is stopped
+          until it is answered here or in the terminal. It is a fixed-height bar
+          (its preview opens as an overlay), so a prompt arriving mid-run costs
+          the rows below a constant 44px instead of reflowing the pane under the
+          pointer — see the LAYOUT note in PermissionRequest. */}
+      {snap.pendingPermission ? (
+        <PermissionRequest
+          sessionId={entry.info.sessionId}
+          pending={snap.pendingPermission}
+          queued={snap.pendingPermissionQueue ?? 0}
+        />
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
         {/* topology: the coordinator + members/workers as a graph, focused session

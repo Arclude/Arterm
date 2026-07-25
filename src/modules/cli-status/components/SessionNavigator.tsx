@@ -66,6 +66,12 @@ export function SessionNavigator({
                   <span className="text-[color:var(--cli-lost)]">
                     connection lost
                   </span>
+                ) : snapshot?.pendingPermission ? (
+                  // A blocked prompt outranks the agent counts: the session is
+                  // waiting on a human, and that has to be visible from the list.
+                  <span style={{ color: "var(--cli-await)" }}>
+                    ⚠ awaiting permission
+                  </span>
                 ) : counts ? (
                   <span>
                     {counts.running} running · {counts.total} agent

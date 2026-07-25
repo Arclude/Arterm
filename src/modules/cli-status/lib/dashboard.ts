@@ -301,11 +301,16 @@ export function sortSessionEntries(
 }
 
 /** One-line activity summary for a session row — connection- and snapshot-aware.
- *  Prefers the concrete tool, then a running autonomy goal, then the raw status. */
+ *  Prefers a blocked permission prompt, then the concrete tool, then a running
+ *  autonomy goal, then the raw status. */
 export function sessionActivity(entry: CliSessionEntry): string {
   if (entry.connection === "lost") return "connection lost";
   const s = entry.snapshot;
   if (!s) return "connecting…";
+  // Blocked on a human outranks any other activity: the run is stopped until the
+  // prompt is answered (in the terminal, or from the dashboard card).
+  if (s.pendingPermission)
+    return `⚠ awaiting permission · ${s.pendingPermission.tool}`;
   if (s.activeTool) return `⚙ ${s.activeTool}`;
   if (s.autonomy.state === "running" && s.autonomy.goal) return s.autonomy.goal;
   if (s.status === "thinking") return "thinking…";

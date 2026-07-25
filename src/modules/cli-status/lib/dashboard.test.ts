@@ -223,6 +223,26 @@ describe("sessionActivity", () => {
     );
   });
 
+  it("puts a blocked permission prompt above the running tool", () => {
+    expect(
+      sessionActivity(
+        liveEntry(
+          snapshot({
+            activeTool: "write_file",
+            pendingPermission: {
+              id: "perm-1",
+              tool: "write_file",
+              preview: "write a.ts",
+              args: { path: "a.ts" },
+              category: "edit",
+              requestedAt: 5,
+            },
+          }),
+        ),
+      ),
+    ).toBe("⚠ awaiting permission · write_file");
+  });
+
   it("falls back to a running autonomy goal, then status, then idle", () => {
     expect(
       sessionActivity(
