@@ -195,8 +195,67 @@ type PendingPermission = {
   category: string;        // "read" | "edit" | "execute"
   riskTier?: string;       // e.g. "destructive" — worth a stronger confirmation in the UI
   requestedAt: number;     // epoch ms
+  origin?: {               // the sub-agent that raised it; ABSENT for the main agent
+    id?: string;           // its board-row id (same id as team_member_state / _event)
+    name: string;          // its role/member name, e.g. "explorer"
+  };
+};
+
+/** Provider failure taxonomy — lets a UI tell "out of quota" from "wrong API key". */
+type ProviderErrorKind =
+  | "network" | "timeout" | "auth" | "quota"
+  | "overloaded" | "server" | "bad_request" | "unknown";
+
+/** Snapshot field: the failure that ended the LAST turn, else null. */
+type StatusError = {
+  message: string;
+  kind?: ProviderErrorKind;
+  provider?: string;
+  status?: number;
+  retryable?: boolean;   // the same request could plausibly succeed on a retry
+  at: number;            // epoch ms
+};
+
+/** Snapshot field: the last model switch the fallback chain made, else null. */
+type StatusFallback = {
+  from: { provider: string; model: string };
+  to: { provider: string; model: string };
+  reason: ProviderErrorKind;
+  detail: string;
+  at: number;
 };
 ```
+
+**`lastError` / `lastFallback`** are session *health*, not history — the event ring keeps the
+history. The CLI clears `lastError` when a new turn starts; `lastFallback` deliberately
+survives across turns, because landing on a backup model is a standing condition worth
+showing after the turn it rescued has ended.
+
+`snapshot.model` always names the model you **configured**, even while a backup is answering.
+A UI that prints it alone will go on naming a model that is not producing the replies — render
+`model↪backup` (both ends: "backup" on its own reads as if the model was changed, when the
+configured one is the one that failed).
+
+**`autonomy_verify`** — a result-verification verdict, streamed as an `agent` frame:
+
+```ts
+{ type: "autonomy_verify";
+  pass: boolean;
+  note?: string;
+  by?: "command" | "judge";   // the deterministic gate, or the LLM judge behind it
+  mustFix?: string[];         // concrete repair items (present on a rejection)
+  skipped?: boolean;          // NO verdict could be obtained; the claim passed BY DEFAULT
+  attempt?: number;           // 1-based repair attempt
+  scope?: "goal" | "phase" | "round" | "task";
+  id?: string;                // the phase/round/task id when scope !== "goal"
+}
+```
+
+It has **three** outcomes, not two: `skipped: true` means the verifier could not produce a
+verdict and the claim was accepted anyway. Rendering that as a pass reports a dead API key as
+a green check — "unverified" is not "verified", and a UI must be able to say which. When
+`scope` is `"task"`, `id` is the same board-row id as `team_member_state`, so a verdict can be
+attributed to the worker whose work was judged.
 
 **Versioning**: `v: 1` appears in the discovery file, `/api/health`, `/api/state`, the SSE
 `snapshot` frame, and the control response. Additive fields do NOT bump `v`. On `v !== 1`
@@ -273,7 +332,7 @@ That is useless when the CLI is running in a background tab, so the prompt has t
 answerers and the first one wins:
 
 - The CLI publishes the waiting request as `pendingPermission` in every snapshot, and emits
-  `permission_request { id, tool, preview, category, riskTier? }` on the stream when it goes
+  `permission_request { id, tool, preview, category, riskTier?, origin? }` on the stream when it goes
   up. A consumer can render from either (the snapshot covers a late subscriber).
 - The desktop answers with `POST /api/control {action:"permission", id, answer}`. `answer` is
   `"allow"` (once), `"allow_always"` (also persists a per-tool override, same as the TUI's
@@ -288,6 +347,15 @@ answerers and the first one wins:
   `via` is `"local"` (the terminal) or `"remote"` (this endpoint).
 - Sub-agents share one prompt queue: only the head is published as `pendingPermission`, and
   `pendingPermissionQueue` counts the rest. Answering the head promotes the next one.
+- Every queue transition also emits `permission_queued { queued }`, for a consumer rendering
+  from the event stream alone. A consumer reading the snapshot does NOT need it: the CLI
+  schedules a `state` push after *every* bus event, this one included, so
+  `pendingPermissionQueue` is at most one throttle window (250 ms) behind — and the `control`
+  response carries the post-answer state immediately. Following both is two sources of truth
+  for one number, and they can arrive out of order.
+- `pendingPermission.origin` names the sub-agent behind the request (absent = the main agent).
+  Its `id` is the same board-row id as `team_member_state`, so the UI can point at the row that
+  is waiting instead of showing a bare tool name.
 - Modes that never prompt (`yolo`, `plan`) simply never produce a `pendingPermission`.
 
 **Security**: this lets a token holder approve a tool call — including a destructive one. That

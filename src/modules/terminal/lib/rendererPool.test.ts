@@ -1,6 +1,10 @@
 import type { Terminal } from "@xterm/xterm";
 import { afterEach, describe, expect, it } from "vitest";
-import { clipboardHasImage, mouseEncodingSequence, pasteAction } from "./rendererPool";
+import {
+  clipboardHasImage,
+  mouseEncodingSequence,
+  pasteAction,
+} from "./rendererPool";
 
 /**
  * Minimal fake of the `Terminal` surface mouseEncodingSequence touches: the
@@ -93,7 +97,9 @@ describe("clipboardHasImage", () => {
 
   it("falls back to the webview clipboard API when no bridge probe exists", async () => {
     setWindow({});
-    const navigatorRef = globalThis.navigator as unknown as { clipboard?: unknown };
+    const navigatorRef = globalThis.navigator as unknown as {
+      clipboard?: unknown;
+    };
     const prior = navigatorRef.clipboard;
     navigatorRef.clipboard = {
       read: async () => [{ types: ["image/png"] }],

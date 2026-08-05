@@ -15,6 +15,7 @@ import {
   terminalLineNavigationSequence,
   terminalWordNavigationSequence,
 } from "./keymap";
+import { attachSmartCursor } from "./smart-cursor";
 
 export const POOL_MAX_SIZE = 5;
 const FIT_DEBOUNCE_MS = 8;
@@ -128,7 +129,10 @@ export async function clipboardHasImage(): Promise<boolean> {
  * text (a filename, a URL) is a paste-the-image intent, and pasting the text
  * would drop the image with no way to ask for it back.
  */
-export function pasteAction(hasImage: boolean, text: string): "image" | "text" | "none" {
+export function pasteAction(
+  hasImage: boolean,
+  text: string,
+): "image" | "text" | "none" {
   if (hasImage) return "image";
   return text ? "text" : "none";
 }
@@ -211,6 +215,12 @@ function createSlot(): Slot {
   host.setAttribute("data-arterm-slot", String(slots.length));
   getRecycler().appendChild(host);
   term.open(host);
+  // Claude Code-style pointer: I-beam over text, arrow over empty cells —
+  // xterm.js's blanket `cursor: text` reads as "the whole window is one big
+  // text field". Attached for the slot's lifetime (slots are pooled, never
+  // freed); selection behavior is untouched, only the pointer shape changes.
+  const screen = host.querySelector<HTMLElement>(".xterm-screen");
+  if (screen) attachSmartCursor(term, screen);
 
   const slot: Slot = {
     id: slots.length,

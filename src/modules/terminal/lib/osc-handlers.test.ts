@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
 import type { Terminal } from "@xterm/xterm";
+import { describe, expect, it, vi } from "vitest";
 import {
   createShellIntegrationState,
   registerCwdHandler,
+  registerOsc52Clipboard,
   registerPromptTracker,
 } from "./osc-handlers";
 
@@ -96,5 +97,53 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
 
     handlers.get(7)?.("file:///C:/Users/me/project");
     expect(onCwd).toHaveBeenCalledWith("C:/Users/me/project");
+  });
+});
+
+describe("OSC 52 clipboard — write-only", () => {
+  const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+
+  it("decodes a copy request and writes it to the clipboard", () => {
+    const { term, handlers } = makeFakeTerm();
+    const write = vi.fn();
+    registerOsc52Clipboard(term, write);
+
+    handlers.get(52)?.(`c;${b64("kopyala beni")}`);
+
+    expect(write).toHaveBeenCalledWith("kopyala beni");
+  });
+
+  it("never answers a clipboard READ (`?`) — output is untrusted", () => {
+    const { term, handlers } = makeFakeTerm();
+    const write = vi.fn();
+    registerOsc52Clipboard(term, write);
+
+    // A hostile program asking "what is on the clipboard?" — the answer could
+    // be a password. The handler must swallow it without responding.
+    handlers.get(52)?.("c;?");
+
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("drops malformed base64 and oversize payloads instead of guessing", () => {
+    const { term, handlers } = makeFakeTerm();
+    const write = vi.fn();
+    registerOsc52Clipboard(term, write);
+
+    handlers.get(52)?.("c;%%%not-base64%%%");
+    handlers.get(52)?.(`c;${"A".repeat(400_001)}`);
+    handlers.get(52)?.("no-separator");
+
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("handles multi-byte UTF-8 payloads intact", () => {
+    const { term, handlers } = makeFakeTerm();
+    const write = vi.fn();
+    registerOsc52Clipboard(term, write);
+
+    handlers.get(52)?.(`c;${b64("► türkçe içerik — ğüşiöç 🚀")}`);
+
+    expect(write).toHaveBeenCalledWith("► türkçe içerik — ğüşiöç 🚀");
   });
 });

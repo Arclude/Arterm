@@ -1,5 +1,10 @@
 import { cn } from "@/lib/utils";
-import { agentCounts, basename, deriveAgents } from "../lib/dashboard";
+import {
+  agentCounts,
+  answeringModel,
+  basename,
+  deriveAgents,
+} from "../lib/dashboard";
 import type { CliSessionEntry } from "../store/cliStatusStore";
 import { StatusDot, sessionDotVariant } from "./CliAtoms";
 
@@ -18,7 +23,9 @@ export function SessionNavigator({
         const { info, snapshot } = entry;
         const agents = snapshot ? deriveAgents(snapshot) : [];
         const counts = snapshot ? agentCounts(snapshot) : null;
-        const model = snapshot?.model ?? info.model ?? "";
+        // `answeringModel` marks a fallback (`opus↪backup`); without it the row
+        // keeps naming the model you chose while a different one answers.
+        const model = snapshot ? answeringModel(snapshot) : (info.model ?? "");
         const provider = snapshot?.provider ?? info.provider ?? "";
         const selected = info.sessionId === selectedId;
         const lost = entry.connection === "lost";

@@ -125,7 +125,13 @@ export type StatusSnapshot = {
   provider: string;
   permissionMode: string;
   toolCount: number;
-  tokens: { in: number; out: number; ctx: number };
+  /**
+   * `ctx` is how full the model's context is, as the CLI's agent sees it —
+   * reported prompt tokens when the provider sends them, an estimate of the
+   * working history otherwise. `ctxWindow` is that model's real window when the
+   * catalog knows it (absent on an unknown local model).
+   */
+  tokens: { in: number; out: number; ctx: number; ctxWindow?: number };
   activeTool: string | null;
   rounds: number;
   autonomy: {
@@ -156,7 +162,53 @@ export type StatusSnapshot = {
   pendingPermission?: PendingPermission | null;
   /** Requests queued behind {@link pendingPermission} (sub-agents share one prompt). */
   pendingPermissionQueue?: number;
+  /**
+   * The failure that ended the most recent turn, `null` when it finished cleanly.
+   * The CLI clears it when a new turn starts — it is the session's current health,
+   * not its history (the event ring keeps that). Additive: an older v1 CLI omits it.
+   */
+  lastError?: StatusError | null;
+  /**
+   * The most recent model switch the fallback chain made, `null` when it has not
+   * moved. Survives across turns on purpose: landing on a backup model is a
+   * standing condition worth showing after the turn it rescued has ended.
+   * Additive: an older v1 CLI omits it.
+   */
+  lastFallback?: StatusFallback | null;
   seq: number;
+};
+
+/** Provider failure taxonomy (contract §5) — lets a UI tell "out of quota" from
+ *  "wrong API key" instead of printing one undifferentiated red line. */
+export type ProviderErrorKind =
+  | "network"
+  | "timeout"
+  | "auth"
+  | "quota"
+  | "overloaded"
+  | "server"
+  | "bad_request"
+  | "unknown";
+
+/** The failure that ended a turn. */
+export type StatusError = {
+  message: string;
+  kind?: ProviderErrorKind;
+  provider?: string;
+  status?: number;
+  /** True when the same request could plausibly succeed on a retry. */
+  retryable?: boolean;
+  /** Epoch ms when the failure was observed. */
+  at: number;
+};
+
+/** The last model switch the fallback chain made (contract §5). */
+export type StatusFallback = {
+  from: { provider: string; model: string };
+  to: { provider: string; model: string };
+  reason: ProviderErrorKind;
+  detail: string;
+  at: number;
 };
 
 /**
@@ -177,6 +229,23 @@ export type PendingPermission = {
   /** e.g. "destructive" — warrants a heavier confirmation. */
   riskTier?: string;
   requestedAt: number;
+  /** The sub-agent that raised it. ABSENT means the main agent asked. */
+  origin?: PermissionOrigin;
+};
+
+/**
+ * Who is blocked on a prompt, when it isn't the main agent. A fan-out shares one
+ * asker, so without this the card says only "write_file" — and with five
+ * same-role workers on the graph there is no way to tell which one is waiting.
+ *
+ * `id` is the board-row id: the same value as `team[].id` and the
+ * `team_member_state` / `team_member_event` events, so the UI can resolve it to
+ * the exact topology node (and borrow its colour). It is absent for a `spawn`
+ * sub-agent, which has a name but no row of its own.
+ */
+export type PermissionOrigin = {
+  id?: string;
+  name: string;
 };
 
 /** The three answers a permission prompt accepts (mirrors the TUI's y/a/n). */

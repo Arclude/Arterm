@@ -1,6 +1,6 @@
-import { invoke } from "@/platform/core";
 import { useEffect } from "react";
 import { createProxyFetch } from "@/modules/ai/lib/proxyFetch";
+import { invoke } from "@/platform/core";
 import { type CliSessionClient, createCliSessionClient } from "./client";
 import { registerCliClient, unregisterCliClient } from "./clientRegistry";
 import { useCliStatusStore } from "./store/cliStatusStore";

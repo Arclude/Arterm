@@ -3,11 +3,14 @@ import type { CliSessionEntry } from "../store/cliStatusStore";
 import type { StatusSnapshot, TeamMemberStatus } from "../types";
 import {
   agentCounts,
+  answeringModel,
   compact,
   computeKpis,
   deriveAgents,
+  deriveSessionNodes,
   deriveWorkers,
   fmtElapsed,
+  originColorVar,
   phaseProgress,
   sessionActivity,
   shareOfWork,
@@ -189,6 +192,21 @@ describe("shareOfWork", () => {
   });
 });
 
+describe("computeKpis — context", () => {
+  it("reports the FULLEST live session, not an average that hides it", () => {
+    const a = liveEntry(snapshot({ tokens: { in: 1, out: 1, ctx: 20_000, ctxWindow: 100_000 } }));
+    const b = liveEntry(snapshot({ tokens: { in: 1, out: 1, ctx: 90_000, ctxWindow: 100_000 } }));
+    expect(computeKpis([a, b]).ctxPercent).toBe(90);
+  });
+
+  it("stays undefined when no session knows its window — 0% would be a lie", () => {
+    // An unknown local model reports no window. Showing 0% there says "plenty
+    // of room" about a context nobody measured.
+    const a = liveEntry(snapshot({ tokens: { in: 1, out: 1, ctx: 12_345 } }));
+    expect(computeKpis([a]).ctxPercent).toBeUndefined();
+  });
+});
+
 describe("computeKpis", () => {
   it("aggregates only live sessions from the authoritative counts", () => {
     const live = liveEntry(
@@ -213,6 +231,73 @@ describe("computeKpis", () => {
     expect(kpis.agentsTotal).toBe(3); // 1 main + 2 members
     expect(kpis.agentsRunning).toBe(1); // = activeAgents
     expect(kpis.tools).toBe(17); // main 3 + members 10 + 4
+  });
+});
+
+describe("answeringModel", () => {
+  const fallback = (
+    to: { provider: string; model: string },
+    from = { provider: "p", model: "m" },
+  ) => ({ from, to, reason: "quota" as const, detail: "429", at: 1 });
+
+  it("is just the model until the chain moves off it", () => {
+    expect(answeringModel(snapshot())).toBe("m");
+  });
+
+  it("names BOTH ends of the switch, not only the backup", () => {
+    // "backup" alone reads as if the model was changed, when the configured one
+    // is the one that failed.
+    expect(
+      answeringModel(
+        snapshot({
+          lastFallback: fallback({ provider: "p", model: "backup" }),
+        }),
+      ),
+    ).toBe("m↪backup");
+  });
+
+  it("spells out the provider only when the chain crossed to a different one", () => {
+    expect(
+      answeringModel(
+        snapshot({
+          lastFallback: fallback({ provider: "other", model: "backup" }),
+        }),
+      ),
+    ).toBe("m↪other/backup");
+  });
+
+  it("stays plain when the chain landed back on the configured model", () => {
+    expect(
+      answeringModel(
+        snapshot({ lastFallback: fallback({ provider: "p", model: "m" }) }),
+      ),
+    ).toBe("m");
+  });
+});
+
+describe("originColorVar", () => {
+  const snap = snapshot({
+    team: [member({ id: "m1", name: "@a" }), member({ id: "m2", name: "@b" })],
+  });
+  const agents = deriveSessionNodes(snap);
+
+  it("gives the prompt the colour of the row that is waiting", () => {
+    const m2 = agents.find((a) => a.id === "m2");
+    expect(originColorVar(agents, { id: "m2", name: "@b" })).toBe(m2?.colorVar);
+    // ...and not the colour of some other row.
+    expect(originColorVar(agents, { id: "m2", name: "@b" })).not.toBe(
+      agents.find((a) => a.id === "m1")?.colorVar,
+    );
+  });
+
+  it("is null when there is no row to point at", () => {
+    // The main agent sends no origin at all.
+    expect(originColorVar(agents, undefined)).toBeNull();
+    // A `spawn` sub-agent has a name but no board row.
+    expect(originColorVar(agents, { name: "sub-agent" })).toBeNull();
+    // An id whose row has not reached this snapshot yet must not fall back to a
+    // neighbour's colour — a wrong colour points at the wrong worker.
+    expect(originColorVar(agents, { id: "m9", name: "@ghost" })).toBeNull();
   });
 });
 
@@ -241,6 +326,27 @@ describe("sessionActivity", () => {
         ),
       ),
     ).toBe("⚠ awaiting permission · write_file");
+  });
+
+  it("names the sub-agent that raised it, when one did", () => {
+    expect(
+      sessionActivity(
+        liveEntry(
+          snapshot({
+            team: [member({ id: "m2", name: "@builder" })],
+            pendingPermission: {
+              id: "perm-2",
+              tool: "write_file",
+              preview: "write a.ts",
+              args: { path: "a.ts" },
+              category: "edit",
+              requestedAt: 5,
+              origin: { id: "m2", name: "@builder" },
+            },
+          }),
+        ),
+      ),
+    ).toBe("⚠ awaiting permission · ⚑ @builder · write_file");
   });
 
   it("falls back to a running autonomy goal, then status, then idle", () => {

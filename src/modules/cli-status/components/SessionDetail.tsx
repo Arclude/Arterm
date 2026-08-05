@@ -2,12 +2,15 @@ import { CommandLineIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { journalTail, lastStopReason, lastVerdict } from "../lib/autonomy";
 import {
   agentCounts,
   computeKpis,
   type DerivedAgent,
+  originColorVar,
   phaseProgress,
 } from "../lib/dashboard";
+import { JOURNAL_GLYPH } from "../lib/feed";
 import type { CliSessionEntry } from "../store/cliStatusStore";
 import { AgentTimeline } from "./AgentTimeline";
 import { AgentStatePill } from "./CliAtoms";
@@ -107,6 +110,12 @@ export function SessionDetail({
     : 0;
   const showGoalPanel =
     auto.state !== "idle" || auto.goal !== "" || auto.phases.length > 0;
+  // Derived from the event ring, not the snapshot: the snapshot says the run
+  // stopped, the events say why — and what the reviewer last demanded.
+  const stopReason =
+    auto.state === "stopped" ? lastStopReason(entry.feed) : null;
+  const verdict = showGoalPanel ? lastVerdict(entry.feed) : null;
+  const journal = showGoalPanel ? journalTail(entry.feed) : [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -119,6 +128,41 @@ export function SessionDetail({
           </span>
         ) : null}
         <div className="ml-auto flex items-center gap-1.5">
+          {/* Degraded but working: the chain moved off the configured model, and
+              the model label alone would go on naming the one that failed. */}
+          {snap.lastFallback ? (
+            <span
+              className="cli-mono rounded-full border px-2 py-0.5 text-[10px]"
+              title={`fallback: ${snap.lastFallback.from.provider}/${snap.lastFallback.from.model} → ${snap.lastFallback.to.provider}/${snap.lastFallback.to.model} — ${snap.lastFallback.reason}${
+                snap.lastFallback.detail ? `: ${snap.lastFallback.detail}` : ""
+              }`}
+              style={{
+                color: "var(--cli-await)",
+                borderColor:
+                  "color-mix(in oklab, var(--cli-await) 45%, transparent)",
+              }}
+            >
+              ↪ {snap.lastFallback.to.model}
+            </span>
+          ) : null}
+          {/* The last turn's failure. The CLI clears it when a new turn starts,
+              so this is current health — an idle session that looks fine but is
+              out of quota reads identically without it. */}
+          {snap.lastError ? (
+            <span
+              className="cli-mono rounded-full border px-2 py-0.5 text-[10px]"
+              title={`${snap.lastError.message}${
+                snap.lastError.provider ? ` (${snap.lastError.provider})` : ""
+              }${snap.lastError.retryable ? " · retryable" : ""}`}
+              style={{
+                color: "var(--cli-fail)",
+                borderColor:
+                  "color-mix(in oklab, var(--cli-fail) 45%, transparent)",
+              }}
+            >
+              ✘ {snap.lastError.kind ?? "error"}
+            </span>
+          ) : null}
           <span
             className="cli-mono rounded-full border px-2 py-0.5 text-[10px]"
             style={{
@@ -171,6 +215,9 @@ export function SessionDetail({
           sessionId={entry.info.sessionId}
           pending={snap.pendingPermission}
           queued={snap.pendingPermissionQueue ?? 0}
+          // Resolved against the SAME list the graph draws, so the prompt's
+          // colour is the waiting node's colour rather than a lookalike.
+          originColor={originColorVar(agents, snap.pendingPermission.origin)}
         />
       ) : null}
 
@@ -308,6 +355,92 @@ export function SessionDetail({
                       <span>step {auto.step}</span>
                     )}
                   </div>
+                  {/* why the run stopped — the red pill alone leaves the user
+                      asking exactly this */}
+                  {stopReason ? (
+                    <p
+                      className="cli-mono mt-1.5 text-[10.5px] leading-snug"
+                      style={{ color: "var(--cli-fail)" }}
+                    >
+                      ■ {stopReason}
+                    </p>
+                  ) : null}
+                  {/* the current run's latest verification verdict, with the
+                      reviewer's actual demands — not just a count of them */}
+                  {verdict ? (
+                    <div className="cli-mono mt-1.5 rounded-lg border border-border/50 bg-card/40 px-2.5 py-1.5 text-[10.5px]">
+                      <span
+                        style={{
+                          color: verdict.skipped
+                            ? "var(--cli-await)"
+                            : verdict.pass
+                              ? "var(--cli-run)"
+                              : "var(--cli-fail)",
+                        }}
+                      >
+                        {verdict.skipped ? "?" : verdict.pass ? "✔" : "✘"}{" "}
+                        {verdict.skipped
+                          ? "unverified"
+                          : verdict.pass
+                            ? "verified"
+                            : "verification failed"}
+                      </span>
+                      <span className="text-muted-foreground/70">
+                        {verdict.by ? ` · ${verdict.by}` : ""}
+                        {verdict.attempt !== undefined
+                          ? ` · attempt ${verdict.attempt}`
+                          : ""}
+                        {verdict.note ? ` — ${verdict.note}` : ""}
+                      </span>
+                      {verdict.mustFix.length > 0 ? (
+                        <ul className="mt-1 flex flex-col gap-0.5">
+                          {verdict.mustFix.map((fix) => (
+                            <li
+                              key={fix}
+                              className="flex gap-1.5 text-muted-foreground/85"
+                            >
+                              <span
+                                className="shrink-0"
+                                style={{ color: "var(--cli-fail)" }}
+                              >
+                                ›
+                              </span>
+                              <span className="min-w-0">{fix}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {/* the eternal run's step diary — the same lines the CLI
+                      prepends to its next directive, oldest first */}
+                  {journal.length > 0 ? (
+                    <ol className="cli-mono mt-1.5 flex flex-col gap-0.5 text-[10.5px]">
+                      {journal.map((line) => (
+                        <li
+                          key={line.ts}
+                          className="flex gap-1.5 text-muted-foreground/80"
+                        >
+                          <span
+                            className="shrink-0"
+                            style={{
+                              color:
+                                line.status === "ok"
+                                  ? "var(--cli-run)"
+                                  : line.status === "idle"
+                                    ? "var(--cli-idle)"
+                                    : "var(--cli-fail)",
+                            }}
+                          >
+                            {JOURNAL_GLYPH[line.status] ?? "•"}
+                          </span>
+                          <span className="min-w-0 truncate">
+                            [{line.status}] {line.note}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
                   {auto.phases.length > 0 ? (
                     <>
                       <div className="cli-meter mt-1.5">

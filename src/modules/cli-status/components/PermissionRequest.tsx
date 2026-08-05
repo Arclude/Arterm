@@ -42,11 +42,17 @@ export function PermissionRequest({
   sessionId,
   pending,
   queued = 0,
+  originColor,
 }: {
   sessionId: string;
   pending: PendingPermission;
   /** Requests waiting behind this one (sub-agents share one prompt queue). */
   queued?: number;
+  /**
+   * Palette colour of the topology node that raised this, from
+   * {@link originColorVar}. Null when nothing on the graph corresponds to it.
+   */
+  originColor?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   // A destructive tool takes two clicks to approve, like the Stop control.
@@ -119,6 +125,25 @@ export function PermissionRequest({
         >
           Permission required
         </span>
+        {/* WHO is blocked. A fan-out shares one asker, so the tool name alone
+            leaves five identical rows on the graph and no way to tell which one
+            is waiting. Wears that node's own palette colour, so the prompt and
+            the row read as the same agent. */}
+        {pending.origin ? (
+          <span
+            className="cli-mono inline-flex max-w-[9rem] shrink-0 items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[10px]"
+            title={`Raised by ${pending.origin.name}`}
+            style={{
+              color: originColor ?? "var(--cli-accent)",
+              borderColor: `color-mix(in oklab, ${
+                originColor ?? "var(--cli-accent)"
+              } 45%, transparent)`,
+            }}
+          >
+            <span aria-hidden="true">⚑</span>
+            {pending.origin.name}
+          </span>
+        ) : null}
         {destructive ? (
           <span
             className="cli-mono shrink-0 rounded-full border px-2 py-0.5 text-[9.5px] uppercase tracking-[0.1em]"

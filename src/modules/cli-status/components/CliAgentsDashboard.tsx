@@ -202,6 +202,12 @@ export function CliAgentsDashboard({
             </small>
           </Kpi>
           <Kpi label="Tools">{compact(kpis.tools)}</Kpi>
+          {kpis.ctxPercent !== undefined ? (
+            <Kpi label="Context">
+              {kpis.ctxPercent}
+              <small className="text-[11px] font-medium text-muted-foreground/70">%</small>
+            </Kpi>
+          ) : null}
           <Kpi label="Tokens" wide>
             {compact(kpis.tokens)}
             {sp ? (
@@ -225,19 +231,29 @@ export function CliAgentsDashboard({
         </div>
       </header>
 
-      {/* 3-column body */}
-      <div className="grid min-h-0 flex-1 grid-cols-[232px_minmax(0,1fr)_320px]">
-        {/* left: session navigator */}
-        <div className="flex min-h-0 flex-col overflow-y-auto border-r border-border bg-card/30">
-          <div className="cli-mono px-4 pt-3 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
-            Sessions
+      {/* body: the session navigator earns its column only when there is
+          something to navigate. With a single session it repeated, card for
+          card, the list already standing in the sidebar — the same thing twice,
+          and the duplicate was the wider of the two. */}
+      <div
+        className={
+          entries.length > 1
+            ? "grid min-h-0 flex-1 grid-cols-[232px_minmax(0,1fr)_320px]"
+            : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px]"
+        }
+      >
+        {entries.length > 1 ? (
+          <div className="flex min-h-0 flex-col overflow-y-auto border-r border-border bg-card/30">
+            <div className="cli-mono px-4 pt-3 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+              Sessions
+            </div>
+            <SessionNavigator
+              entries={entries}
+              selectedId={resolvedSessionId}
+              onSelect={setSelSession}
+            />
           </div>
-          <SessionNavigator
-            entries={entries}
-            selectedId={resolvedSessionId}
-            onSelect={setSelSession}
-          />
-        </div>
+        ) : null}
 
         {/* center: focused session */}
         {currentEntry ? (

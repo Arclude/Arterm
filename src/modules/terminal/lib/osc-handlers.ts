@@ -84,3 +84,52 @@ function parseOsc7(data: string): string | null {
   if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1);
   return path;
 }
+
+/**
+ * Max accepted OSC 52 base64 payload (~300 KB decoded). Large enough for any
+ * legitimate copy (Arterm CLI caps its own /copy payload at 100k chars),
+ * small enough that hostile output can't balloon the clipboard endlessly.
+ */
+const OSC52_MAX_B64 = 400_000;
+
+/**
+ * OSC 52 — programs putting text on the system clipboard. This is how a
+ * terminal app copies without owning a display: Arterm CLI's `/copy`, tmux's
+ * `set-clipboard`, vim's `"+y` over SSH. Without a handler xterm.js silently
+ * drops the sequence, which read as "copy is broken" inside the desktop app.
+ *
+ * WRITE-only, on purpose. A payload of `?` asks the terminal to REPLY with the
+ * clipboard's current contents, and that is never answered: terminal output is
+ * untrusted (a remote SSH host, a `cat` of a hostile file), and answering
+ * would hand it whatever the user last copied — passwords included. kitty and
+ * foot default to the same asymmetry for the same reason.
+ */
+export function registerOsc52Clipboard(
+  term: Terminal,
+  writeClipboard: (text: string) => void = (text) => {
+    void navigator.clipboard.writeText(text).catch(() => {});
+  },
+): () => void {
+  const d = term.parser.registerOscHandler(52, (data) => {
+    // "Pc;Pd" — Pc names a clipboard buffer (c/p/s…; all land on the one
+    // system clipboard a browser exposes), Pd is the base64 payload.
+    const sep = data.indexOf(";");
+    if (sep === -1) return true;
+    const payload = data.slice(sep + 1);
+    if (
+      payload === "?" ||
+      payload.length === 0 ||
+      payload.length > OSC52_MAX_B64
+    )
+      return true;
+    try {
+      const bytes = Uint8Array.from(atob(payload), (ch) => ch.charCodeAt(0));
+      const text = new TextDecoder().decode(bytes);
+      if (text) writeClipboard(text);
+    } catch {
+      // Not valid base64 — malformed or hostile; drop, never guess.
+    }
+    return true;
+  });
+  return () => d.dispose();
+}

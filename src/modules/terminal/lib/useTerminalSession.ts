@@ -7,6 +7,7 @@ import { DormantRing } from "./dormantRing";
 import {
   createShellIntegrationState,
   registerCwdHandler,
+  registerOsc52Clipboard,
   registerPromptTracker,
 } from "./osc-handlers";
 import { openPty, ptyShellLabel, type PtySession } from "./pty-bridge";
@@ -399,6 +400,9 @@ function bindLeafToSlot(leafId: number, s: Session): void {
       // attacker file, etc.).
       const shellState = createShellIntegrationState();
       const prompt = registerPromptTracker(term, shellState);
+      // OSC 52: programs copy to the system clipboard (Arterm CLI's /copy,
+      // tmux, vim over SSH). Write-only — see osc-handlers.ts.
+      const clip = registerOsc52Clipboard(term);
       const cwd = registerCwdHandler(
         term,
         (next) => {
@@ -416,7 +420,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         },
         shellState,
       );
-      return [prompt.dispose, cwd];
+      return [prompt.dispose, cwd, clip];
     },
     onSearchReady: (addon) => s.callbacks.onSearchReady?.(addon),
   });

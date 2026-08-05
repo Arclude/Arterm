@@ -5,6 +5,7 @@
 import type { CliSessionEntry } from "../store/cliStatusStore";
 import type {
   AutonomyPhase,
+  PermissionOrigin,
   StatusSnapshot,
   TeamMemberStatus,
   WorkerStatus,
@@ -182,6 +183,25 @@ export function deriveSessionNodes(snapshot: StatusSnapshot): DerivedAgent[] {
 }
 
 /**
+ * The palette colour of the node a permission prompt came from, so the prompt
+ * wears the same colour as the row that is waiting. Null when there is nothing
+ * to point at — the main agent (no origin), a `spawn` sub-agent (a name but no
+ * board row), or an id whose row has not reached this snapshot yet.
+ *
+ * Colours here are assigned by INDEX, so this must resolve against the same
+ * derived list the graph renders (`deriveSessionNodes`) rather than recomputing
+ * a colour from the id — two lists ordered differently would tint the prompt to
+ * match a node it did not come from, which is worse than no colour at all.
+ */
+export function originColorVar(
+  agents: DerivedAgent[],
+  origin: PermissionOrigin | undefined,
+): string | null {
+  if (!origin?.id) return null;
+  return agents.find((a) => a.id === origin.id)?.colorVar ?? null;
+}
+
+/**
  * Authoritative agent counts for a session, aligned with the rail badge.
  * `running` is the server-computed `activeAgents` (main + running team + running
  * workers + fleet.active); `total` is every known node (main + team + workers +
@@ -235,6 +255,13 @@ export type DashboardKpis = {
   agentsTotal: number;
   tools: number;
   tokens: number;
+  /**
+   * How full the fullest live session's context is, in percent. Absent when no
+   * session reports a window (an unknown local model), which is why it is
+   * optional rather than 0 — "we don't know" and "empty" are different, and
+   * showing 0% for the first is the failure this replaced.
+   */
+  ctxPercent?: number;
 };
 
 /**
@@ -251,16 +278,24 @@ export function computeKpis(entries: CliSessionEntry[]): DashboardKpis {
     tools: 0,
     tokens: 0,
   };
+  // Fullest context across live sessions — the one that matters is whichever
+  // is closest to compacting, not an average that hides it.
+  let ctxPercent: number | undefined;
   for (const e of entries) {
     if (e.connection !== "live" || !e.snapshot) continue;
     const s = e.snapshot;
     kpis.sessions += 1;
     kpis.tokens += s.tokens.in + s.tokens.out;
+    if (s.tokens.ctxWindow && s.tokens.ctxWindow > 0) {
+      const pct = Math.min(100, Math.round((s.tokens.ctx / s.tokens.ctxWindow) * 100));
+      ctxPercent = ctxPercent === undefined ? pct : Math.max(ctxPercent, pct);
+    }
     const counts = agentCounts(s);
     kpis.agentsRunning += counts.running;
     kpis.agentsTotal += counts.total;
     kpis.tools += (s.main?.toolUseCount ?? 0) + tallyMemberTools(s);
   }
+  if (ctxPercent !== undefined) kpis.ctxPercent = ctxPercent;
   return kpis;
 }
 
@@ -308,13 +343,43 @@ export function sessionActivity(entry: CliSessionEntry): string {
   const s = entry.snapshot;
   if (!s) return "connecting…";
   // Blocked on a human outranks any other activity: the run is stopped until the
-  // prompt is answered (in the terminal, or from the dashboard card).
-  if (s.pendingPermission)
-    return `⚠ awaiting permission · ${s.pendingPermission.tool}`;
+  // prompt is answered (in the terminal, or from the dashboard card). Name the
+  // worker when one asked: across a rail of sessions, "awaiting permission ·
+  // write_file" is the same sentence for every blocked fan-out there is.
+  if (s.pendingPermission) {
+    const who = s.pendingPermission.origin?.name;
+    const tool = s.pendingPermission.tool;
+    return who
+      ? `⚠ awaiting permission · ⚑ ${who} · ${tool}`
+      : `⚠ awaiting permission · ${tool}`;
+  }
   if (s.activeTool) return `⚙ ${s.activeTool}`;
   if (s.autonomy.state === "running" && s.autonomy.goal) return s.autonomy.goal;
   if (s.status === "thinking") return "thinking…";
   return "idle";
+}
+
+/**
+ * What to label the session's model: the configured one, or `configured↪backup`
+ * once the fallback chain has moved off it.
+ *
+ * `snapshot.model` stays the model you CHOSE even while a backup is answering, so
+ * printing it alone leaves the dashboard naming a model that is not producing the
+ * replies. Naming both ends is deliberate: "backup" on its own reads as if the
+ * model was changed, when in fact the configured one is the one that failed. The
+ * provider is only spelled out when the chain crossed to a different one.
+ */
+export function answeringModel(snapshot: StatusSnapshot): string {
+  const fb = snapshot.lastFallback;
+  if (!fb) return snapshot.model;
+  const sameTarget =
+    fb.to.provider === snapshot.provider && fb.to.model === snapshot.model;
+  if (sameTarget) return snapshot.model; // chain landed back on the configured model
+  const to =
+    fb.to.provider === snapshot.provider
+      ? fb.to.model
+      : `${fb.to.provider}/${fb.to.model}`;
+  return `${snapshot.model}↪${to}`;
 }
 
 /** Compact number: 950, 1.2k, 15k, 1.3M. */

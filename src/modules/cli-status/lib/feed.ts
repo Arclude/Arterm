@@ -33,6 +33,55 @@ function toolName(o: Record<string, unknown>): string | undefined {
   );
 }
 
+/**
+ * A verification verdict, which has THREE outcomes and never two: `skipped` means
+ * no verdict could be obtained and the claim passed by default. "Unverified" is
+ * not "verified" — collapsing them would draw a green check for a dead API key,
+ * and the whole point of the gate is that its silence is visible.
+ *
+ * A payload with no boolean `pass` is skipped rather than guessed at: this feed
+ * never invents a verdict it did not receive.
+ */
+function describeVerdict(
+  o: Record<string, unknown>,
+): { glyph: string; text: string } | null {
+  if (typeof o.pass !== "boolean") return null;
+  const scope = asString(o.scope);
+  const id = asString(o.id);
+  // "goal" is the whole run and needs no qualifier; a phase/round/task says which.
+  const at = `${scope && scope !== "goal" ? ` ${scope}` : ""}${id ? ` ${id}` : ""}`;
+  const note = asString(o.note);
+  const tail = note ? ` — ${note}` : "";
+  if (o.skipped === true) return { glyph: "?", text: `unverified${at}${tail}` };
+  if (o.pass) return { glyph: "✔", text: `verified${at}` };
+  // Which half rejected is worth a word: the command gate is an exit code, the
+  // judge an opinion, and they are argued with differently. The attempt number
+  // says whether this is the first complaint or the fifth.
+  const by = asString(o.by);
+  const attempt =
+    typeof o.attempt === "number" ? ` · attempt ${o.attempt}` : "";
+  // The actual items, not just a count: a truncated row still shows the first
+  // fix, and the full list rides the row's tooltip.
+  const fixes = Array.isArray(o.mustFix)
+    ? o.mustFix.filter((f): f is string => typeof f === "string")
+    : [];
+  const toFix = fixes.length > 0 ? ` · fix: ${fixes.join("; ")}` : "";
+  return {
+    glyph: "✘",
+    text: `verification failed${at}${by ? ` (${by})` : ""}${attempt}${tail}${toFix}`,
+  };
+}
+
+/** Journal statuses → glyphs: what an eternal step amounted to, at a glance.
+ *  Exported so the session detail panel draws the same diary the feed does. */
+export const JOURNAL_GLYPH: Record<string, string> = {
+  ok: "•",
+  idle: "○",
+  error: "✘",
+  loop: "↻",
+  "verify-fail": "✘",
+};
+
 /** Human-readable {glyph, text} for a known event type, or null to skip it. */
 function describe(
   type: string,
@@ -55,6 +104,54 @@ function describe(
     case "team_member_state": {
       const state = asString(o.state);
       return state ? { glyph: "•", text: `→ ${state}` } : null;
+    }
+    case "autonomy_verify":
+      return describeVerdict(o);
+    // Run endings: why a run stopped is as much a fact as that it stopped —
+    // without these the pill turns red/green and the feed says nothing.
+    case "autonomy_done": {
+      const summary = asString(o.summary);
+      return {
+        glyph: "✔",
+        text: `goal complete${summary ? ` — ${summary}` : ""}`,
+      };
+    }
+    case "autonomy_stopped": {
+      const reason = asString(o.reason);
+      return { glyph: "■", text: `stopped${reason ? ` — ${reason}` : ""}` };
+    }
+    // Loop detector (steer-then-cut): the difference between "steered" and
+    // "cut" is the difference between a nudge and an ended turn.
+    case "loop_detected": {
+      const streak = typeof o.streak === "number" ? ` ×${o.streak}` : "";
+      return { glyph: "↻", text: `repeating${streak} — steered` };
+    }
+    case "loop_cut": {
+      const streak = typeof o.streak === "number" ? ` ×${o.streak}` : "";
+      return { glyph: "↻", text: `loop cut${streak} — turn ended` };
+    }
+    // Progress-gated step extension: the cap moved because work was happening.
+    case "autonomy_extended": {
+      const limit = typeof o.newLimit === "number" ? ` → ${o.newLimit}` : "";
+      return { glyph: "⤒", text: `step limit extended${limit}` };
+    }
+    // Eternal-mode provider backoff: the run is waiting, not wedged.
+    case "autonomy_backoff": {
+      const secs =
+        typeof o.ms === "number" ? ` ${Math.round(o.ms / 1000)}s` : "";
+      const attempt =
+        typeof o.attempt === "number" ? ` (attempt ${o.attempt})` : "";
+      return { glyph: "…", text: `backing off${secs}${attempt}` };
+    }
+    // Eternal journal: one classified line per step — the run's own diary.
+    case "autonomy_journal": {
+      const status = asString(o.status);
+      const note = asString(o.note);
+      if (!status) return null;
+      return {
+        glyph: JOURNAL_GLYPH[status] ?? "•",
+        text: `[${status}]${note ? ` ${note}` : ""}`,
+      };
     }
     default:
       return null;
@@ -86,6 +183,17 @@ function describeStamped(
         type = innerType;
         obj = innerObj;
       }
+    }
+  }
+
+  // A per-task verdict belongs under the worker whose work was judged, not under
+  // the session: in a fan-out the interesting question is WHICH task was rejected,
+  // and `id` is the same board-row id the graph already draws.
+  if (type === "autonomy_verify") {
+    const row = asString(ev.id) ? byId.get(ev.id as string) : undefined;
+    if (row) {
+      who = row.name;
+      whoColor = row.colorVar;
     }
   }
 

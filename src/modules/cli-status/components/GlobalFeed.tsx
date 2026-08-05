@@ -27,7 +27,9 @@ export function GlobalFeed({ rows }: { rows: FeedRow[] }) {
             >
               <span className="text-muted-foreground/60">{fmtTime(r.ts)}</span>
               <span style={{ color: "var(--cli-accent)" }}>{r.glyph}</span>
-              <span className="min-w-0 truncate">
+              {/* rows truncate; the tooltip carries the full text (mustFix
+                  lists and stop reasons routinely outrun the column) */}
+              <span className="min-w-0 truncate" title={r.text}>
                 <span className="font-semibold" style={{ color: r.whoColor }}>
                   {r.who}
                 </span>{" "}
