@@ -37,6 +37,8 @@ export type ControlParams = {
   id?: string;
   /** The answer for `action: "permission"`. */
   answer?: PermissionAnswer;
+  /** The checkpoint to restore, for `action: "rewind"`. */
+  checkpointId?: string;
 };
 
 export type CliSessionClient = {

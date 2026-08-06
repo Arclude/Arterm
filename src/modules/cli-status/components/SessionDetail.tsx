@@ -13,6 +13,7 @@ import {
 import { JOURNAL_GLYPH } from "../lib/feed";
 import type { CliSessionEntry } from "../store/cliStatusStore";
 import { AgentTimeline } from "./AgentTimeline";
+import { CheckpointList } from "./CheckpointList";
 import { AgentStatePill } from "./CliAtoms";
 import { PermissionRequest } from "./PermissionRequest";
 import { SessionControls } from "./SessionControls";
@@ -87,6 +88,8 @@ export function SessionDetail({
   const pillLabel = autonomyRunning
     ? `${auto.mode} · ${auto.state}`
     : snap.status;
+  // Additive field: an older CLI sends no `checkpoints` at all.
+  const checkpoints = snap.checkpoints ?? [];
   const termFocus =
     snap != null && entry.info.terminalId != null
       ? resolveTerminalFocus(entry.info.terminalId)
@@ -237,6 +240,18 @@ export function SessionDetail({
           // Resolved against the SAME list the graph draws, so the prompt's
           // colour is the waiting node's colour rather than a lookalike.
           originColor={originColorVar(agents, snap.pendingPermission.origin)}
+        />
+      ) : null}
+
+      {/* the undo ladder. Absent (older CLI) and empty (nothing has run yet)
+          both render nothing: a disabled "Rewind" row would say the feature is
+          broken, when in fact there is simply nothing to go back to. */}
+      {checkpoints.length > 0 ? (
+        <CheckpointList
+          sessionId={entry.info.sessionId}
+          checkpoints={checkpoints}
+          now={now}
+          agentBusy={snap.status !== "idle"}
         />
       ) : null}
 

@@ -190,8 +190,22 @@ export type StatusSnapshot = {
   /** What the unattended-run guards did. Zero here is a real answer. */
   guards?: StatusGuards | null;
   /** Undoable turns, newest first (bounded by the CLI). */
-  checkpoints?: { id: string; label: string; at: number }[];
+  checkpoints?: CliCheckpoint[];
   seq: number;
+};
+
+/**
+ * One undoable turn, restorable via the `rewind` control action. `label` is the
+ * user prompt that started the turn — the only handle a human has on "which
+ * turn"; `at` is epoch ms. Additive field: an older v1 CLI sends no
+ * `checkpoints` at all, which is why the snapshot's field is optional and the UI
+ * renders nothing rather than an empty state (absent means "this CLI cannot",
+ * not "there is nothing to undo").
+ */
+export type CliCheckpoint = {
+  id: string;
+  label: string;
+  at: number;
 };
 
 /** Provider failure taxonomy (contract §5) — lets a UI tell "out of quota" from
@@ -274,7 +288,8 @@ export type ControlAction =
   | "steer"
   | "goal"
   | "mode"
-  | "permission";
+  | "permission"
+  | "rewind";
 
 /** Autonomy modes accepted by the `mode` control action. */
 export type AutonomyMode = "once" | "eternal" | "parallel" | "phased" | "team";
@@ -283,6 +298,20 @@ export type AutonomyMode = "once" | "eternal" | "parallel" | "phased" | "team";
 export type ControlResult = {
   ok: boolean;
   error?: string;
+  /**
+   * A success note, when the action has more to say than "it worked". `rewind`
+   * uses it to report what the restore could NOT put back
+   * (`"restored 3, unchanged 1, skipped 2 link(s)"`) — see
+   * {@link rewindOutcome}, which is why this must never be dropped on the floor.
+   */
+  detail?: string;
+  /**
+   * `rewind`'s counts as DATA. The desktop classifies a partial restore from
+   * `skippedLinks`, not by matching a word in `detail` — a wording change in the
+   * CLI must never be able to turn a partial restore into a clean-looking one.
+   * Absent from an older CLI, which is the only case `detail` is read for.
+   */
+  rewind?: { restored: number; unchanged: number; skippedLinks: number };
   state?: StatusSnapshot;
 };
 
