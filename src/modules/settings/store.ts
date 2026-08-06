@@ -257,7 +257,13 @@ export const DEFAULT_PREFERENCES: Preferences = {
   favoriteModelIds: [],
   recentModelIds: [],
   vimMode: false,
-  showHidden: false,
+  // Dot-prefixed files are not incidental in a code project — `.env`,
+  // `.gitignore`, `.github/`, `.eslintrc` are edited as often as any source
+  // file. Hiding them by default meant the explorer silently omitted the files
+  // people came looking for, with the remedy buried in a settings window. `.git`
+  // itself stays out regardless (see the explorer's `fetchChildren`), which is
+  // the one dot-entry nobody browses and the one that floods the watcher.
+  showHidden: true,
   terminalWebglEnabled: true,
   terminalFontFamily: "",
   terminalLetterSpacing: 0,

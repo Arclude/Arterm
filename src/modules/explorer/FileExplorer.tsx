@@ -12,6 +12,8 @@ import {
   FolderAddIcon,
   Refresh01Icon,
   Search01Icon,
+  ViewIcon,
+  ViewOffSlashIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -24,6 +26,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { setShowHidden } from "@/modules/settings/store";
 import { ExplorerSearch, type ExplorerSearchHandle } from "./ExplorerSearch";
 import { EntryRow, PendingRow, StatusRow } from "./TreeRow";
 import { InlineInput } from "./InlineInput";
@@ -173,6 +177,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(
     ref,
   ) {
     const tree = useFileTree(rootPath, { onPathRenamed, onPathDeleted });
+    const showHidden = usePreferencesStore((s) => s.showHidden);
     const [selectedPath, setSelectedPath] = useState<string | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSearchActive, setIsSearchActive] = useState(false);
@@ -461,6 +466,28 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(
             title="New folder"
           >
             <HugeiconsIcon icon={FolderAddIcon} size={13} strokeWidth={2} />
+          </Button>
+          {/* The same preference the settings window exposes, put where the
+              absence is noticed. Finding out why `.env` is missing should not
+              require guessing that a settings page has the answer. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 text-muted-foreground hover:text-foreground"
+            onClick={() => void setShowHidden(!showHidden)}
+            title={
+              showHidden
+                ? "Hide dot-files (.env, .gitignore)"
+                : "Show dot-files (.env, .gitignore)"
+            }
+            aria-label="Toggle hidden files"
+            aria-pressed={showHidden}
+          >
+            <HugeiconsIcon
+              icon={showHidden ? ViewIcon : ViewOffSlashIcon}
+              size={13}
+              strokeWidth={2}
+            />
           </Button>
           <Button
             variant="ghost"

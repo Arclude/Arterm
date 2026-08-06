@@ -105,11 +105,17 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   const fetchChildren = useCallback(async (path: string) => {
     setNodes((s) => ({ ...s, [path]: { status: "loading" } }));
     try {
-      const entries = await invoke<DirEntry[]>("fs_read_dir", {
+      const listed = await invoke<DirEntry[]>("fs_read_dir", {
         path,
         showHidden: showHiddenRef.current,
         workspace: currentWorkspaceEnv(),
       });
+      // `.git` is excluded whatever the preference says. It is the one
+      // dot-entry nobody browses — machine state, thousands of loose objects —
+      // and letting it in would swamp both the tree and the fs-watcher, which
+      // is the noise the blanket dotfile filter was really protecting against.
+      // Everything else dot-prefixed (.env, .gitignore, .github) is source.
+      const entries = listed.filter((e) => e.name !== ".git");
 
       const liveDirs = new Set(
         entries
@@ -222,11 +228,14 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     };
     void listenFsChanged((paths) => {
       const current = nodesRef.current;
-      // When hidden files aren't shown, churn in dotfiles (e.g. ~/.claude.json,
-      // .git) isn't visible anyway — don't reload the tree for it.
+      // Churn the tree cannot show is churn not worth reloading for: every
+      // dotfile when they are hidden, and `.git` always — it is excluded from
+      // the listing either way, and it is by far the busiest directory in a
+      // repository.
       const skipHidden = !showHiddenRef.current;
       for (const p of paths) {
         const base = p.split(/[\\/]/).pop() ?? p;
+        if (base === ".git" || p.includes("/.git/")) continue;
         if (skipHidden && base.startsWith(".")) continue;
         const parent = dirname(p);
         if (current[parent]?.status === "loaded") pending.add(parent);
