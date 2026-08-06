@@ -262,6 +262,21 @@ export type DashboardKpis = {
    * showing 0% for the first is the failure this replaced.
    */
   ctxPercent?: number;
+  /**
+   * Total USD across live sessions. Absent — not 0 — when nothing priced was
+   * reported, for the same reason as `ctxPercent`: a local model that costs
+   * nothing and a backend that counts nothing must not render identically.
+   */
+  usd?: number;
+  /** True when some spend had no catalog price, so `usd` is a floor. */
+  usdIsFloor?: boolean;
+  /** Tightest ceiling pressure across live sessions, 0–100. Absent with no ceiling. */
+  budgetPercent?: number;
+  /** Guard activity summed across live sessions. Zeroes are meaningful. */
+  loopSteers: number;
+  loopCuts: number;
+  /** Sessions running inside a sandbox, of those that reported either way. */
+  sandboxed?: { confined: number; total: number };
 };
 
 /**
@@ -277,26 +292,76 @@ export function computeKpis(entries: CliSessionEntry[]): DashboardKpis {
     agentsTotal: 0,
     tools: 0,
     tokens: 0,
+    loopSteers: 0,
+    loopCuts: 0,
   };
   // Fullest context across live sessions — the one that matters is whichever
   // is closest to compacting, not an average that hides it.
   let ctxPercent: number | undefined;
+  // Spend is summed only from sessions that actually reported it; a session
+  // whose backend counts nothing contributes neither a number nor a zero.
+  let usd: number | undefined;
+  let usdIsFloor = false;
+  let budgetPercent: number | undefined;
+  let confined = 0;
+  let sandboxKnown = 0;
   for (const e of entries) {
     if (e.connection !== "live" || !e.snapshot) continue;
     const s = e.snapshot;
     kpis.sessions += 1;
     kpis.tokens += s.tokens.in + s.tokens.out;
     if (s.tokens.ctxWindow && s.tokens.ctxWindow > 0) {
-      const pct = Math.min(100, Math.round((s.tokens.ctx / s.tokens.ctxWindow) * 100));
+      const pct = Math.min(
+        100,
+        Math.round((s.tokens.ctx / s.tokens.ctxWindow) * 100),
+      );
       ctxPercent = ctxPercent === undefined ? pct : Math.max(ctxPercent, pct);
     }
     const counts = agentCounts(s);
     kpis.agentsRunning += counts.running;
     kpis.agentsTotal += counts.total;
     kpis.tools += (s.main?.toolUseCount ?? 0) + tallyMemberTools(s);
+
+    const b = s.budget;
+    if (b?.reported) {
+      usd = (usd ?? 0) + b.usd;
+      if (b.unpriced) usdIsFloor = true;
+      // The TIGHTEST ceiling, not an average: the run about to be stopped is
+      // the one worth showing, exactly as with context.
+      for (const pct of ceilingPressure(b)) {
+        budgetPercent =
+          budgetPercent === undefined ? pct : Math.max(budgetPercent, pct);
+      }
+    }
+    if (s.guards) {
+      kpis.loopSteers += s.guards.loopSteers;
+      kpis.loopCuts += s.guards.loopCuts;
+    }
+    if (s.sandbox !== undefined) {
+      sandboxKnown += 1;
+      if (s.sandbox) confined += 1;
+    }
   }
   if (ctxPercent !== undefined) kpis.ctxPercent = ctxPercent;
+  if (usd !== undefined) {
+    kpis.usd = usd;
+    kpis.usdIsFloor = usdIsFloor;
+  }
+  if (budgetPercent !== undefined) kpis.budgetPercent = budgetPercent;
+  if (sandboxKnown > 0) kpis.sandboxed = { confined, total: sandboxKnown };
   return kpis;
+}
+
+/** How close a session is to each configured ceiling, in percent. */
+function ceilingPressure(b: NonNullable<StatusSnapshot["budget"]>): number[] {
+  const out: number[] = [];
+  if (b.limitTokens && b.limitTokens > 0) {
+    out.push(Math.min(100, Math.round((b.totalTokens / b.limitTokens) * 100)));
+  }
+  if (b.limitUsd && b.limitUsd > 0) {
+    out.push(Math.min(100, Math.round((b.usd / b.limitUsd) * 100)));
+  }
+  return out;
 }
 
 function tallyMemberTools(s: StatusSnapshot): number {

@@ -173,6 +173,25 @@ export function SessionDetail({
           >
             {snap.permissionMode}
           </span>
+          {/* The half `permissionMode` cannot tell. "yolo" looks identical
+              whether or not a boundary is in force, and those are very
+              different risk states; the title carries the boundary verbatim. */}
+          {snap.sandbox !== undefined ? (
+            <span
+              className="cli-mono rounded-full border px-2 py-0.5 text-[10px]"
+              title={
+                snap.sandbox ?? "shell commands run on the host, unconfined"
+              }
+              style={{
+                color: snap.sandbox ? "var(--cli-run)" : "var(--cli-lost)",
+                borderColor: snap.sandbox
+                  ? "color-mix(in oklab, var(--cli-run) 38%, transparent)"
+                  : "color-mix(in oklab, var(--cli-lost) 38%, transparent)",
+              }}
+            >
+              {snap.sandbox ? "sandboxed" : "unconfined"}
+            </span>
+          ) : null}
           {entry.info.terminalId != null ? (
             termFocus ? (
               <button

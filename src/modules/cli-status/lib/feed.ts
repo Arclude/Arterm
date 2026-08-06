@@ -130,6 +130,20 @@ function describe(
       const streak = typeof o.streak === "number" ? ` ×${o.streak}` : "";
       return { glyph: "↻", text: `loop cut${streak} — turn ended` };
     }
+    // Run budget. The soft crossing is a REQUEST to wrap up and the hard one is
+    // a refusal to send the next request — a run that chose to finish and one
+    // that was stopped look the same in the transcript otherwise.
+    case "budget_warning": {
+      const spent = typeof o.spent === "string" ? ` (${o.spent})` : "";
+      return {
+        glyph: "◔",
+        text: `budget soft limit${spent} — asked to wrap up`,
+      };
+    }
+    case "budget_exceeded": {
+      const spent = typeof o.spent === "string" ? ` (${o.spent})` : "";
+      return { glyph: "●", text: `budget spent${spent} — run stopped` };
+    }
     // Progress-gated step extension: the cap moved because work was happening.
     case "autonomy_extended": {
       const limit = typeof o.newLimit === "number" ? ` → ${o.newLimit}` : "";

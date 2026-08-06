@@ -194,8 +194,12 @@ describe("shareOfWork", () => {
 
 describe("computeKpis — context", () => {
   it("reports the FULLEST live session, not an average that hides it", () => {
-    const a = liveEntry(snapshot({ tokens: { in: 1, out: 1, ctx: 20_000, ctxWindow: 100_000 } }));
-    const b = liveEntry(snapshot({ tokens: { in: 1, out: 1, ctx: 90_000, ctxWindow: 100_000 } }));
+    const a = liveEntry(
+      snapshot({ tokens: { in: 1, out: 1, ctx: 20_000, ctxWindow: 100_000 } }),
+    );
+    const b = liveEntry(
+      snapshot({ tokens: { in: 1, out: 1, ctx: 90_000, ctxWindow: 100_000 } }),
+    );
     expect(computeKpis([a, b]).ctxPercent).toBe(90);
   });
 
@@ -447,5 +451,101 @@ describe("formatters", () => {
   it("fmtElapsed", () => {
     expect(fmtElapsed(45)).toBe("45s");
     expect(fmtElapsed(125)).toBe("2m05s");
+  });
+});
+
+describe("computeKpis — cost, guards, sandbox", () => {
+  const budget = (over: Record<string, unknown> = {}) => ({
+    inputTokens: 100,
+    outputTokens: 50,
+    cacheTokens: 0,
+    totalTokens: 150,
+    usd: 0.5,
+    breached: false,
+    unpriced: false,
+    reported: true,
+    ...over,
+  });
+
+  it("sums spend only from sessions that actually reported it", () => {
+    // A local model that counts nothing must contribute NOTHING — not a zero
+    // that drags the total down and reads as a measurement.
+    const reported = liveEntry(snapshot({ budget: budget({ usd: 1.25 }) }));
+    const silent = liveEntry(
+      snapshot({ budget: budget({ usd: 0, reported: false }) }),
+    );
+    const k = computeKpis([reported, silent]);
+    expect(k.usd).toBe(1.25);
+    expect(k.usdIsFloor).toBe(false);
+  });
+
+  it("leaves usd undefined when nothing was reported — 0 would be a claim", () => {
+    expect(computeKpis([liveEntry(snapshot({}))]).usd).toBeUndefined();
+  });
+
+  it("marks the total as a floor when some spend had no catalog price", () => {
+    const k = computeKpis([
+      liveEntry(snapshot({ budget: budget({ unpriced: true }) })),
+    ]);
+    expect(k.usdIsFloor).toBe(true);
+  });
+
+  it("reports the TIGHTEST ceiling pressure, not an average", () => {
+    const easy = liveEntry(
+      snapshot({ budget: budget({ usd: 1, limitUsd: 100 }) }),
+    );
+    const tight = liveEntry(
+      snapshot({ budget: budget({ usd: 9, limitUsd: 10 }) }),
+    );
+    expect(computeKpis([easy, tight]).budgetPercent).toBe(90);
+  });
+
+  it("has no budget percent without a ceiling to be near", () => {
+    expect(
+      computeKpis([liveEntry(snapshot({ budget: budget() }))]).budgetPercent,
+    ).toBeUndefined();
+  });
+
+  it("sums guard activity, and reports zeroes rather than omitting them", () => {
+    // Unlike cost, 0 here is a real answer: nothing got stuck.
+    const quiet = liveEntry(
+      snapshot({
+        guards: {
+          loopSteers: 0,
+          loopCuts: 0,
+          extensions: 0,
+          lastVerdict: null,
+        },
+      }),
+    );
+    const stuck = liveEntry(
+      snapshot({
+        guards: {
+          loopSteers: 4,
+          loopCuts: 1,
+          extensions: 2,
+          lastVerdict: null,
+        },
+      }),
+    );
+    const k = computeKpis([quiet, stuck]);
+    expect(k.loopSteers).toBe(4);
+    expect(k.loopCuts).toBe(1);
+    expect(computeKpis([quiet]).loopCuts).toBe(0);
+  });
+
+  it("counts confined sessions only among those that said either way", () => {
+    const confined = liveEntry(
+      snapshot({
+        sandbox: "writes confined to /w; egress: 13 allowed domains",
+      }),
+    );
+    const host = liveEntry(snapshot({ sandbox: null }));
+    const silent = liveEntry(snapshot({})); // an older CLI: says nothing
+    expect(computeKpis([confined, host, silent]).sandboxed).toEqual({
+      confined: 1,
+      total: 2,
+    });
+    expect(computeKpis([silent]).sandboxed).toBeUndefined();
   });
 });

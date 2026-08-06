@@ -172,6 +172,15 @@ describe("buildGlobalFeed · unattended-run events", () => {
     expect(cut?.text).toBe("loop cut ×5 — turn ended");
   });
 
+  it("tells a budget wrap-up request apart from a budget stop", () => {
+    // A run that CHOSE to finish and one that was refused its next request look
+    // the same in the transcript; the feed is where the difference lives.
+    const [soft] = rows([ev("budget_warning", { spent: "$3.80/$5" })]);
+    expect(soft?.text).toBe("budget soft limit ($3.80/$5) — asked to wrap up");
+    const [hard] = rows([ev("budget_exceeded", { spent: "$5.00/$5" })]);
+    expect(hard?.text).toBe("budget spent ($5.00/$5) — run stopped");
+  });
+
   it("renders extensions, backoffs, and journal lines", () => {
     const [ext] = rows([ev("autonomy_extended", { newLimit: 50 })]);
     expect(ext?.text).toBe("step limit extended → 50");

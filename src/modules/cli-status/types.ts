@@ -175,6 +175,22 @@ export type StatusSnapshot = {
    * Additive: an older v1 CLI omits it.
    */
   lastFallback?: StatusFallback | null;
+  /**
+   * Run spend. Optional because an older CLI does not send it — and absent is
+   * "unknown", never zero. `reported: false` says the backend counted nothing,
+   * which a local model does routinely; rendering that as a free run would be a
+   * fiction the dashboard invented.
+   */
+  budget?: StatusBudget | null;
+  /**
+   * The execution boundary shell commands run inside, or null for the host.
+   * `permissionMode` cannot tell these apart — yolo looks the same either way.
+   */
+  sandbox?: string | null;
+  /** What the unattended-run guards did. Zero here is a real answer. */
+  guards?: StatusGuards | null;
+  /** Undoable turns, newest first (bounded by the CLI). */
+  checkpoints?: { id: string; label: string; at: number }[];
   seq: number;
 };
 
@@ -269,3 +285,27 @@ export type ControlResult = {
   error?: string;
   state?: StatusSnapshot;
 };
+
+/** Run spend as the CLI reports it (`StatusBudget` in statusState.ts). */
+export interface StatusBudget {
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
+  totalTokens: number;
+  usd: number;
+  limitTokens?: number;
+  limitUsd?: number;
+  breached: boolean;
+  /** `usd` is a floor: some spend had no catalog price. */
+  unpriced: boolean;
+  /** False ⇒ the numbers above are "not reported", not "not spent". */
+  reported: boolean;
+}
+
+/** Guard activity as the CLI reports it (`StatusGuards` in statusState.ts). */
+export interface StatusGuards {
+  loopSteers: number;
+  loopCuts: number;
+  extensions: number;
+  lastVerdict: { pass: boolean; scope?: string; note?: string } | null;
+}

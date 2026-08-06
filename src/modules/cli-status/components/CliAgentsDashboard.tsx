@@ -205,7 +205,40 @@ export function CliAgentsDashboard({
           {kpis.ctxPercent !== undefined ? (
             <Kpi label="Context">
               {kpis.ctxPercent}
-              <small className="text-[11px] font-medium text-muted-foreground/70">%</small>
+              <small className="text-[11px] font-medium text-muted-foreground/70">
+                %
+              </small>
+            </Kpi>
+          ) : null}
+          {/* Cost is absent, never 0, when nothing priced was reported — a local
+              model that counts nothing must not read as a run that was free. */}
+          {kpis.usd !== undefined ? (
+            <Kpi label={kpis.usdIsFloor ? "Cost (min)" : "Cost"}>
+              <span className="text-[11px] font-medium text-muted-foreground/70">
+                $
+              </span>
+              {kpis.usd < 10 ? kpis.usd.toFixed(2) : Math.round(kpis.usd)}
+              {kpis.budgetPercent !== undefined ? (
+                <small className="ml-1 text-[11px] font-medium text-muted-foreground/70">
+                  {kpis.budgetPercent}% of cap
+                </small>
+              ) : null}
+            </Kpi>
+          ) : null}
+          {/* Zero is a real answer here — "nothing got stuck" — so this stays. */}
+          <Kpi label="Guards">
+            {kpis.loopCuts}
+            <small className="text-[11px] font-medium text-muted-foreground/70">
+              {" cut"}
+              {kpis.loopSteers > 0 ? ` · ${kpis.loopSteers} steer` : ""}
+            </small>
+          </Kpi>
+          {kpis.sandboxed ? (
+            <Kpi label="Sandbox">
+              {kpis.sandboxed.confined}
+              <small className="text-[11px] font-medium text-muted-foreground/70">
+                /{kpis.sandboxed.total} confined
+              </small>
             </Kpi>
           ) : null}
           <Kpi label="Tokens" wide>
