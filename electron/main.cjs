@@ -463,6 +463,12 @@ app.whenReady().then(async () => {
   });
   serveDist();
   createWindow();
+  // Bir önceki güncellemeden kalan eski ağaç: kurulum sırasında silinemiyor
+  // (o an çalışan süreç oradan okuyor), o yüzden temizliği açılışa bırakıyoruz.
+  // Arka planda, pencereyi geciktirmeden.
+  updater
+    .sweepBackups()
+    .catch((e) => console.error(`update cleanup failed: ${e.message}`));
 });
 
 app.on("window-all-closed", () => app.quit());

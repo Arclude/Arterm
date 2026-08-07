@@ -48,6 +48,11 @@ export function AboutSection() {
                   : "Check for updates";
   const onUpdateClick = () => {
     if (available) void install();
+    // Yerinde güncellenemeyen kurulum biçimlerinde (pacman, salt-okunur
+    // AppImage) elle indirme tek yol; UpdaterDialog ana pencerede kaldığı için
+    // release sayfasını buradan açıyoruz.
+    else if (status.kind === "manual-available")
+      void openUrl(status.info.releaseUrl);
     else void check({ manual: true });
   };
 

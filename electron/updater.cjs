@@ -4,8 +4,10 @@
 // yeni bir runtime bağımlılığı o akışı bozardı. GitHub Releases API'si zaten
 // bize yeterli.
 //
-// İki kurulum biçimi desteklenir:
+// Üç kurulum biçimi desteklenir:
 //   AppImage → dosyayı yerinde değiştir, parola sormaz, tam otomatik.
+//   dizin    → açılmış AppImage / taşınabilir kurulum: yeni imajı indirip
+//              içeriğini açar ve dizini rename ile yerine koyar. Parola sormaz.
 //   deb      → yeni .deb'i indir, pkexec ile kur (sistem parolası sorulur).
 //              apt aynı paket adını yerinde yükseltir, eski sürüm kalmaz.
 const fs = require("node:fs");
@@ -25,7 +27,30 @@ const LATEST_MANIFEST = `https://github.com/${REPO}/releases/latest/download/lat
 const ASSET_PREFIX = `https://github.com/${REPO}/releases/download/`;
 const UA = "Arterm-Updater";
 
-/** "appimage" | "deb" | null (dev checkout veya tanınmayan kurulum). */
+// Paket yöneticisinin sahip olduğu ağaçlara dokunmayız: dosyaları uygulama
+// içinden değiştirmek pacman/apt veritabanını gerçekle tutarsız bırakır.
+const SYSTEM_PREFIXES = ["/usr/", "/opt/", "/nix/", "/snap/", "/var/"];
+
+/**
+ * Açılmış AppImage veya taşınabilir dizin kurulumunun kökü, ya da null.
+ * Dizini yerine yenisini koyacağımız için hem kökün hem de üst dizinin
+ * yazılabilir olması gerekir (rename üst dizinde yapılır).
+ */
+function portableRoot() {
+  if (!app.isPackaged) return null;
+  const root = path.dirname(process.execPath);
+  if (SYSTEM_PREFIXES.some((p) => `${root}/`.startsWith(p))) return null;
+  if (!fs.existsSync(path.join(root, "resources", "app.asar"))) return null;
+  try {
+    fs.accessSync(root, fs.constants.W_OK);
+    fs.accessSync(path.dirname(root), fs.constants.W_OK);
+  } catch {
+    return null;
+  }
+  return root;
+}
+
+/** "appimage" | "dir" | "deb" | null (dev checkout veya tanınmayan kurulum). */
 function installKind() {
   // AppImage runtime'ı bu değişkeni AppImage dosyasının yoluna set eder.
   const appImage = process.env.APPIMAGE;
@@ -40,6 +65,7 @@ function installKind() {
     }
   }
   if (process.execPath.startsWith("/opt/")) return "deb";
+  if (portableRoot()) return "dir";
   return null;
 }
 
@@ -87,9 +113,12 @@ async function checkUpdate() {
     throw new Error(`release ${version} has no Linux checksum manifest`);
   }
   const sums = await sumsRes.json();
-  const entry = sums[kind];
+  // Taşınabilir dizin kurulumu da AppImage asset'inden beslenir: imajı indirip
+  // içeriğini açar, dizini onunla değiştiririz.
+  const asset = kind === "dir" ? "appimage" : kind;
+  const entry = sums[asset];
   if (!entry?.name || !entry?.sha256) {
-    throw new Error(`release ${version} has no ${kind} asset`);
+    throw new Error(`release ${version} has no ${asset} asset`);
   }
 
   const url = `${ASSET_PREFIX}v${version}/${entry.name}`;
@@ -145,9 +174,12 @@ async function download(update, dest, onProgress) {
   return dest;
 }
 
-function run(cmd, args) {
+function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+      ...opts,
+    });
     let stderr = "";
     child.stderr.on("data", (d) => {
       stderr += d.toString();
@@ -173,6 +205,46 @@ async function installAppImage(file) {
   fs.renameSync(file, target);
 }
 
+async function installDir(file, root, workDir) {
+  fs.chmodSync(file, 0o755);
+  // --appimage-extract FUSE istemez (runtime imajı kendi açar); içeriği
+  // workDir/squashfs-root altına çıkarır.
+  await run(file, ["--appimage-extract"], { cwd: workDir });
+  const fresh = path.join(workDir, "squashfs-root");
+  if (!fs.existsSync(path.join(fresh, "resources", "app.asar"))) {
+    throw new Error("downloaded image is not an Arterm build");
+  }
+  // Aynı dosya sisteminde rename atomiktir: yarıda kesilse bile ya eski ya
+  // yeni ağaç tam olarak yerinde durur, yarım kopyalanmış bir dizin değil.
+  const backup = `${root}.old-${app.getVersion()}`;
+  fs.rmSync(backup, { recursive: true, force: true });
+  fs.renameSync(root, backup);
+  try {
+    fs.renameSync(fresh, root);
+  } catch (e) {
+    fs.renameSync(backup, root);
+    throw e;
+  }
+  // Eski ağacı burada silmiyoruz: çalışan süreç hâlâ oradaki .pak/.so
+  // dosyalarını açabilir. Bir sonraki açılışta sweepBackups() temizler.
+}
+
+/** Bir önceki güncellemeden kalan `<kök>.old-*` ağaçlarını siler. */
+async function sweepBackups() {
+  const root = portableRoot();
+  if (!root) return;
+  const parent = path.dirname(root);
+  const prefix = `${path.basename(root)}.old-`;
+  const names = await fs.promises.readdir(parent);
+  await Promise.all(
+    names
+      .filter((n) => n.startsWith(prefix))
+      .map((n) =>
+        fs.promises.rm(path.join(parent, n), { recursive: true, force: true }),
+      ),
+  );
+}
+
 async function installDeb(file) {
   // apt-get, dpkg -i'nin aksine bağımlılıkları da çözer; aynı paket adı
   // (arterm) olduğu için kurulum eski sürümü yerinde değiştirir.
@@ -181,12 +253,22 @@ async function installDeb(file) {
 
 /** İndirir + kurar. Çağıran bittiğinde uygulamayı yeniden başlatmalı. */
 async function downloadAndInstall(update, onProgress) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "arterm-update-"));
+  const root = update.kind === "dir" ? portableRoot() : null;
+  if (update.kind === "dir" && !root) {
+    throw new Error("install directory is no longer writable");
+  }
+  // "dir" yolunda indirdiğimiz imajı açmak için çalıştırmamız ve sonucu rename
+  // ile yerine koymamız gerekiyor; ikisi de kurulumla aynı dosya sistemini
+  // ister (/tmp ayrı bölüm olabilir ya da noexec ile mount edilmiş olabilir).
+  const base = root ? path.dirname(root) : os.tmpdir();
+  const dir = fs.mkdtempSync(path.join(base, ".arterm-update-"));
   const file = path.join(dir, path.basename(new URL(update.url).pathname));
   try {
     await download(update, file, onProgress);
     if (update.kind === "appimage") {
       await installAppImage(file);
+    } else if (update.kind === "dir") {
+      await installDir(file, root, dir);
     } else {
       await installDeb(file);
     }
@@ -205,4 +287,10 @@ function relaunch() {
   app.exit(0);
 }
 
-module.exports = { installKind, checkUpdate, downloadAndInstall, relaunch };
+module.exports = {
+  installKind,
+  checkUpdate,
+  downloadAndInstall,
+  sweepBackups,
+  relaunch,
+};
