@@ -1,9 +1,11 @@
 import type { Terminal } from "@xterm/xterm";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  type AtlasRepaintSlot,
   clipboardHasImage,
   mouseEncodingSequence,
   pasteAction,
+  repaintSlot,
 } from "./rendererPool";
 
 /**
@@ -67,6 +69,69 @@ describe("pasteAction", () => {
 
   it("does nothing for an empty clipboard", () => {
     expect(pasteAction(false, "")).toBe("none");
+  });
+});
+
+describe("repaintSlot", () => {
+  type FakeSlot = AtlasRepaintSlot & {
+    refreshed: number;
+    atlasCleared: number;
+  };
+
+  const makeSlot = (hasWebgl = true): FakeSlot => {
+    const slot: FakeSlot = {
+      webglAddon: hasWebgl ? {} : null,
+      lastRepaintAt: 0,
+      refreshed: 0,
+      atlasCleared: 0,
+      term: {
+        rows: 24,
+        refresh: () => {
+          slot.refreshed++;
+        },
+        clearTextureAtlas: () => {
+          slot.atlasCleared++;
+        },
+      },
+    };
+    return slot;
+  };
+
+  it("refreshes only the repainted slot on Chromium", () => {
+    const [a, b] = [makeSlot(), makeSlot()];
+    repaintSlot(a, [a, b], true, 100);
+    expect([a.refreshed, b.refreshed]).toEqual([1, 0]);
+    expect([a.atlasCleared, b.atlasCleared]).toEqual([0, 0]);
+  });
+
+  it("clears every pooled slot on WebKit — the texture atlas is shared", () => {
+    // Tek slot temizlenirse kardeşlerin render model'i yeniden paketlenen
+    // atlasta artık var olmayan glif koordinatlarını göstermeye devam eder.
+    const [a, b, c] = [makeSlot(), makeSlot(), makeSlot()];
+    repaintSlot(a, [a, b, c], false, 100);
+    expect([a.atlasCleared, b.atlasCleared, c.atlasCleared]).toEqual([1, 1, 1]);
+  });
+
+  it("stamps every cleared slot so the resize throttle stays global", () => {
+    const [a, b] = [makeSlot(), makeSlot()];
+    repaintSlot(a, [a, b], false, 250);
+    expect([a.lastRepaintAt, b.lastRepaintAt]).toEqual([250, 250]);
+  });
+
+  it("skips slots with no live context, which own no atlas pages", () => {
+    const [a, parked] = [makeSlot(), makeSlot(false)];
+    repaintSlot(a, [a, parked], false, 100);
+    expect(parked.atlasCleared).toBe(0);
+    expect(parked.lastRepaintAt).toBe(0);
+  });
+
+  it("keeps going when one terminal throws, so a dead slot can't strand the rest", () => {
+    const [a, b] = [makeSlot(), makeSlot()];
+    a.term.clearTextureAtlas = () => {
+      throw new Error("context lost");
+    };
+    repaintSlot(a, [a, b], false, 100);
+    expect(b.atlasCleared).toBe(1);
   });
 });
 

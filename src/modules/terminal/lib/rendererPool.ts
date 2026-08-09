@@ -6,7 +6,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import { detectMonoFontFamily } from "@/lib/fonts";
-import { IS_ELECTRON_SHELL } from "@/lib/platform";
+import { IS_CHROMIUM } from "@/lib/platform";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { openUrl } from "@/platform/opener";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
@@ -23,7 +23,7 @@ const FIT_DEBOUNCE_MS = 8;
 // (ink/Claude Code) diff-render'larını yanlış genişliğe karşı çalıştırır ve
 // normal buffer'a kalıcı çöp bırakabilir. Chromium'da canlı resize akıcı
 // olduğundan pencereyi kısa tut; WebKitGTK'da resize fırtınasına karşı geniş.
-const PTY_RESIZE_DEBOUNCE_MS = IS_ELECTRON_SHELL ? 64 : 256;
+const PTY_RESIZE_DEBOUNCE_MS = IS_CHROMIUM ? 64 : 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
 
 export type SlotAdapter = {
@@ -559,21 +559,63 @@ function rewireSlot(slot: Slot, p: AcquireParams): void {
 // rebuilds the atlas and routes through xterm's RenderService full-refresh,
 // the path a bare fitAddon.fit() never triggers.
 //
-// Chromium (Electron kabuğu) bu workaround'a muhtaç değil: backing store
-// resize'da temizlenmez ve yazım sürerken tekrarlanan atlas rebuild'leri
-// yanlış-glif artefaktları üretebiliyor. Orada düz full-refresh yeterli.
+// Chromium bu workaround'a muhtaç değil: backing store resize'da temizlenmez
+// ve yazım sürerken tekrarlanan atlas rebuild'leri yanlış-glif artefaktları
+// üretebiliyor. Orada düz full-refresh yeterli. Motora bakılır, kabuğa değil:
+// Windows'ta Tauri de Chromium (WebView2) çalıştırır.
 function repaintWebgl(slot: Slot): void {
   if (!slot.webglAddon) return;
-  slot.lastRepaintAt = performance.now();
-  if (IS_ELECTRON_SHELL) {
+  repaintSlot(slot, slots, IS_CHROMIUM, performance.now());
+}
+
+export type AtlasRepaintSlot = {
+  webglAddon: unknown;
+  lastRepaintAt: number;
+  term: {
+    rows: number;
+    refresh(start: number, end: number): void;
+    clearTextureAtlas(): void;
+  };
+};
+
+/**
+ * Bir slot için tek repaint adımı — GPU'suz test edilebilsin diye ayrıldı.
+ *
+ * Chromium'da iş o slot'un düz full-refresh'i ile biter. WebKit'te ise
+ * clearTextureAtlas() adı kadar "tek terminale ait" değildir: xterm atlasları
+ * süreç genelinde, yalnızca font/renk config'ine göre paylaştırır
+ * (CharAtlasCache.acquireTextureAtlas) ve havuzdaki her slot aynı
+ * termOptions()'tan doğduğu için hepsi TEK atlası paylaşır. Çağrı paylaşılan
+ * atlasın sayfalarını siler (her sayfanın version'ı artar, yani kardeş
+ * terminaller GPU dokusunu yeniden yükler) ama render model'ini yalnızca
+ * çağıran terminal için temizler. Kardeşler değişmemiş hücreleri atladığından
+ * onları yeniden paketlenmiş atlasta artık var olmayan glif koordinatlarıyla
+ * çizmeye devam eder: hücre içeriği değişene dek ekranda kalan, dilimlenmiş
+ * yanlış glifler. O yüzden canlı context'i olan her slot temizlenir.
+ *
+ * Damga da global: silme herkesi vurduğu için throttle'ın da global olması
+ * gerekir, yoksa resize'da N slot'un ResizeObserver'ı tik başına N kez siler.
+ */
+export function repaintSlot(
+  slot: AtlasRepaintSlot,
+  pool: readonly AtlasRepaintSlot[],
+  isChromium: boolean,
+  now: number,
+): void {
+  if (isChromium) {
+    slot.lastRepaintAt = now;
     try {
       slot.term.refresh(0, slot.term.rows - 1);
     } catch {}
     return;
   }
-  try {
-    slot.term.clearTextureAtlas();
-  } catch {}
+  for (const s of pool) {
+    if (!s.webglAddon) continue;
+    s.lastRepaintAt = now;
+    try {
+      s.term.clearTextureAtlas();
+    } catch {}
+  }
 }
 
 // For one-shot fits (bind, rewire, preference changes). The resize-drag path
