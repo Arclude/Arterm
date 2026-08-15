@@ -273,7 +273,9 @@ function createSlot(): Slot {
       if (event.type === "keydown") bridge.writeToPty(lineNavigation);
       return false;
     }
-    const wordNavigation = terminalWordNavigationSequence(event);
+    const wordNavigation = terminalWordNavigationSequence(event, {
+      alternateScreen: slot.term.buffer.active.type === "alternate",
+    });
     if (wordNavigation) {
       event.preventDefault();
       if (event.type === "keydown") bridge.writeToPty(wordNavigation);

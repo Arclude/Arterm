@@ -16,11 +16,15 @@ const evt = (partial: Partial<TerminalKeyEvent>): TerminalKeyEvent => ({
   ...partial,
 });
 
+const normalScreen = { alternateScreen: false };
+const altScreen = { alternateScreen: true };
+
 describe("terminalWordNavigationSequence", () => {
   it("maps Option+Left to readline word-left", () => {
     expect(
       terminalWordNavigationSequence(
         evt({ altKey: true, key: "ArrowLeft", code: "ArrowLeft" }),
+        normalScreen,
       ),
     ).toBe("\x1bb");
   });
@@ -29,6 +33,7 @@ describe("terminalWordNavigationSequence", () => {
     expect(
       terminalWordNavigationSequence(
         evt({ altKey: true, key: "ArrowRight", code: "ArrowRight" }),
+        normalScreen,
       ),
     ).toBe("\x1bf");
   });
@@ -37,6 +42,26 @@ describe("terminalWordNavigationSequence", () => {
     expect(
       terminalWordNavigationSequence(
         evt({ key: "ArrowLeft", code: "ArrowLeft" }),
+        normalScreen,
+      ),
+    ).toBeNull();
+  });
+
+  // A full-screen app binds Alt+arrows itself -- arterm cycles reasoning
+  // effort with them. Rewriting the key to ESC b / ESC f swallowed it before
+  // the pty, so the binding was dead in every arterm session in this app
+  // while working in a plain terminal.
+  it("passes Alt+arrows through to a full-screen app", () => {
+    expect(
+      terminalWordNavigationSequence(
+        evt({ altKey: true, key: "ArrowLeft", code: "ArrowLeft" }),
+        altScreen,
+      ),
+    ).toBeNull();
+    expect(
+      terminalWordNavigationSequence(
+        evt({ altKey: true, key: "ArrowRight", code: "ArrowRight" }),
+        altScreen,
       ),
     ).toBeNull();
   });

@@ -5,10 +5,21 @@ export type TerminalKeyEvent = Pick<
 
 export type PlatformOpts = { isMac: boolean };
 
+export type ScreenOpts = { alternateScreen: boolean };
+
+/** Alt+Left/Right → readline word motion, but only for the normal buffer.
+ *
+ * A full-screen app owns the alternate buffer and binds Alt+arrows itself:
+ * arterm cycles reasoning effort with them, vim moves between windows.
+ * Rewriting the key to ESC b / ESC f here means the app never sees it, and
+ * the binding looks silently dead from inside. Shells run in the normal
+ * buffer, so they keep the alias. */
 export function terminalWordNavigationSequence(
   event: TerminalKeyEvent,
+  opts: ScreenOpts,
 ): string | null {
   if (!event.altKey || event.ctrlKey || event.metaKey) return null;
+  if (opts.alternateScreen) return null;
   if (event.key === "ArrowLeft" || event.code === "ArrowLeft") return "\x1bb";
   if (event.key === "ArrowRight" || event.code === "ArrowRight") return "\x1bf";
   return null;
